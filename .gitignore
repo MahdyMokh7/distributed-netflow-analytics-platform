@@ -1,0 +1,41 @@
+# Compiled output
+/target/
+*.class
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+/var/log/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Docker
+*.pid
+*.pid.lock
+
+# Environment files (sensitive)
+.env
+.env.*
+!/.env.example
+
+# Local configuration
+application-local.yml
+
+
+## Mehdy Special
+/docs/dev-guide
+/docs/project_contents.txt
+/scripts/project-content-extracter.py
