@@ -1,0 +1,75 @@
+# Main application configuration
+spring:
+  application:
+    name: nimbo-data-ingester
+  
+  # Profiles
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  
+  # Logging
+  output:
+    ansi:
+      enabled: always
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    com.nimbo.ingester: DEBUG
+    org.apache.kafka: WARN
+    org.apache.hadoop: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# Kafka configuration
+kafka:
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  topic: ${KAFKA_TOPIC:netflow}
+  consumer-group: ${KAFKA_CONSUMER_GROUP:parquet-writer}
+  enable-auto-commit: false
+  poll-timeout-ms: 1000
+  max-poll-records: 500
+  session-timeout-ms: 30000
+  heartbeat-interval-ms: 3000
+  max-poll-interval-ms: 300000
+
+# HDFS configuration
+hdfs:
+  uri: ${HDFS_URI:hdfs://localhost:9000}
+  base-path: ${HDFS_BASE_PATH:/data/netflow/}
+  partition-strategy: ${HDFS_PARTITION_STRATEGY:HOUR}
+  write-buffer-size: 65536
+  replication-factor: ${HDFS_REPLICATION_FACTOR:1}
+
+# Parquet configuration
+parquet:
+  compression-codec: ${PARQUET_COMPRESSION:SNAPPY}
+  block-size: 134217728  # 128MB
+  page-size: 1048576     # 1MB
+  enable-dictionary: true
+
+# File rolling strategy
+rolling:
+  strategy: ${ROLLING_STRATEGY:TIME_AND_SIZE}
+  time-interval-minutes: ${ROLLING_TIME_INTERVAL:5}
+  max-file-size-mb: ${ROLLING_MAX_SIZE_MB:100}
+  file-name-pattern: "netflow-{timestamp}.parquet"
+
+# Health and metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+
+# Thread pool configuration
+executor:
+  core-pool-size: 4
+  max-pool-size: 8
+  queue-capacity: 100
+  thread-name-prefix: ingester-

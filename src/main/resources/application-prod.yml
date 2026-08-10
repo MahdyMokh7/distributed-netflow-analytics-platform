@@ -1,0 +1,19 @@
+# Production-specific configuration
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+logging:
+  level:
+    com.nimbo.ingester: INFO
+
+rolling:
+  time-interval-minutes: 60  # Hourly rolling in production
+  max-file-size-mb: 1024
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

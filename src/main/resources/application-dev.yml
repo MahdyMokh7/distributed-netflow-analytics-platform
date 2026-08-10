@@ -1,0 +1,19 @@
+# Development-specific configuration
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+kafka:
+  bootstrap-servers: kafka:9092
+
+hdfs:
+  uri: hdfs://namenode:9000
+
+logging:
+  level:
+    com.nimbo.ingester: DEBUG
+
+rolling:
+  time-interval-minutes: 1  # Fast rolling for testing
+  max-file-size-mb: 10
