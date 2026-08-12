@@ -77,7 +77,7 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - HDFS_URI=hdfs://namenode:9000
       - KAFKA_TOPIC=netflow
-      - KAFKA_CONSUMER_GROUP=parquet-writer-dev
+      - KAFKA_CONSUMER_GROUP=netflow-java-consumer8-dev
       - HDFS_BASE_PATH=/data/test/netflow/
     networks:
       - nimbo-dev-network

@@ -10,14 +10,14 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *
  * This is the first microservice in the Nimbo data processing pipeline.
  * Responsibilities:
- *   1. Consume Netflow data from Kafka topic (Person A)
- *   2. Deserialize Avro messages (Person A)
- *   3. Write data as Parquet files to HDFS (Person B)
+ *   1. Consume Netflow data from Kafka topic
+ *   2. Deserialize Avro messages
+ *   3. Write data as Parquet files to HDFS
  *
  * The service is designed for:
  *   - Zero data loss (at-least-once delivery semantics)
  *   - Horizontal scalability
- *   - Automated deployment via Jenkins (Person C)
+ *   - Automated deployment via Jenkins
  *
  * @author Nimbo Team
  * @version 1.0.0
@@ -27,11 +27,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling  // For scheduled file rolling
 public class DataIngesterApplication {
 
-    /**
-     * Application entry point.
-     *
-     * @param args command line arguments (supports Spring Boot standard args)
-     */
     public static void main(String[] args) {
         SpringApplication.run(DataIngesterApplication.class, args);
     }
