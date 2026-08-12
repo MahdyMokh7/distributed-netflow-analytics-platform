@@ -34,27 +34,27 @@ kafka:
   heartbeat-interval-ms: 3000
   max-poll-interval-ms: 300000
 
-# HDFS configuration
-hdfs:
-  uri: ${HDFS_URI:hdfs://localhost:9000}
-  base-path: ${HDFS_BASE_PATH:/data/netflow/}
-  partition-strategy: ${HDFS_PARTITION_STRATEGY:HOUR}
-  write-buffer-size: 65536
-  replication-factor: ${HDFS_REPLICATION_FACTOR:1}
-
-# Parquet configuration
-parquet:
-  compression-codec: ${PARQUET_COMPRESSION:SNAPPY}
-  block-size: 134217728  # 128MB
-  page-size: 1048576     # 1MB
-  enable-dictionary: true
-
-# File rolling strategy
 rolling:
-  strategy: ${ROLLING_STRATEGY:TIME_AND_SIZE}
-  time-interval-minutes: ${ROLLING_TIME_INTERVAL:5}
-  max-file-size-mb: ${ROLLING_MAX_SIZE_MB:100}
-  file-name-pattern: "netflow-{timestamp}.parquet"
+  max-record-count: ${ROLLING_MAX_RECORD_COUNT:50000}
+  max-size-bytes: ${ROLLING_MAX_SIZE_BYTES:67108864}
+  max-age: ${ROLLING_MAX_AGE:2m}
+
+storage:
+  hdfs:
+    uri: ${HDFS_URI:hdfs://team1}
+    user: ${HDFS_USER:team1}
+    base-path: ${HDFS_BASE_PATH:/netflow/parquet}
+
+    nodes:
+      node1: ${HDFS_NODE1:10.10.61.51:8020}
+      node2: ${HDFS_NODE2:10.10.61.52:8020}
+      node3: ${HDFS_NODE3:10.10.61.53:8020}
+
+  parquet:
+    compression-codec: ${PARQUET_COMPRESSION:SNAPPY}
+    block-size-bytes: ${PARQUET_BLOCK_SIZE:134217728}
+    page-size-bytes: ${PARQUET_PAGE_SIZE:1048576}
+    enable-dictionary: ${PARQUET_ENABLE_DICTIONARY:true}
 
 # Health and metrics
 management:
