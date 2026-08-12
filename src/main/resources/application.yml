@@ -1,7 +1,7 @@
 # Main application configuration
 spring:
   application:
-    name: nimbo-data-ingester
+    name: nimbo
   
   # Profiles
   profiles:
@@ -16,7 +16,7 @@ spring:
 logging:
   level:
     root: INFO
-    com.nimbo.ingester: DEBUG
+    com.nimbo.ingester: INFO
     org.apache.kafka: WARN
     org.apache.hadoop: WARN
   pattern:
@@ -40,16 +40,6 @@ rolling:
   max-age: ${ROLLING_MAX_AGE:2m}
 
 storage:
-  hdfs:
-    uri: ${HDFS_URI:hdfs://team1}
-    user: ${HDFS_USER:team1}
-    base-path: ${HDFS_BASE_PATH:/netflow/parquet}
-
-    nodes:
-      node1: ${HDFS_NODE1:10.10.61.51:8020}
-      node2: ${HDFS_NODE2:10.10.61.52:8020}
-      node3: ${HDFS_NODE3:10.10.61.53:8020}
-
   parquet:
     compression-codec: ${PARQUET_COMPRESSION:SNAPPY}
     block-size-bytes: ${PARQUET_BLOCK_SIZE:134217728}

@@ -5,12 +5,13 @@ import com.nimbo.storage.service.batching.BatchPolicy;
 import org.apache.hadoop.fs.FileSystem;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
 import java.net.URI;
 import java.util.Map;
 
-@org.springframework.context.annotation.Configuration
+@Configuration
 @EnableConfigurationProperties({
         RollingProperties.class,
         HdfsProperties.class,
@@ -40,68 +41,41 @@ public class StorageConfiguration {
         org.apache.hadoop.conf.Configuration conf =
                 new org.apache.hadoop.conf.Configuration();
 
-        conf.set("fs.defaultFS", hdfsProperties.getUri());
+        String uriStr = hdfsProperties.getUri();
+        conf.set("fs.defaultFS", uriStr);
 
-        conf.set("dfs.nameservices", "team1");
+        String nameservice = hdfsProperties.getNameservice();
+        if (nameservice != null && !nameservice.isBlank()) {
+            conf.set("dfs.nameservices", nameservice);
 
-        conf.set(
-                "dfs.ha.namenodes.team1",
-                "team1-node1,team1-node2,team1-node3"
-        );
+            Map<String, String> nodes = hdfsProperties.getNodes();
+            if (nodes != null && !nodes.isEmpty()) {
+                // Sets "team1-node1,team1-node2,team1-node3"
+                String nodeAliases = String.join(",", nodes.keySet());
+                conf.set("dfs.ha.namenodes." + nameservice, nodeAliases);
 
-        Map<String, String> nodes = hdfsProperties.getNodes();
-
-        if (nodes != null) {
-            conf.set(
-                    "dfs.namenode.rpc-address.team1.team1-node1",
-                    nodes.getOrDefault("node1", "10.10.61.51:8020")
-            );
-
-            conf.set(
-                    "dfs.namenode.rpc-address.team1.team1-node2",
-                    nodes.getOrDefault("node2", "10.10.61.52:8020")
-            );
-
-            conf.set(
-                    "dfs.namenode.rpc-address.team1.team1-node3",
-                    nodes.getOrDefault("node3", "10.10.61.53:8020")
-            );
-        } else {
-            conf.set(
-                    "dfs.namenode.rpc-address.team1.team1-node1",
-                    "10.10.61.51:8020"
-            );
+                // Registers IP:Port for each node
+                for (Map.Entry<String, String> entry : nodes.entrySet()) {
+                    conf.set(
+                            "dfs.namenode.rpc-address." + nameservice + "." + entry.getKey(),
+                            entry.getValue()
+                    );
+                }
+            }
 
             conf.set(
-                    "dfs.namenode.rpc-address.team1.team1-node2",
-                    "10.10.61.52:8020"
-            );
-
-            conf.set(
-                    "dfs.namenode.rpc-address.team1.team1-node3",
-                    "10.10.61.53:8020"
+                    "dfs.client.failover.proxy.provider." + nameservice,
+                    "org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider"
             );
         }
 
-        conf.set(
-                "dfs.client.failover.proxy.provider.team1",
-                "org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider"
-        );
+        conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
+        conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
 
-        conf.set(
-                "fs.hdfs.impl",
-                org.apache.hadoop.hdfs.DistributedFileSystem.class.getName()
-        );
+        String user = (hdfsProperties.getUser() != null && !hdfsProperties.getUser().isBlank())
+                ? hdfsProperties.getUser()
+                : "root";
 
-        conf.set(
-                "fs.file.impl",
-                org.apache.hadoop.fs.LocalFileSystem.class.getName()
-        );
-
-        return FileSystem.get(
-                URI.create(hdfsProperties.getUri()),
-                conf,
-                hdfsProperties.getUser()
-        );
+        return FileSystem.get(URI.create(uriStr), conf, user);
     }
 }

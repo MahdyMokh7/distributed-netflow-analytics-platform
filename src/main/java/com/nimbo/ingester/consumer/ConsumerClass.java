@@ -23,7 +23,9 @@ import java.util.Collections;
 import java.util.Properties;
 
 public class ConsumerClass {
-    public static void consume( ParquetWriterService parquetWriter) throws Exception {
+    private static IngestedRecord ingestedRecord;
+
+    public static void consume(ParquetWriterService parquetWriter) throws Exception {
 
         Properties props = new Properties();
 

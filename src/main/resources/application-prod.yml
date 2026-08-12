@@ -8,12 +8,24 @@ logging:
   level:
     com.nimbo.ingester: INFO
 
-rolling:
-  time-interval-minutes: 60  # Hourly rolling in production
-  max-file-size-mb: 1024
-
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics
+
+kafka:
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
+  topic: ${KAFKA_TOPIC:netflow}
+  consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer8}
+
+storage:
+  hdfs:
+    uri: ${HDFS_URI:hdfs://team1}
+    user: ${HDFS_USER:team1}
+    base-path: ${HDFS_BASE_PATH:/netflow/parquet}
+    nameservice: team1
+    nodes:
+      team1-node1: ${HDFS_NODE1:10.10.61.51:8020}
+      team1-node2: ${HDFS_NODE2:10.10.61.52:8020}
+      team1-node3: ${HDFS_NODE3:10.10.61.53:8020}

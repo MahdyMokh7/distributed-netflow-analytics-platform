@@ -10,6 +10,7 @@ public class HdfsProperties {
     private String uri;
     private String user;
     private String basePath;
+    private String nameservice;
     private Map<String, String> nodes;
 
     public String getUri() { return uri; }
@@ -20,6 +21,9 @@ public class HdfsProperties {
 
     public String getBasePath() { return basePath; }
     public void setBasePath(String basePath) { this.basePath = basePath; }
+
+    public String getNameservice() { return nameservice; }
+    public void setNameservice(String nameservice) { this.nameservice = nameservice; }
 
     public Map<String, String> getNodes() { return nodes; }
     public void setNodes(Map<String, String> nodes) { this.nodes = nodes; }

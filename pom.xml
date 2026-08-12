@@ -38,7 +38,7 @@
         <hadoop.version>3.3.6</hadoop.version>
         <parquet.version>1.13.1</parquet.version>
         <lombok.version>1.18.30</lombok.version>
-        <testcontainers.version>1.19.3</testcontainers.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
         <confluent.version>7.5.0</confluent.version>
         
         <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
@@ -199,6 +199,13 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>kafka</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
             <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
