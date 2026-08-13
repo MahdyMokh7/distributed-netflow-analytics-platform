@@ -3,28 +3,21 @@ package com.nimbo.storage.service.batching;
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.model.TopicPartitionKey;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public final class BatchAccumulator {
 
-    private static final Logger logger =
-            LoggerFactory.getLogger(BatchAccumulator.class);
-
     private final BatchPolicy batchPolicy;
-    private final List<IngestedRecord> buffer = new ArrayList<>();
 
     private Instant firstRecordAt;
     private long accumulatedSizeBytes;
+    private long recordCount;
 
-    private final Map<TopicPartitionKey, Long> pendingOffsets = new HashMap<>();
+    // Nested map: topic -> partition -> nextOffset
+    private final Map<String, Map<Integer, Long>> pendingOffsets = new HashMap<>();
 
     public BatchAccumulator(BatchPolicy batchPolicy) {
         this.batchPolicy = Objects.requireNonNull(
@@ -34,74 +27,55 @@ public final class BatchAccumulator {
     }
 
     public void add(IngestedRecord record) {
-        Objects.requireNonNull(
-                record,
-                "record must not be null"
-        );
+        Objects.requireNonNull(record, "record must not be null");
 
-        if (buffer.isEmpty()) {
+        if (firstRecordAt == null) {
             firstRecordAt = Instant.now();
         }
 
-        buffer.add(record);
+        recordCount++;
         accumulatedSizeBytes += record.serializedSizeBytes();
 
-        TopicPartitionKey key = new TopicPartitionKey(record.topic(), record.partition());
-        pendingOffsets.merge(key, record.offset() + 1, Math::max);
-
-//        logger.debug(
-//                "Record added to batch: count={}, sizeBytes={}",
-//                buffer.size(),
-//                accumulatedSizeBytes
-//        );
+        pendingOffsets
+                .computeIfAbsent(record.topic(), t -> new HashMap<>())
+                .merge(record.partition(), record.offset() + 1, Math::max);
     }
 
     public boolean shouldFlush() {
         return batchPolicy.shouldFlush(
-                buffer.size(),
+                recordCount,
                 accumulatedSizeBytes,
                 firstRecordAt,
                 Instant.now()
         );
     }
 
-    public RecordBatch peekBatch() {
-        if (buffer.isEmpty()) {
-            throw new IllegalStateException(
-                    "Cannot create batch from an empty accumulator"
-            );
-        }
-
-        return new RecordBatch(
-                buffer,
-                firstRecordAt,
-                accumulatedSizeBytes
-        );
-    }
-
     public void clear() {
-        if (buffer.isEmpty()) {
+        if (recordCount == 0) {
             return;
         }
 
-//        logger.debug(
-//                "Clearing successfully persisted batch: count={}, sizeBytes={}",
-//                buffer.size(),
-//                accumulatedSizeBytes
-//        );
-
-        buffer.clear();
-        firstRecordAt = null;
+        recordCount = 0;
         accumulatedSizeBytes = 0L;
+        firstRecordAt = null;
         pendingOffsets.clear();
     }
 
     public Map<TopicPartitionKey, Long> getPendingOffsets() {
-        return Map.copyOf(pendingOffsets);
+        Map<TopicPartitionKey, Long> result = new HashMap<>();
+        pendingOffsets.forEach((topic, partitions) ->
+                partitions.forEach((partition, offset) ->
+                        result.put(
+                                new TopicPartitionKey(topic, partition),
+                                offset
+                        )
+                )
+        );
+        return Map.copyOf(result);
     }
 
-    public int getRecordCount() {
-        return buffer.size();
+    public long getRecordCount() {
+        return recordCount;
     }
 
     public long getAccumulatedSizeBytes() {
@@ -113,6 +87,6 @@ public final class BatchAccumulator {
     }
 
     public boolean isEmpty() {
-        return buffer.isEmpty();
+        return recordCount == 0;
     }
 }

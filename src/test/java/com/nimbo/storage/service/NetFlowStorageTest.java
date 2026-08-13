@@ -5,19 +5,19 @@ import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.exception.StorageException;
 import com.nimbo.storage.model.TopicPartitionKey;
 import com.nimbo.storage.service.batching.BatchAccumulator;
-import com.nimbo.storage.service.batching.RecordBatch;
 import com.nimbo.storage.service.hdfs.FileStorage;
 import com.nimbo.storage.service.naming.FileNameGenerator;
 import com.nimbo.storage.service.parquet.ParquetFileWriter;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.hadoop.ParquetWriter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -46,14 +46,30 @@ class NetFlowStorageTest {
     private IngestedRecord record;
 
     @Mock
-    private RecordBatch batch;
+    private GenericRecord genericRecord;
 
+    @Mock
+    private ParquetWriter<GenericRecord> writer;
+
+    private Schema schema;
     private NetFlowStorage storage;
 
     @BeforeEach
     void setUp() {
         when(hdfsProperties.getBasePath())
                 .thenReturn("/netflow/parquet");
+
+        schema = new Schema.Parser().parse(
+                """
+                {
+                  "type": "record",
+                  "name": "TestRecord",
+                  "fields": [
+                    {"name": "value", "type": "string"}
+                  ]
+                }
+                """
+        );
 
         storage = new NetFlowStorage(
                 batchAccumulator,
@@ -64,59 +80,58 @@ class NetFlowStorageTest {
         );
     }
 
-    @Test
-    void acceptShouldAddRecordAndNotFlushWhenThresholdNotReached() {
+    private void mockOpenWriter(int partition, String fileName, String tempFileName) throws Exception {
+        when(record.partition()).thenReturn(partition);
+        when(record.record()).thenReturn(genericRecord);
+        when(genericRecord.getSchema()).thenReturn(schema);
 
-        when(batchAccumulator.shouldFlush())
-                .thenReturn(false);
+        when(fileNameGenerator.generateFileName(partition))
+                .thenReturn(fileName);
+        when(fileNameGenerator.generateTempFileName(fileName))
+                .thenReturn(tempFileName);
+
+        when(parquetFileWriter.createWriter(
+                eq(new Path("/netflow/parquet", tempFileName)),
+                eq(schema)
+        )).thenReturn(writer);
+    }
+
+    @Test
+    void acceptShouldAddRecordAndNotFlushWhenThresholdNotReached() throws Exception {
+        mockOpenWriter(0, "netflow-0.parquet", "netflow-0.parquet.tmp");
+
+        when(batchAccumulator.shouldFlush()).thenReturn(false);
 
         Optional<Map<TopicPartitionKey, Long>> result =
                 storage.accept(record);
 
         assertTrue(result.isEmpty());
 
+        verify(fileStorage).ensureDirectoryExists(new Path("/netflow/parquet"));
+        verify(parquetFileWriter).createWriter(
+                new Path("/netflow/parquet", "netflow-0.parquet.tmp"),
+                schema
+        );
+        verify(parquetFileWriter).write(writer, genericRecord);
+
         verify(batchAccumulator).add(record);
         verify(batchAccumulator).shouldFlush();
 
-        verifyNoInteractions(
-                parquetFileWriter,
-                fileStorage,
-                fileNameGenerator
-        );
+        verify(parquetFileWriter, never()).closeWriter(any());
+        verify(fileStorage, never()).commitAtomic(any(), any());
+        verify(batchAccumulator, never()).clear();
     }
 
     @Test
     void acceptShouldFlushWhenThresholdIsReached() throws Exception {
+        mockOpenWriter(2, "netflow-2.parquet", "netflow-2.parquet.tmp");
 
-        when(batchAccumulator.shouldFlush())
-                .thenReturn(true);
+        when(batchAccumulator.shouldFlush()).thenReturn(true);
 
-        when(batchAccumulator.peekBatch())
-                .thenReturn(batch);
-
-        when(batch.getRecords())
-                .thenReturn(List.of(record));
-
-        when(record.partition())
-                .thenReturn(2);
-
-        when(fileNameGenerator.generateFileName(2))
-                .thenReturn("netflow-2.parquet");
-
-        when(fileNameGenerator.generateTempFileName("netflow-2.parquet"))
-                .thenReturn("netflow-2.parquet.tmp");
-
-        when(batchAccumulator.getPendingOffsets())
-                .thenReturn(Map.of(
-                        new TopicPartitionKey("netflow", 2),
-                        101L
-                ));
-
-        Map<TopicPartitionKey, Long> expectedOffsets =
-                Map.of(
-                        new TopicPartitionKey("netflow", 2),
-                        101L
-                );
+        Map<TopicPartitionKey, Long> expectedOffsets = Map.of(
+                new TopicPartitionKey("netflow", 2), 101L
+        );
+        when(batchAccumulator.getPendingOffsets()).thenReturn(expectedOffsets);
 
         Optional<Map<TopicPartitionKey, Long>> result =
                 storage.accept(record);
@@ -124,252 +139,97 @@ class NetFlowStorageTest {
         assertTrue(result.isPresent());
         assertEquals(expectedOffsets, result.get());
 
+        verify(fileStorage).ensureDirectoryExists(new Path("/netflow/parquet"));
+        verify(parquetFileWriter).createWriter(
+                new Path("/netflow/parquet", "netflow-2.parquet.tmp"),
+                schema
+        );
+        verify(parquetFileWriter).write(writer, genericRecord);
         verify(batchAccumulator).add(record);
         verify(batchAccumulator).shouldFlush();
-        verify(batchAccumulator).peekBatch();
 
-        verify(fileStorage).ensureDirectoryExists(
-                new Path("/netflow/parquet")
-        );
-
-        verify(parquetFileWriter).writeToPath(
-                eq(batch),
-                eq(new Path(
-                        "/netflow/parquet",
-                        "netflow-2.parquet.tmp"
-                ))
-        );
-
+        verify(parquetFileWriter).closeWriter(writer);
         verify(fileStorage).commitAtomic(
-                new Path(
-                        "/netflow/parquet",
-                        "netflow-2.parquet.tmp"
-                ),
-                new Path(
-                        "/netflow/parquet",
-                        "netflow-2.parquet"
-                )
+                new Path("/netflow/parquet", "netflow-2.parquet.tmp"),
+                new Path("/netflow/parquet", "netflow-2.parquet")
         );
-
         verify(batchAccumulator).getPendingOffsets();
         verify(batchAccumulator).clear();
     }
 
     @Test
     void flushShouldReturnEmptyMapWhenAccumulatorIsEmpty() {
+        when(batchAccumulator.isEmpty()).thenReturn(true);
 
-        when(batchAccumulator.isEmpty())
-                .thenReturn(true);
-
-        Map<TopicPartitionKey, Long> result =
-                storage.flush();
+        Map<TopicPartitionKey, Long> result = storage.flush();
 
         assertTrue(result.isEmpty());
-
         verify(batchAccumulator).isEmpty();
-
-        verifyNoInteractions(
-                parquetFileWriter,
-                fileStorage,
-                fileNameGenerator
-        );
+        verifyNoInteractions(parquetFileWriter, fileStorage, fileNameGenerator);
     }
 
     @Test
-    void flushShouldPersistBatchAndClearAccumulator() throws Exception {
+    void flushShouldPersistCurrentWriterAndClearAccumulator() throws Exception {
+        mockOpenWriter(1, "netflow-1.parquet", "netflow-1.parquet.tmp");
+        when(batchAccumulator.shouldFlush()).thenReturn(false);
+        storage.accept(record);
+        reset(parquetFileWriter, fileStorage, batchAccumulator);
 
-        when(batchAccumulator.isEmpty())
-                .thenReturn(false);
+        when(batchAccumulator.isEmpty()).thenReturn(false);
+        when(batchAccumulator.getRecordCount()).thenReturn(5L);
 
-        when(batchAccumulator.getRecordCount())
-                .thenReturn(5);
+        Map<TopicPartitionKey, Long> expectedOffsets = Map.of(
+                new TopicPartitionKey("netflow", 1), 200L
+        );
+        when(batchAccumulator.getPendingOffsets()).thenReturn(expectedOffsets);
 
-        when(batchAccumulator.peekBatch())
-                .thenReturn(batch);
-
-        when(batch.getRecords())
-                .thenReturn(List.of(record));
-
-        when(record.partition())
-                .thenReturn(1);
-
-        when(fileNameGenerator.generateFileName(1))
-                .thenReturn("netflow-1.parquet");
-
-        when(fileNameGenerator.generateTempFileName("netflow-1.parquet"))
-                .thenReturn("netflow-1.parquet.tmp");
-
-        Map<TopicPartitionKey, Long> expectedOffsets =
-                Map.of(
-                        new TopicPartitionKey("netflow", 1),
-                        200L
-                );
-
-        when(batchAccumulator.getPendingOffsets())
-                .thenReturn(expectedOffsets);
-
-        Map<TopicPartitionKey, Long> result =
-                storage.flush();
+        Map<TopicPartitionKey, Long> result = storage.flush();
 
         assertEquals(expectedOffsets, result);
 
-        verify(fileStorage).ensureDirectoryExists(
-                new Path("/netflow/parquet")
-        );
-
-        verify(parquetFileWriter).writeToPath(
-                eq(batch),
-                eq(new Path(
-                        "/netflow/parquet",
-                        "netflow-1.parquet.tmp"
-                ))
-        );
-
+        verify(parquetFileWriter).closeWriter(writer);
         verify(fileStorage).commitAtomic(
-                new Path(
-                        "/netflow/parquet",
-                        "netflow-1.parquet.tmp"
-                ),
-                new Path(
-                        "/netflow/parquet",
-                        "netflow-1.parquet"
-                )
+                new Path("/netflow/parquet", "netflow-1.parquet.tmp"),
+                new Path("/netflow/parquet", "netflow-1.parquet")
         );
-
         verify(batchAccumulator).getPendingOffsets();
         verify(batchAccumulator).clear();
     }
 
     @Test
-    void shouldKeepBatchWhenParquetWriteFails() throws Exception {
+    void shouldCleanupTempFileAndClearAccumulatorWhenWriteFails() throws Exception {
+        mockOpenWriter(0, "netflow-0.parquet", "netflow-0.parquet.tmp");
 
-        when(batchAccumulator.isEmpty())
-                .thenReturn(false);
-
-        when(batchAccumulator.getRecordCount())
-                .thenReturn(5);
-
-        when(batchAccumulator.peekBatch())
-                .thenReturn(batch);
-
-        when(batch.getRecords())
-                .thenReturn(List.of(record));
-
-        when(record.partition())
-                .thenReturn(0);
-
-        when(fileNameGenerator.generateFileName(0))
-                .thenReturn("netflow-0.parquet");
-
-        when(fileNameGenerator.generateTempFileName("netflow-0.parquet"))
-                .thenReturn("netflow-0.parquet.tmp");
-
-        doThrow(new RuntimeException("HDFS write failed"))
+        doThrow(new RuntimeException("write failed"))
                 .when(parquetFileWriter)
-                .writeToPath(
-                        eq(batch),
-                        eq(new Path(
-                                "/netflow/parquet",
-                                "netflow-0.parquet.tmp"
-                        ))
-                );
+                .write(eq(writer), eq(genericRecord));
 
-        assertThrows(
-                StorageException.class,
-                () -> storage.flush()
-        );
-
-        verify(parquetFileWriter).writeToPath(
-                eq(batch),
-                eq(new Path(
-                        "/netflow/parquet",
-                        "netflow-0.parquet.tmp"
-                ))
-        );
+        assertThrows(StorageException.class, () -> storage.accept(record));
 
         verify(fileStorage).cleanupTempFile(
-                new Path(
-                        "/netflow/parquet",
-                        "netflow-0.parquet.tmp"
-                )
+                new Path("/netflow/parquet", "netflow-0.parquet.tmp")
         );
-
-        verify(batchAccumulator, never()).clear();
-
-        verify(fileStorage, never()).commitAtomic(
-                any(Path.class),
-                any(Path.class)
-        );
+        verify(batchAccumulator).clear();
+        verify(fileStorage, never()).commitAtomic(any(), any());
     }
 
     @Test
     void shouldRejectNullRecord() {
-
-        assertThrows(
-                NullPointerException.class,
-                () -> storage.accept(null)
-        );
-
-        verifyNoInteractions(batchAccumulator);
+        assertThrows(NullPointerException.class, () -> storage.accept(null));
+        verifyNoInteractions(batchAccumulator, parquetFileWriter, fileStorage, fileNameGenerator);
     }
 
     @Test
     void constructorShouldRejectNullDependencies() {
-
-        assertThrows(
-                NullPointerException.class,
-                () -> new NetFlowStorage(
-                        null,
-                        parquetFileWriter,
-                        fileStorage,
-                        fileNameGenerator,
-                        hdfsProperties
-                )
-        );
-
-        assertThrows(
-                NullPointerException.class,
-                () -> new NetFlowStorage(
-                        batchAccumulator,
-                        null,
-                        fileStorage,
-                        fileNameGenerator,
-                        hdfsProperties
-                )
-        );
-
-        assertThrows(
-                NullPointerException.class,
-                () -> new NetFlowStorage(
-                        batchAccumulator,
-                        parquetFileWriter,
-                        null,
-                        fileNameGenerator,
-                        hdfsProperties
-                )
-        );
-
-        assertThrows(
-                NullPointerException.class,
-                () -> new NetFlowStorage(
-                        batchAccumulator,
-                        parquetFileWriter,
-                        fileStorage,
-                        null,
-                        hdfsProperties
-                )
-        );
-
-        assertThrows(
-                NullPointerException.class,
-                () -> new NetFlowStorage(
-                        batchAccumulator,
-                        parquetFileWriter,
-                        fileStorage,
-                        fileNameGenerator,
-                        null
-                )
-        );
+        assertThrows(NullPointerException.class,
+                () -> new NetFlowStorage(null, parquetFileWriter, fileStorage, fileNameGenerator, hdfsProperties));
+        assertThrows(NullPointerException.class,
+                () -> new NetFlowStorage(batchAccumulator, null, fileStorage, fileNameGenerator, hdfsProperties));
+        assertThrows(NullPointerException.class,
+                () -> new NetFlowStorage(batchAccumulator, parquetFileWriter, null, fileNameGenerator, hdfsProperties));
+        assertThrows(NullPointerException.class,
+                () -> new NetFlowStorage(batchAccumulator, parquetFileWriter, fileStorage, null, hdfsProperties));
+        assertThrows(NullPointerException.class,
+                () -> new NetFlowStorage(batchAccumulator, parquetFileWriter, fileStorage, fileNameGenerator, null));
     }
-
 }

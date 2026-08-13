@@ -6,12 +6,12 @@ import java.util.Objects;
 
 public final class BatchPolicy {
 
-    private final int maxRecordCount;
+    private final long maxRecordCount;
     private final long maxSizeBytes;
     private final Duration maxBatchAge;
 
     public BatchPolicy(
-            int maxRecordCount,
+            long maxRecordCount,
             long maxSizeBytes,
             Duration maxBatchAge
     ) {
@@ -43,7 +43,7 @@ public final class BatchPolicy {
     }
 
     public boolean shouldFlush(
-            int recordCount,
+            long recordCount,
             long totalSizeBytes,
             Instant firstRecordAt,
             Instant now
@@ -70,7 +70,7 @@ public final class BatchPolicy {
                 .compareTo(maxBatchAge) >= 0;
     }
 
-    public int getMaxRecordCount() {
+    public long getMaxRecordCount() {
         return maxRecordCount;
     }
 

@@ -5,11 +5,13 @@ import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.exception.StorageException;
 import com.nimbo.storage.model.TopicPartitionKey;
 import com.nimbo.storage.service.batching.BatchAccumulator;
-import com.nimbo.storage.service.batching.RecordBatch;
 import com.nimbo.storage.service.hdfs.FileStorage;
 import com.nimbo.storage.service.naming.FileNameGenerator;
 import com.nimbo.storage.service.parquet.ParquetFileWriter;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.hadoop.ParquetWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,12 @@ public final class NetFlowStorage {
     private final FileNameGenerator fileNameGenerator;
     private final HdfsProperties hdfsProperties;
 
+    private ParquetWriter<GenericRecord> currentWriter;
+    private Path currentTempPath;
+    private Path currentFinalPath;
+    private Schema currentSchema;
+    private boolean writerOpen = false;
+
     public NetFlowStorage(
             BatchAccumulator batchAccumulator,
             ParquetFileWriter parquetFileWriter,
@@ -45,53 +53,103 @@ public final class NetFlowStorage {
         logger.info("NetFlowStorage initialized with HDFS target path: {}", hdfsProperties.getBasePath());
     }
 
-     public Optional<Map<TopicPartitionKey, Long>> accept(IngestedRecord record) {
-         Objects.requireNonNull(record, "record must not be null");
-         batchAccumulator.add(record);
+    public Optional<Map<TopicPartitionKey, Long>> accept(IngestedRecord record) {
+        Objects.requireNonNull(record, "record must not be null");
 
-         if (batchAccumulator.shouldFlush()) {
-            return Optional.of(flushInternal());
-         }
+        try {
+            if (!writerOpen) {
+                openWriter(record);
+            }
 
-         return Optional.empty();
-     }
+            parquetFileWriter.write(currentWriter, record.record());
+
+            batchAccumulator.add(record);
+
+            if (batchAccumulator.shouldFlush()) {
+                Map<TopicPartitionKey, Long> offsets = commitCurrentBatch();
+                return Optional.of(offsets);
+            }
+
+            return Optional.empty();
+        } catch (Exception e) {
+            handleWriteFailure(e);
+            throw new StorageException("Failed to process record in streaming Parquet writer", e);
+        }
+    }
 
     public Map<TopicPartitionKey, Long> flush() {
         if (batchAccumulator.isEmpty()) {
             logger.info("Flush requested but accumulator is empty");
             return Map.of();
         }
-        logger.info("Executing lifecycle flush for {} buffered records", batchAccumulator.getRecordCount());
-        return flushInternal();
+
+        logger.info("Executing lifecycle flush for {} records", batchAccumulator.getRecordCount());
+        try {
+            return commitCurrentBatch();
+        } catch (Exception e) {
+            handleWriteFailure(e);
+            throw new StorageException("Failed to flush Parquet batch to HDFS", e);
+        }
     }
 
-    private Map<TopicPartitionKey, Long> flushInternal() {
-        RecordBatch batch = batchAccumulator.peekBatch();
-        int primaryPartition = batch.getRecords().get(0).partition();
+    private void openWriter(IngestedRecord firstRecord) throws Exception {
+        int primaryPartition = firstRecord.partition();
 
         String finalFileName = fileNameGenerator.generateFileName(primaryPartition);
         String tempFileName = fileNameGenerator.generateTempFileName(finalFileName);
 
         Path basePath = new Path(hdfsProperties.getBasePath());
-        Path finalPath = new Path(basePath, finalFileName);
-        Path tempPath = new Path(basePath, tempFileName);
+        currentFinalPath = new Path(basePath, finalFileName);
+        currentTempPath = new Path(basePath, tempFileName);
 
-        try {
-            fileStorage.ensureDirectoryExists(basePath);
-            parquetFileWriter.writeToPath(batch, tempPath);
-            fileStorage.commitAtomic(tempPath, finalPath);
+        fileStorage.ensureDirectoryExists(basePath);
 
-            Map<TopicPartitionKey, Long> offsetsToCommit = batchAccumulator.getPendingOffsets();
+        currentSchema = firstRecord.record().getSchema();
+        currentWriter = parquetFileWriter.createWriter(currentTempPath, currentSchema);
+        writerOpen = true;
+    }
 
-            batchAccumulator.clear();
-
-            //logger.info("Successfully persisted batch of {} records to HDFS at {}", batch.size(), finalPath);
-            return offsetsToCommit;
-
-        } catch (Exception e) {
-            fileStorage.cleanupTempFile(tempPath);
-            logger.error("Failed to persist batch to HDFS. Buffer retained in memory for zero data loss.", e);
-            throw new StorageException("Failed to write Parquet batch to HDFS", e);
+    private Map<TopicPartitionKey, Long> commitCurrentBatch() throws Exception {
+        if (!writerOpen) {
+            return Map.of();
         }
+
+        parquetFileWriter.closeWriter(currentWriter);
+        writerOpen = false;
+
+        fileStorage.commitAtomic(currentTempPath, currentFinalPath);
+
+        Map<TopicPartitionKey, Long> offsets = batchAccumulator.getPendingOffsets();
+
+        batchAccumulator.clear();
+
+        currentWriter = null;
+        currentTempPath = null;
+        currentFinalPath = null;
+        currentSchema = null;
+
+        return offsets;
+    }
+
+    private void handleWriteFailure(Exception e) {
+        if (writerOpen) {
+            try {
+                parquetFileWriter.closeWriter(currentWriter);
+            } catch (Exception closeException) {
+                logger.warn("Failed closing writer during error handling", closeException);
+            }
+            writerOpen = false;
+        }
+
+        if (currentTempPath != null) {
+            fileStorage.cleanupTempFile(currentTempPath);
+        }
+        
+        batchAccumulator.clear();
+
+        currentWriter = null;
+        currentTempPath = null;
+        currentFinalPath = null;
+        currentSchema = null;
     }
 }

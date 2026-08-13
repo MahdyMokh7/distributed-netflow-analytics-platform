@@ -1,9 +1,7 @@
 package com.nimbo.storage.service.parquet;
 
-import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.exception.ParquetWriteException;
-import com.nimbo.storage.service.batching.RecordBatch;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -29,46 +27,60 @@ public final class ParquetFileWriter {
         this.hadoopConfiguration = fileSystem.getConf();
     }
 
-    public void writeToPath(RecordBatch batch, Path targetPath) throws ParquetWriteException {
-        Objects.requireNonNull(batch, "batch must not be null");
-        Objects.requireNonNull(targetPath, "targetPath must not be null");
 
-        Schema schema = extractSchema(batch);
+    public ParquetWriter<GenericRecord> createWriter(Path targetPath, Schema schema)
+            throws ParquetWriteException {
+        Objects.requireNonNull(targetPath, "targetPath must not be null");
+        Objects.requireNonNull(schema, "schema must not be null");
+
         CompressionCodecName codec = CompressionCodecName.valueOf(
                 parquetProperties.getCompressionCodec().toUpperCase()
         );
 
-        try (ParquetWriter<GenericRecord> writer = AvroParquetWriter
-                .<GenericRecord>builder(targetPath)
-                .withSchema(schema)
-                .withConf(hadoopConfiguration)
-                .withCompressionCodec(codec)
-                .withRowGroupSize(parquetProperties.getBlockSizeBytes())
-                .withPageSize(parquetProperties.getPageSizeBytes())
-                .withDictionaryEncoding(parquetProperties.isEnableDictionary())
-                .build()) {
+        return buildWriter(targetPath, schema, codec);
+    }
 
-            for (IngestedRecord ingestedRecord : batch.getRecords()) {
-                writer.write(ingestedRecord.record());
-            }
+    public void write(ParquetWriter<GenericRecord> writer, GenericRecord record)
+            throws ParquetWriteException {
+        Objects.requireNonNull(writer, "writer must not be null");
+        Objects.requireNonNull(record, "record must not be null");
+
+        try {
+            writer.write(record);
         } catch (IOException e) {
-            throw new ParquetWriteException("Failed writing Parquet payload to HDFS path: " + targetPath, e);
+            throw new ParquetWriteException("Failed writing record to Parquet writer", e);
         }
     }
 
-    private Schema extractAndValidateSchema(RecordBatch batch) {
-        Schema schema = batch.getRecords().get(0).record().getSchema();
+    public void closeWriter(ParquetWriter<GenericRecord> writer)
+            throws ParquetWriteException {
+        Objects.requireNonNull(writer, "writer must not be null");
 
-        for (IngestedRecord ingestedRecord : batch.getRecords()) {
-            Schema currentSchema = ingestedRecord.record().getSchema();
-            if (schema != currentSchema && !schema.equals(currentSchema)) {
-                throw new IllegalArgumentException("Records in the same batch have inconsistent Avro schemas");
-            }
+        try {
+            writer.close();
+        } catch (IOException e) {
+            throw new ParquetWriteException("Failed closing Parquet writer", e);
         }
-        return schema;
     }
 
-    private Schema extractSchema(RecordBatch batch) {
-        return batch.getRecords().get(0).record().getSchema();
+
+    private ParquetWriter<GenericRecord> buildWriter(
+            Path targetPath,
+            Schema schema,
+            CompressionCodecName codec
+    ) throws ParquetWriteException {
+        try {
+            return AvroParquetWriter
+                    .<GenericRecord>builder(targetPath)
+                    .withSchema(schema)
+                    .withConf(hadoopConfiguration)
+                    .withCompressionCodec(codec)
+                    .withRowGroupSize(parquetProperties.getBlockSizeBytes())
+                    .withPageSize(parquetProperties.getPageSizeBytes())
+                    .withDictionaryEncoding(parquetProperties.isEnableDictionary())
+                    .build();
+        } catch (IOException e) {
+            throw new ParquetWriteException("Failed creating Parquet writer for path: " + targetPath, e);
+        }
     }
 }
