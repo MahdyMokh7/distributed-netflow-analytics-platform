@@ -119,11 +119,6 @@ pipeline {
                         docker run -d \
                             --name nimbo-ingester \
                             --restart unless-stopped \
-                            -e KAFKA_BOOTSTRAP_SERVERS=${kafkaServers} \
-                            -e HDFS_URI=${hdfsUri} \
-                            -e KAFKA_TOPIC=${env.KAFKA_TOPIC} \
-                            -e KAFKA_CONSUMER_GROUP=${env.KAFKA_CONSUMER_GROUP} \
-                            -e HDFS_BASE_PATH=${env.HDFS_BASE_PATH} \
                             -e SPRING_PROFILES_ACTIVE=prod \
                             -p 8080:8080 \
                             ${IMAGE_NAME}:latest

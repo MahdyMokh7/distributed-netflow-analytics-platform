@@ -5,14 +5,12 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.4</version>
+        <version>3.4.3</version>
         <relativePath/>
     </parent>
-
 
     <groupId>com.nimbo</groupId>
     <artifactId>nimbo</artifactId>
@@ -29,26 +27,28 @@
         <java.version>17</java.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
-        
+
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        
-        <avro.version>1.11.3</avro.version>
-        <kafka.version>3.6.1</kafka.version>
-        <hadoop.version>3.3.6</hadoop.version>
-        <parquet.version>1.13.1</parquet.version>
-        <lombok.version>1.18.30</lombok.version>
-        <testcontainers.version>1.20.4</testcontainers.version>
-        <confluent.version>7.5.0</confluent.version>
-        
-        <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
-        <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
-        <maven-failsafe-plugin.version>3.2.5</maven-failsafe-plugin.version>
-    </properties>
 
+        <avro.version>1.11.3</avro.version>
+        <kafka.version>3.9.0</kafka.version>
+        <hadoop.version>3.4.1</hadoop.version>
+        <parquet.version>1.15.0</parquet.version>
+        <lombok.version>1.18.36</lombok.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
+        <confluent.version>7.8.0</confluent.version>
+        <mockito.version>5.14.2</mockito.version>
+
+        <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
+        <maven-failsafe-plugin.version>3.5.2</maven-failsafe-plugin.version>
+        <jacoco.version>0.8.12</jacoco.version>
+    </properties>
 
     <dependencies>
 
+        <!-- SPRING BOOT -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
@@ -76,7 +76,12 @@
             <optional>true</optional>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
 
+        <!-- KAFKA -->
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
@@ -88,8 +93,7 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
-        <!-- AVRO  -->
-
+        <!-- AVRO -->
         <dependency>
             <groupId>org.apache.avro</groupId>
             <artifactId>avro</artifactId>
@@ -99,7 +103,7 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-avro-serializer</artifactId>
-            <version>7.5.0</version>
+            <version>${confluent.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.slf4j</groupId>
@@ -109,11 +113,14 @@
                     <groupId>ch.qos.reload4j</groupId>
                     <artifactId>reload4j</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>org.apache.kafka</groupId>
+                    <artifactId>kafka-clients</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
 
         <!-- HDFS & PARQUET -->
-
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-client</artifactId>
@@ -123,20 +130,21 @@
                     <groupId>org.slf4j</groupId>
                     <artifactId>slf4j-log4j12</artifactId>
                 </exclusion>
-
                 <exclusion>
                     <groupId>org.slf4j</groupId>
                     <artifactId>slf4j-reload4j</artifactId>
                 </exclusion>
-
                 <exclusion>
                     <groupId>log4j</groupId>
                     <artifactId>log4j</artifactId>
                 </exclusion>
-
                 <exclusion>
                     <groupId>javax.servlet</groupId>
                     <artifactId>servlet-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.zookeeper</groupId>
+                    <artifactId>zookeeper</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -153,6 +161,7 @@
             <version>${parquet.version}</version>
         </dependency>
 
+        <!-- UTILITY -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -168,7 +177,7 @@
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
-            <version>2.15.1</version>
+            <version>2.18.0</version>
         </dependency>
 
         <dependency>
@@ -176,13 +185,13 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
-
+        <!-- LOGGING -->
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
         </dependency>
 
-
+        <!-- TESTING -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -233,6 +242,82 @@
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- EXPLICIT DECLARATIONS TO FIX "USED UNDECLARED" WARNINGS -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-common</artifactId>
+            <version>${parquet.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+            <version>${hadoop.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-log4j12</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>log4j</groupId>
+                    <artifactId>log4j</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-hdfs-client</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
     </dependencies>
 
     <repositories>
@@ -246,7 +331,7 @@
                 <enabled>false</enabled>
             </snapshots>
         </repository>
-        
+
         <repository>
             <id>confluent</id>
             <name>Confluent Maven Repository</name>
@@ -256,7 +341,7 @@
 
     <build>
         <finalName>${project.artifactId}</finalName>
-        
+
         <plugins>
 
             <plugin>
@@ -346,7 +431,7 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.11</version>
+                <version>${jacoco.version}</version>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>
@@ -366,11 +451,7 @@
         </plugins>
     </build>
 
-    <!-- 
-        BUILD PROFILES - Different configurations for different environments
-    -->
     <profiles>
-        <!-- Development profile - active by default -->
         <profile>
             <id>dev</id>
             <activation>
@@ -381,7 +462,6 @@
             </properties>
         </profile>
 
-        <!-- Production profile -->
         <profile>
             <id>prod</id>
             <properties>
@@ -389,7 +469,6 @@
             </properties>
         </profile>
 
-        <!-- Skip tests profile - for quick builds -->
         <profile>
             <id>skip-tests</id>
             <properties>

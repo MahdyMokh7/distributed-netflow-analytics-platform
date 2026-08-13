@@ -5,17 +5,21 @@ import com.nimbo.ingester.deserializer.AvroDeserializer;
 import com.nimbo.ingester.exception.KafkaConsumerException;
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.ingester.service.DataProcessingService;
+import com.nimbo.storage.model.TopicPartitionKey;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 
 import java.time.Duration;
-import java.util.Collections;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
@@ -31,6 +35,7 @@ public class NetflowConsumer {
     private final AtomicBoolean running = new AtomicBoolean(true);
     private Thread consumerThread;
 
+
     public NetflowConsumer(
             KafkaConsumer<byte[], byte[]> kafkaConsumer,
             KafkaProperties kafkaProperties,
@@ -40,6 +45,40 @@ public class NetflowConsumer {
         this.kafkaProperties = kafkaProperties;
         this.avroDeserializer = avroDeserializer;
         this.dataProcessingService = dataProcessingService;
+
+        registerRebalanceListener();
+    }
+
+    private void registerRebalanceListener() {
+        this.kafkaConsumer.subscribe(
+                Collections.singletonList(kafkaProperties.getTopic()),
+                new ConsumerRebalanceListener() {
+                    @Override
+                    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                        log.info("Partitions revoked: {}. Flushing buffered records...", partitions);
+                        // Flush before partitions are revoked to prevent data loss
+                        try {
+                            Map<TopicPartitionKey, Long> flushedOffsets = dataProcessingService.flush();
+                            if (!flushedOffsets.isEmpty()) {
+                                Map<TopicPartition, OffsetAndMetadata> commitMap = new HashMap<>();
+                                flushedOffsets.forEach((key, offset) -> {
+                                    TopicPartition partition = new TopicPartition(key.topic(), key.partition());
+                                    commitMap.put(partition, new OffsetAndMetadata(offset));
+                                });
+                                kafkaConsumer.commitSync(commitMap);
+                                log.info("Flushed and committed {} offsets during rebalance", flushedOffsets.size());
+                            }
+                        } catch (Exception e) {
+                            log.error("Failed to flush during rebalance", e);
+                        }
+                    }
+
+                    @Override
+                    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                        log.info("Partitions assigned: {}", partitions);
+                    }
+                }
+        );
     }
 
     @PostConstruct
@@ -65,12 +104,25 @@ public class NetflowConsumer {
                         continue;
                     }
 
+                    Map<TopicPartitionKey, Long> offsetsToCommit = new HashMap<>();
+
                     for (ConsumerRecord<byte[], byte[]> record : records) {
-                        processRecord(record);
+                        Optional<Map<TopicPartitionKey, Long>> result = processRecord(record);
+                        result.ifPresent(offsets -> {
+                            offsets.forEach((key, offset) -> {
+                                offsetsToCommit.merge(key, offset, Math::max);
+                            });
+                        });
                     }
 
-                    if (!kafkaProperties.isEnableAutoCommit()) {
-                        kafkaConsumer.commitSync();
+                    if (!kafkaProperties.isEnableAutoCommit() && !offsetsToCommit.isEmpty()) {
+                        Map<TopicPartition, OffsetAndMetadata> commitMap = new HashMap<>();
+                        offsetsToCommit.forEach((key, offset) -> {
+                            TopicPartition partition = new TopicPartition(key.topic(), key.partition());
+                            commitMap.put(partition, new OffsetAndMetadata(offset));
+                        });
+                        kafkaConsumer.commitSync(commitMap);
+                        log.debug("Committed offsets: {}", offsetsToCommit);
                     }
 
                 } catch (Exception e) {
@@ -91,7 +143,7 @@ public class NetflowConsumer {
         }
     }
 
-    private void processRecord(ConsumerRecord<byte[], byte[]> record) {
+    private Optional<Map<TopicPartitionKey, Long>> processRecord(ConsumerRecord<byte[], byte[]> record) {
         try {
             var genericRecord = avroDeserializer.deserialize(record.value());
 
@@ -103,11 +155,12 @@ public class NetflowConsumer {
                     record.value().length
             );
 
-            dataProcessingService.processRecord(ingestedRecord);
+            return dataProcessingService.processRecord(ingestedRecord);
 
         } catch (Exception e) {
             log.error("Error processing record: topic={}, partition={}, offset={}",
                     record.topic(), record.partition(), record.offset(), e);
+            return Optional.empty();
         }
     }
 
@@ -115,6 +168,24 @@ public class NetflowConsumer {
     public void shutdown() {
         log.info("Shutting down Netflow consumer...");
         running.set(false);
+
+        // SCENARIO 1: GRACEFUL SHUTDOWN - Flush remaining records
+        try {
+            log.info("Flushing remaining buffered records before shutdown...");
+            Map<TopicPartitionKey, Long> flushedOffsets = dataProcessingService.flush();
+            if (!flushedOffsets.isEmpty()) {
+                Map<TopicPartition, OffsetAndMetadata> commitMap = new HashMap<>();
+                flushedOffsets.forEach((key, offset) -> {
+                    TopicPartition partition = new TopicPartition(key.topic(), key.partition());
+                    commitMap.put(partition, new OffsetAndMetadata(offset));
+                });
+                kafkaConsumer.commitSync(commitMap);
+                log.info("Flushed and committed {} offsets during shutdown", flushedOffsets.size());
+            }
+        } catch (Exception e) {
+            log.error("Error flushing during shutdown", e);
+        }
+
         if (consumerThread != null) {
             try {
                 consumerThread.interrupt();

@@ -39,3 +39,5 @@ application-local.yml
 /docs/dev-guide
 /docs/project_contents.txt
 /scripts/project-content-extracter.py
+
+terminal.log
