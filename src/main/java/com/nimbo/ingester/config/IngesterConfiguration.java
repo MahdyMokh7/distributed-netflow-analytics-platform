@@ -73,30 +73,4 @@ public class IngesterConfiguration {
         return new KafkaProducer<>(configs);
     }
 
-    @Bean
-    public KafkaConsumer<byte[], byte[]> kafkaConsumer(KafkaProperties properties) {
-        Map<String, Object> configs = buildConsumerConfigs(properties);
-        return new KafkaConsumer<>(configs);
-    }
-
-    private Map<String, Object> buildConsumerConfigs(KafkaProperties properties) {
-        Map<String, Object> configs = new HashMap<>();
-
-        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, properties.getBootstrapServers());
-        configs.put(ConsumerConfig.GROUP_ID_CONFIG, properties.getConsumerGroup());
-        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, properties.isEnableAutoCommit());
-        configs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        configs.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, properties.getMaxPollRecords());
-        configs.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, properties.getSessionTimeoutMs());
-        configs.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, properties.getHeartbeatIntervalMs());
-        configs.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, properties.getMaxPollIntervalMs());
-
-        if (properties.getAdditionalConfigs() != null) {
-            configs.putAll(properties.getAdditionalConfigs());
-        }
-
-        return configs;
-    }
 }

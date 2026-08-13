@@ -19,3 +19,7 @@ storage:
     uri: ${HDFS_URI:hdfs://namenode:9000}
     user: root
     base-path: ${HDFS_BASE_PATH:/data/test/netflow/}
+
+ingester:
+  kafka:
+    consumer-instances: ${CONSUMER_INSTANCES:1}

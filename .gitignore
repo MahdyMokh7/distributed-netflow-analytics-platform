@@ -38,6 +38,7 @@ application-local.yml
 ## Mehdy Special
 /docs/dev-guide
 /docs/project_contents.txt
+/docs/project_java_contents.txt
 /scripts/project-content-extracter.py
-
+/scripts/project_java_contents.txt
 terminal.log

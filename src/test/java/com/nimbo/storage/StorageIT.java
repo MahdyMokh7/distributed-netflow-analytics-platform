@@ -5,7 +5,6 @@ import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.model.TopicPartitionKey;
 import com.nimbo.storage.service.NetFlowStorage;
-import com.nimbo.storage.service.batching.BatchAccumulator;
 import com.nimbo.storage.service.batching.BatchPolicy;
 import com.nimbo.storage.service.hdfs.HdfsFileStorage;
 import com.nimbo.storage.service.naming.FileNameGenerator;
@@ -50,35 +49,22 @@ class StorageIT {
                     DockerImageName.parse("apache/hadoop:3.3.6")
             )
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource(
-                                    "hadoop/core-site.xml"
-                            ),
+                            MountableFile.forClasspathResource("hadoop/core-site.xml"),
                             "/opt/hadoop/etc/hadoop/core-site.xml"
                     )
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource(
-                                    "hadoop/hdfs-site.xml"
-                            ),
+                            MountableFile.forClasspathResource("hadoop/hdfs-site.xml"),
                             "/opt/hadoop/etc/hadoop/hdfs-site.xml"
                     )
-                    .withExposedPorts(
-                            8020,
-                            9870,
-                            9866
-                    )
+                    .withExposedPorts(8020, 9870, 9866)
                     .withCopyFileToContainer(
                             MountableFile.forClasspathResource("hadoop/start-hdfs.sh"),
                             "/opt/hadoop/start-hdfs.sh"
                     )
                     .withCommand("bash", "/opt/hadoop/start-hdfs.sh")
                     .waitingFor(
-                            Wait.forLogMessage(
-                                            ".*HDFS_READY.*",
-                                            1
-                                    )
-                                    .withStartupTimeout(
-                                            Duration.ofMinutes(2)
-                                    )
+                            Wait.forLogMessage(".*HDFS_READY.*", 1)
+                                    .withStartupTimeout(Duration.ofMinutes(2))
                     );
 
     private static FileSystem fileSystem;
@@ -86,20 +72,16 @@ class StorageIT {
     private static Configuration hadoopConfiguration;
     private static Schema avroSchema;
 
-    private static final List<GenericRecord> ingestedRecords =
-            new ArrayList<>();
+    private static final List<GenericRecord> ingestedRecords = new ArrayList<>();
 
     @BeforeAll
     static void setUpAll() throws Exception {
         avroSchema = createAvroSchema();
         hadoopConfiguration = createHadoopConfiguration();
         fileSystem = createFileSystem(hadoopConfiguration);
-
         netFlowStorage = createStorageFixture(fileSystem);
-
         ingestedRecords.clear();
     }
-
 
     private static Schema createAvroSchema() throws Exception {
         String schemaJson = """
@@ -107,18 +89,9 @@ class StorageIT {
                   "type": "record",
                   "name": "NetFlowRecord",
                   "fields": [
-                    {
-                      "name": "srcIp",
-                      "type": "string"
-                    },
-                    {
-                      "name": "dstIp",
-                      "type": "string"
-                    },
-                    {
-                      "name": "bytes",
-                      "type": "long"
-                    }
+                    {"name": "srcIp", "type": "string"},
+                    {"name": "dstIp", "type": "string"},
+                    {"name": "bytes", "type": "long"}
                   ]
                 }
                 """;
@@ -126,20 +99,10 @@ class StorageIT {
     }
 
     private static Configuration createHadoopConfiguration() {
-        String hdfsUri =
-                "hdfs://"
-                        + HDFS_CONTAINER.getHost()
-                        + ":"
-                        + HDFS_CONTAINER.getMappedPort(8020);
-
+        String hdfsUri = "hdfs://" + HDFS_CONTAINER.getHost() + ":" + HDFS_CONTAINER.getMappedPort(8020);
         Configuration conf = new Configuration();
         conf.set("fs.defaultFS", hdfsUri);
-        conf.set(
-                "fs.hdfs.impl",
-                org.apache.hadoop.hdfs.DistributedFileSystem.class.getName()
-        );
-        // The container's hdfs-site.xml is not loaded by the client,
-        // so set replication explicitly for the test JVM.
+        conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
         conf.set("dfs.replication", "1");
         return conf;
     }
@@ -147,27 +110,13 @@ class StorageIT {
     private static FileSystem createFileSystem(Configuration conf)
             throws IOException, InterruptedException {
         String hdfsUri = conf.get("fs.defaultFS");
-        FileSystem fs = FileSystem.get(
-                URI.create(hdfsUri),
-                conf,
-                "hadoop"
-        );
-        assertTrue(
-                fs.exists(new Path("/")),
-                "HDFS root should be accessible"
-        );
+        FileSystem fs = FileSystem.get(URI.create(hdfsUri), conf, "hadoop");
+        assertTrue(fs.exists(new Path("/")), "HDFS root should be accessible");
         return fs;
     }
 
-    // ---------- Storage fixture helpers ----------
-
     private static NetFlowStorage createStorageFixture(FileSystem fs) {
-        BatchPolicy batchPolicy = new BatchPolicy(
-                5,
-                1024 * 1024,
-                Duration.ofMinutes(2)
-        );
-        BatchAccumulator batchAccumulator = new BatchAccumulator(batchPolicy);
+        BatchPolicy batchPolicy = new BatchPolicy(5, 1024 * 1024, Duration.ofMinutes(2));
 
         ParquetProperties parquetProperties = new ParquetProperties();
         parquetProperties.setCompressionCodec("SNAPPY");
@@ -175,9 +124,7 @@ class StorageIT {
         parquetProperties.setPageSizeBytes(1024 * 1024);
         parquetProperties.setEnableDictionary(true);
 
-        ParquetFileWriter parquetFileWriter =
-                new ParquetFileWriter(fs, parquetProperties);
-
+        ParquetFileWriter parquetFileWriter = new ParquetFileWriter(fs, parquetProperties);
         FileNameGenerator fileNameGenerator = new FileNameGenerator();
         HdfsFileStorage hdfsFileStorage = new HdfsFileStorage(fs);
 
@@ -185,7 +132,7 @@ class StorageIT {
         hdfsProperties.setBasePath("/netflow/parquet");
 
         return new NetFlowStorage(
-                batchAccumulator,
+                batchPolicy,
                 parquetFileWriter,
                 hdfsFileStorage,
                 fileNameGenerator,
@@ -194,212 +141,73 @@ class StorageIT {
     }
 
     @Test
-    @DisplayName(
-            "persisting a batch as Parquet in HDFS and reading it back."
-    )
+    @DisplayName("Should persist batch as Parquet in HDFS and read it back")
     void shouldWriteAndReadParquetThroughHdfs() throws Exception {
-
-        /*
-         * Record 1:
-         * verify that the batch is initially buffered.
-         */
-        GenericRecord firstRecord =
-                createRecord(
-                        "192.168.1.10",
-                        "10.0.0.1",
-                        500L
-                );
-
+        GenericRecord firstRecord = createRecord("192.168.1.10", "10.0.0.1", 500L);
         ingestedRecords.add(firstRecord);
 
         Optional<Map<TopicPartitionKey, Long>> result =
-                netFlowStorage.accept(
-                        createIngestedRecord(
-                                firstRecord,
-                                100L
-                        )
-                );
+                netFlowStorage.accept(createIngestedRecord(firstRecord, 100L));
 
-        assertTrue(
-                result.isEmpty(),
-                "The first record must remain buffered"
-        );
+        assertTrue(result.isEmpty(), "First record must remain buffered");
 
-        /*
-         * Records 2-5.
-         * The fifth record reaches the batch threshold.
-         */
         for (int i = 2; i <= 5; i++) {
-
-            GenericRecord record =
-                    createRecord(
-                            "192.168.1." + i,
-                            "10.0.0.1",
-                            1000L * i
-                    );
-
+            GenericRecord record = createRecord("192.168.1." + i, "10.0.0.1", 1000L * i);
             ingestedRecords.add(record);
-
-            result =
-                    netFlowStorage.accept(
-                            createIngestedRecord(
-                                    record,
-                                    99L + i
-                            )
-                    );
+            result = netFlowStorage.accept(createIngestedRecord(record, 99L + i));
         }
 
-        /*
-         * The fifth record must trigger persistence.
-         */
-        assertTrue(
-                result.isPresent(),
-                "The fifth record must trigger a batch flush"
-        );
+        assertTrue(result.isPresent(), "Fifth record must trigger batch flush");
+        assertEquals(105L, result.get().get(new TopicPartitionKey("netflow", 0)));
 
-        assertEquals(
-                105L,
-                result.get().get(
-                        new TopicPartitionKey(
-                                "netflow",
-                                0
-                        )
-                )
-        );
+        Path storageDirectory = new Path("/netflow/parquet");
+        assertTrue(fileSystem.exists(storageDirectory), "HDFS target directory must exist");
 
-        /*
-         * Verify the HDFS directory exists.
-         */
-        Path storageDirectory =
-                new Path("/netflow/parquet");
+        FileStatus[] files = fileSystem.listStatus(storageDirectory);
+        assertEquals(1, files.length, "Exactly one Parquet file should be created");
 
-        assertTrue(
-                fileSystem.exists(storageDirectory),
-                "The HDFS target directory must exist"
-        );
+        Path parquetFile = files[0].getPath();
+        assertTrue(parquetFile.getName().endsWith(".parquet"), "File must have .parquet extension");
+        assertFalse(parquetFile.getName().startsWith("."), "Temporary file must not remain");
+        assertTrue(files[0].getLen() > 0, "Parquet file must not be empty");
 
-        /*
-         * Verify that a real Parquet file was committed.
-         */
-        FileStatus[] files =
-                fileSystem.listStatus(
-                        storageDirectory
-                );
-
-        assertEquals(
-                1,
-                files.length,
-                "Exactly one Parquet file should have been created"
-        );
-
-        Path parquetFile =
-                files[0].getPath();
-
-        assertTrue(
-                parquetFile.getName().endsWith(".parquet"),
-                "The committed file must have a .parquet extension"
-        );
-
-        assertFalse(
-                parquetFile.getName().startsWith("."),
-                "The temporary file must not remain as the final file"
-        );
-
-        assertTrue(
-                files[0].getLen() > 0,
-                "The Parquet file must not be empty"
-        );
-
-        /*
-         * Read the actual Parquet file back from HDFS.
-         *
-         * IMPORTANT:
-         * Reuse the HDFS configuration. A new empty
-         * Configuration would default to the local filesystem.
-         */
         try (ParquetReader<GenericRecord> reader =
-                     AvroParquetReader
-                             .<GenericRecord>builder(
-                                     HadoopInputFile.fromPath(
-                                             parquetFile,
-                                             hadoopConfiguration
-                                     )
-                             )
-                             .build()) {
+                     AvroParquetReader.<GenericRecord>builder(
+                             HadoopInputFile.fromPath(parquetFile, hadoopConfiguration)
+                     ).build()) {
 
             int count = 0;
-
             GenericRecord actual;
 
             while ((actual = reader.read()) != null) {
+                assertTrue(count < ingestedRecords.size(), "HDFS contains more records than expected");
 
-                assertTrue(
-                        count < ingestedRecords.size(),
-                        "HDFS contains more records than expected"
-                );
-
-                GenericRecord expected =
-                        ingestedRecords.get(count);
-
-                assertEquals(
-                        expected.get("srcIp").toString(),
-                        actual.get("srcIp").toString()
-                );
-
-                assertEquals(
-                        expected.get("dstIp").toString(),
-                        actual.get("dstIp").toString()
-                );
-
-                assertEquals(
-                        expected.get("bytes"),
-                        actual.get("bytes")
-                );
+                GenericRecord expected = ingestedRecords.get(count);
+                assertEquals(expected.get("srcIp").toString(), actual.get("srcIp").toString());
+                assertEquals(expected.get("dstIp").toString(), actual.get("dstIp").toString());
+                assertEquals(expected.get("bytes"), actual.get("bytes"));
 
                 count++;
             }
 
-            assertEquals(
-                    ingestedRecords.size(),
-                    count,
-                    "All ingested records must be readable from Parquet"
-            );
+            assertEquals(ingestedRecords.size(), count, "All ingested records must be readable from Parquet");
         }
     }
 
-    private static GenericRecord createRecord(
-            String srcIp,
-            String dstIp,
-            long bytes
-    ) {
-
-        GenericRecord record =
-                new GenericData.Record(avroSchema);
-
+    private static GenericRecord createRecord(String srcIp, String dstIp, long bytes) {
+        GenericRecord record = new GenericData.Record(avroSchema);
         record.put("srcIp", srcIp);
         record.put("dstIp", dstIp);
         record.put("bytes", bytes);
-
         return record;
     }
 
-    private static IngestedRecord createIngestedRecord(
-            GenericRecord record,
-            long offset
-    ) {
-
-        return new IngestedRecord(
-                record,
-                "netflow",
-                0,
-                offset,
-                100
-        );
+    private static IngestedRecord createIngestedRecord(GenericRecord record, long offset) {
+        return new IngestedRecord(record, "netflow", 0, offset, 100);
     }
 
     @AfterAll
     static void tearDownAll() throws IOException {
-
         if (fileSystem != null) {
             fileSystem.close();
         }

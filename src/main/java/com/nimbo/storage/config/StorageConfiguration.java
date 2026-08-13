@@ -1,6 +1,5 @@
 package com.nimbo.storage.config;
 
-import com.nimbo.storage.service.batching.BatchAccumulator;
 import com.nimbo.storage.service.batching.BatchPolicy;
 import org.apache.hadoop.fs.FileSystem;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -26,11 +25,6 @@ public class StorageConfiguration {
                 properties.getMaxSizeBytes(),
                 properties.getMaxAge()
         );
-    }
-
-    @Bean
-    public BatchAccumulator batchAccumulator(BatchPolicy batchPolicy) {
-        return new BatchAccumulator(batchPolicy);
     }
 
     @Bean

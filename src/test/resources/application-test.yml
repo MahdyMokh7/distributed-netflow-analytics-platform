@@ -1,0 +1,44 @@
+spring:
+  profiles:
+    active: test
+
+logging:
+  level:
+    com.nimbo.ingester: DEBUG
+    org.apache.kafka: WARN
+    org.apache.hadoop: WARN
+
+ingester:
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic: test-netflow
+    consumer-group: test-consumer-group
+    enable-auto-commit: false
+    poll-timeout-ms: 100
+    max-poll-records: 10
+    session-timeout-ms: 10000
+    heartbeat-interval-ms: 3000
+    max-poll-interval-ms: 60000
+
+    consumer-instances: 1
+    writer-threads-per-instance: 1
+    writer-queue-capacity: 10
+    batch-max-records: 10
+    batch-max-size-bytes: 1048576
+    batch-max-age-minutes: 1
+
+storage:
+  hdfs:
+    uri: hdfs://localhost:9000
+    user: test
+    base-path: /data/test/
+  parquet:
+    compression-codec: SNAPPY
+    block-size-bytes: 134217728
+    page-size-bytes: 1048576
+    enable-dictionary: true
+
+rolling:
+  max-record-count: 10
+  max-size-bytes: 1048576
+  max-age: 1m

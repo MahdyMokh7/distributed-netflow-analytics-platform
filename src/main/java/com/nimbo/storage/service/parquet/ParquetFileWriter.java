@@ -1,5 +1,6 @@
 package com.nimbo.storage.service.parquet;
 
+import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.exception.ParquetWriteException;
 import org.apache.avro.Schema;
@@ -26,7 +27,6 @@ public final class ParquetFileWriter {
         this.parquetProperties = Objects.requireNonNull(parquetProperties, "parquetProperties must not be null");
         this.hadoopConfiguration = fileSystem.getConf();
     }
-
 
     public ParquetWriter<GenericRecord> createWriter(Path targetPath, Schema schema)
             throws ParquetWriteException {
@@ -62,7 +62,6 @@ public final class ParquetFileWriter {
             throw new ParquetWriteException("Failed closing Parquet writer", e);
         }
     }
-
 
     private ParquetWriter<GenericRecord> buildWriter(
             Path targetPath,

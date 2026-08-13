@@ -66,7 +66,7 @@ class DataProcessingServiceTest {
     void shouldHandleStorageReturningOffsets() {
         IngestedRecord record = createTestRecord();
         when(netFlowStorage.accept(any(IngestedRecord.class)))
-                .thenReturn(Optional.of(java.util.Map.of()));
+                .thenReturn(Optional.of(Map.of()));
 
         service.processRecord(record);
 

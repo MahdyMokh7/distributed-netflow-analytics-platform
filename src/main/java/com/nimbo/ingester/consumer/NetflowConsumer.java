@@ -10,61 +10,92 @@ import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
 import com.nimbo.ingester.service.NetflowValidationService;
 import com.nimbo.storage.model.TopicPartitionKey;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-@Component
+@Slf4j
 public class NetflowConsumer {
 
-    private static final Logger log = LoggerFactory.getLogger(NetflowConsumer.class);
-
-    private final KafkaConsumer<byte[], byte[]> kafkaConsumer;
     private final KafkaProperties kafkaProperties;
     private final AvroDeserializer avroDeserializer;
     private final DataProcessingService dataProcessingService;
     private final NetflowValidationService validationService;
-    private final AtomicBoolean running = new AtomicBoolean(true);
     private final DlqService dlqService;
+    private final int instanceId;
+
+    private KafkaConsumer<byte[], byte[]> kafkaConsumer;
+    private final AtomicBoolean running = new AtomicBoolean(true);
     private Thread consumerThread;
 
-
     public NetflowConsumer(
-            KafkaConsumer<byte[], byte[]> kafkaConsumer,
             KafkaProperties kafkaProperties,
             AvroDeserializer avroDeserializer,
             DataProcessingService dataProcessingService,
-            NetflowValidationService validationService, DlqService dlqService
-    ) {
-        this.kafkaConsumer = kafkaConsumer;
+            NetflowValidationService validationService,
+            DlqService dlqService,
+            int instanceId) {
         this.kafkaProperties = kafkaProperties;
         this.avroDeserializer = avroDeserializer;
         this.dataProcessingService = dataProcessingService;
         this.validationService = validationService;
         this.dlqService = dlqService;
+        this.instanceId = instanceId;
 
+        this.kafkaConsumer = createKafkaConsumer();
         registerRebalanceListener();
     }
+
+    private KafkaConsumer<byte[], byte[]> createKafkaConsumer() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                kafkaProperties.getBootstrapServers());
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG,
+                kafkaProperties.getConsumerGroup());
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                ByteArrayDeserializer.class.getName());
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                ByteArrayDeserializer.class.getName());
+        configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+                kafkaProperties.isEnableAutoCommit());
+        configs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+                "earliest");
+        configs.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG,
+                kafkaProperties.getMaxPollRecords());
+        configs.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
+                kafkaProperties.getSessionTimeoutMs());
+        configs.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
+                kafkaProperties.getHeartbeatIntervalMs());
+        configs.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG,
+                kafkaProperties.getMaxPollIntervalMs());
+
+        configs.put(ConsumerConfig.CLIENT_ID_CONFIG,
+                "consumer-" + kafkaProperties.getConsumerGroup() + "-" + instanceId);
+
+        if (kafkaProperties.getAdditionalConfigs() != null) {
+            configs.putAll(kafkaProperties.getAdditionalConfigs());
+        }
+
+        return new KafkaConsumer<>(configs);
+    }
+
     private void registerRebalanceListener() {
         this.kafkaConsumer.subscribe(
                 Collections.singletonList(kafkaProperties.getTopic()),
                 new ConsumerRebalanceListener() {
                     @Override
                     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                        log.info("Partitions revoked: {}. Flushing buffered records...", partitions);
-                        // Flush before partitions are revoked to prevent data loss
+                        log.info("Instance #{}: Partitions revoked: {}", instanceId, partitions);
                         try {
                             Map<TopicPartitionKey, Long> flushedOffsets = dataProcessingService.flush();
                             if (!flushedOffsets.isEmpty()) {
@@ -74,33 +105,43 @@ public class NetflowConsumer {
                                     commitMap.put(partition, new OffsetAndMetadata(offset));
                                 });
                                 kafkaConsumer.commitSync(commitMap);
-                                log.info("Flushed and committed {} offsets during rebalance", flushedOffsets.size());
+                                log.info("Instance #{}: Flushed {} offsets during rebalance",
+                                        instanceId, flushedOffsets.size());
                             }
                         } catch (Exception e) {
-                            log.error("Failed to flush during rebalance", e);
+                            log.error("Instance #{}: Failed to flush during rebalance", instanceId, e);
                         }
                     }
 
                     @Override
                     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                        log.info("Partitions assigned: {}", partitions);
+                        log.info("Instance #{}: Partitions assigned: {}", instanceId, partitions);
                     }
                 }
         );
     }
 
-    @PostConstruct
+    private Set<TopicPartitionKey> toKeys(Collection<TopicPartition> partitions) {
+        Set<TopicPartitionKey> keys = new HashSet<>();
+        for (TopicPartition tp : partitions) {
+            keys.add(new TopicPartitionKey(tp.topic(), tp.partition()));
+        }
+        return keys;
+    }
+
     public void start() {
-        log.info("Starting Netflow consumer for topic: {}", kafkaProperties.getTopic());
-        this.consumerThread = new Thread(this::consumeLoop, "netflow-consumer-thread");
+        log.info("Starting consumer instance #{} for topic: {}",
+                instanceId, kafkaProperties.getTopic());
+        this.consumerThread = new Thread(this::consumeLoop,
+                "consumer-instance-" + instanceId);
         this.consumerThread.setDaemon(true);
         this.consumerThread.start();
     }
 
     private void consumeLoop() {
         try {
-            kafkaConsumer.subscribe(Collections.singletonList(kafkaProperties.getTopic()));
-            log.info("Subscribed to topic: {}", kafkaProperties.getTopic());
+            log.info("Instance #{}: Subscribed to topic: {}",
+                    instanceId, kafkaProperties.getTopic());
 
             while (running.get()) {
                 try {
@@ -109,21 +150,15 @@ public class NetflowConsumer {
                     );
 
                     if (records.isEmpty()) {
-                        System.out.println(
-                                "No records received..."
-                        );
                         continue;
                     }
 
                     Map<TopicPartitionKey, Long> offsetsToCommit = new HashMap<>();
 
                     for (ConsumerRecord<byte[], byte[]> record : records) {
-                        Optional<Map<TopicPartitionKey, Long>> result = processRecord(record);
-                        result.ifPresent(offsets -> {
-                            offsets.forEach((key, offset) -> {
-                                offsetsToCommit.merge(key, offset, Math::max);
-                            });
-                        });
+                        processRecord(record).ifPresent(offsets ->
+                                offsets.forEach((key, offset) -> offsetsToCommit.merge(key, offset, Math::max))
+                        );
                     }
 
                     if (!kafkaProperties.isEnableAutoCommit() && !offsetsToCommit.isEmpty()) {
@@ -133,113 +168,63 @@ public class NetflowConsumer {
                             commitMap.put(partition, new OffsetAndMetadata(offset));
                         });
                         kafkaConsumer.commitSync(commitMap);
-                        log.debug("Committed offsets: {}", offsetsToCommit);
+                        log.debug("Instance #{}: Committed offsets: {}", instanceId, offsetsToCommit);
                     }
 
                 } catch (Exception e) {
-                    log.error("Error during Kafka consumption", e);
+                    log.error("Instance #{}: Error during Kafka consumption", instanceId, e);
                 }
             }
 
         } catch (Exception e) {
-            log.error("Fatal error in consumer loop", e);
+            log.error("Instance #{}: Fatal error in consumer loop", instanceId, e);
             throw new KafkaConsumerException("Consumer loop failed", e);
         } finally {
             try {
                 kafkaConsumer.close();
-                log.info("Kafka consumer closed");
+                log.info("Instance #{}: Kafka consumer closed", instanceId);
             } catch (Exception e) {
-                log.warn("Error closing Kafka consumer", e);
+                log.warn("Instance #{}: Error closing Kafka consumer", instanceId, e);
             }
         }
     }
 
-    private Optional<Map<TopicPartitionKey, Long>> processRecord(
-            ConsumerRecord<byte[], byte[]> record
-    ) {
-
+    private Optional<Map<TopicPartitionKey, Long>> processRecord(ConsumerRecord<byte[], byte[]> record) {
         try {
+            var genericRecord = avroDeserializer.deserialize(record.value());
 
-            var genericRecord =
-                    avroDeserializer.deserialize(
-                            record.value()
-                    );
-
-
-            ValidationResult result =
-                    validationService.validate(
-                            genericRecord
-                    );
-
+            ValidationResult result = validationService.validate(genericRecord);
 
             if (!result.valid()) {
-
-//                log.warn(
-//                        "Invalid Netflow record: topic={}, partition={}, offset={}, error={}",
-//                        record.topic(),
-//                        record.partition(),
-//                        record.offset(),
-//                        result.errorMessage()
-//                );
-
-                dlqService.publish(
-                        record,
-                        "VALIDATION_ERROR",
-                        result.errorMessage()
-                );
-
+                dlqService.publish(record, "VALIDATION_ERROR", result.errorMessage());
                 return Optional.empty();
             }
 
-
-            IngestedRecord ingestedRecord =
-                    new IngestedRecord(
-                            genericRecord,
-                            record.topic(),
-                            record.partition(),
-                            record.offset(),
-                            record.value().length
-                    );
-
-
-            return dataProcessingService
-                    .processRecord(
-                            ingestedRecord
-                    );
-
-
-        } catch (DeserializationException e) {
-
-            dlqService.publish(
-                    record,
-                    "DESERIALIZATION_ERROR",
-                    e.getMessage()
-            );
-            return Optional.empty();
-
-
-        } catch (Exception e) {
-
-            log.error(
-                    "Error processing record: topic={}, partition={}, offset={}",
+            IngestedRecord ingestedRecord = new IngestedRecord(
+                    genericRecord,
                     record.topic(),
                     record.partition(),
                     record.offset(),
-                    e
+                    record.value().length
             );
 
+            return dataProcessingService.processRecord(ingestedRecord);
+
+        } catch (DeserializationException e) {
+            dlqService.publish(record, "DESERIALIZATION_ERROR", e.getMessage());
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Instance #{}: Error processing record: topic={}, partition={}, offset={}",
+                    instanceId, record.topic(), record.partition(), record.offset(), e);
             return Optional.empty();
         }
     }
 
-    @PreDestroy
     public void shutdown() {
-        log.info("Shutting down Netflow consumer...");
+        log.info("Instance #{}: Shutting down...", instanceId);
         running.set(false);
 
-        // SCENARIO 1: GRACEFUL SHUTDOWN - Flush remaining records
         try {
-            log.info("Flushing remaining buffered records before shutdown...");
             Map<TopicPartitionKey, Long> flushedOffsets = dataProcessingService.flush();
             if (!flushedOffsets.isEmpty()) {
                 Map<TopicPartition, OffsetAndMetadata> commitMap = new HashMap<>();
@@ -248,10 +233,10 @@ public class NetflowConsumer {
                     commitMap.put(partition, new OffsetAndMetadata(offset));
                 });
                 kafkaConsumer.commitSync(commitMap);
-                log.info("Flushed and committed {} offsets during shutdown", flushedOffsets.size());
+                log.info("Instance #{}: Flushed {} offsets during shutdown", instanceId, flushedOffsets.size());
             }
         } catch (Exception e) {
-            log.error("Error flushing during shutdown", e);
+            log.error("Instance #{}: Error flushing during shutdown", instanceId, e);
         }
 
         if (consumerThread != null) {
@@ -262,5 +247,6 @@ public class NetflowConsumer {
                 Thread.currentThread().interrupt();
             }
         }
+        log.info("Instance #{}: Shutdown complete", instanceId);
     }
 }

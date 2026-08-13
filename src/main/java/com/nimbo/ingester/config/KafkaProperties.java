@@ -47,4 +47,7 @@ public class KafkaProperties {
 
     private Map<String, String> additionalConfigs;
 
+    @Min(1)
+    private int consumerInstances = 1;
+
 }

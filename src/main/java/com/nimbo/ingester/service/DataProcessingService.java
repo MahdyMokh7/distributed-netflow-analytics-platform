@@ -7,10 +7,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 
-@Service
 public class DataProcessingService {
 
     private static final Logger log = LoggerFactory.getLogger(DataProcessingService.class);
@@ -31,12 +31,12 @@ public class DataProcessingService {
         }
     }
 
-    // FLUSH - For graceful shutdown and rebalance
+    // Lifecycle flush - only for partitions the caller currently owns (rebalance/shutdown)
     public Map<TopicPartitionKey, Long> flush() {
         try {
             return netFlowStorage.flush();
         } catch (Exception e) {
-            log.error("Failed to flush storage", e);
+            log.error("Failed to flush storage for partitions: ");
             throw e;
         }
     }
