@@ -2,26 +2,31 @@ package com.nimbo.storage.service.batching;
 
 import com.nimbo.ingester.model.IngestedRecord;
 import org.apache.avro.generic.GenericRecord;
+import com.nimbo.storage.model.TopicPartitionKey;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
 class BatchAccumulatorTest {
 
-    private IngestedRecord createRecord(int sizeBytes) {
+    private IngestedRecord createRecord(String topic, int partition, long offset, int sizeBytes) {
         GenericRecord avroRecord = mock(GenericRecord.class);
-
         return new IngestedRecord(
                 avroRecord,
-                "netflow",
-                0,
-                100L,
+                topic,
+                partition,
+                offset,
                 sizeBytes
         );
+    }
+
+    private IngestedRecord createRecord(int sizeBytes) {
+        return createRecord("netflow", 0, 100L, sizeBytes);
     }
 
     @Test
@@ -242,6 +247,81 @@ class BatchAccumulatorTest {
         assertThrows(
                 IllegalStateException.class,
                 accumulator::peekBatch
+        );
+    }
+
+    @Test
+    void shouldTrackPendingOffsetsForSinglePartition() {
+        BatchPolicy policy = new BatchPolicy(100, 1000, Duration.ofMinutes(1));
+        BatchAccumulator accumulator = new BatchAccumulator(policy);
+
+        accumulator.add(createRecord("netflow", 0, 10L, 100));
+
+        Map<TopicPartitionKey, Long> offsets = accumulator.getPendingOffsets();
+
+        assertEquals(1, offsets.size());
+        assertEquals(11L, offsets.get(new TopicPartitionKey("netflow", 0)));
+    }
+
+    @Test
+    void shouldTrackHighestOffsetForSamePartition() {
+        BatchPolicy policy = new BatchPolicy(100, 1000, Duration.ofMinutes(1));
+        BatchAccumulator accumulator = new BatchAccumulator(policy);
+
+        accumulator.add(createRecord("netflow", 0, 10L, 100));
+        accumulator.add(createRecord("netflow", 0, 11L, 100));
+        accumulator.add(createRecord("netflow", 0, 15L, 100));
+
+        Map<TopicPartitionKey, Long> offsets = accumulator.getPendingOffsets();
+
+        assertEquals(1, offsets.size());
+        assertEquals(16L, offsets.get(new TopicPartitionKey("netflow", 0)));
+    }
+
+    @Test
+    void shouldTrackOffsetsForMultiplePartitions() {
+        BatchPolicy policy = new BatchPolicy(100, 1000, Duration.ofMinutes(1));
+        BatchAccumulator accumulator = new BatchAccumulator(policy);
+
+        accumulator.add(createRecord("netflow", 0, 10L, 100));
+        accumulator.add(createRecord("netflow", 1, 20L, 100));
+        accumulator.add(createRecord("netflow", 2, 30L, 100));
+
+        Map<TopicPartitionKey, Long> offsets = accumulator.getPendingOffsets();
+
+        assertEquals(3, offsets.size());
+        assertEquals(11L, offsets.get(new TopicPartitionKey("netflow", 0)));
+        assertEquals(21L, offsets.get(new TopicPartitionKey("netflow", 1)));
+        assertEquals(31L, offsets.get(new TopicPartitionKey("netflow", 2)));
+    }
+
+    @Test
+    void shouldTrackOffsetsForDifferentTopics() {
+        BatchPolicy policy = new BatchPolicy(100, 1000, Duration.ofMinutes(1));
+        BatchAccumulator accumulator = new BatchAccumulator(policy);
+
+        accumulator.add(createRecord("topic-a", 0, 10L, 100));
+        accumulator.add(createRecord("topic-b", 0, 20L, 100));
+
+        Map<TopicPartitionKey, Long> offsets = accumulator.getPendingOffsets();
+
+        assertEquals(2, offsets.size());
+        assertEquals(11L, offsets.get(new TopicPartitionKey("topic-a", 0)));
+        assertEquals(21L, offsets.get(new TopicPartitionKey("topic-b", 0)));
+    }
+
+    @Test
+    void shouldReturnUnmodifiablePendingOffsetsMap() {
+        BatchPolicy policy = new BatchPolicy(100, 1000, Duration.ofMinutes(1));
+        BatchAccumulator accumulator = new BatchAccumulator(policy);
+
+        accumulator.add(createRecord("netflow", 0, 10L, 100));
+
+        Map<TopicPartitionKey, Long> offsets = accumulator.getPendingOffsets();
+
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> offsets.clear()
         );
     }
 }

@@ -46,14 +46,14 @@ public final class NetFlowStorage {
     }
 
      public Optional<Map<TopicPartitionKey, Long>> accept(IngestedRecord record) {
-     Objects.requireNonNull(record, "record must not be null");
-     batchAccumulator.add(record);
+         Objects.requireNonNull(record, "record must not be null");
+         batchAccumulator.add(record);
 
-     if (batchAccumulator.shouldFlush()) {
-        return Optional.of(flushInternal());
-     }
+         if (batchAccumulator.shouldFlush()) {
+            return Optional.of(flushInternal());
+         }
 
-     return Optional.empty();
+         return Optional.empty();
      }
 
     public Map<TopicPartitionKey, Long> flush() {
@@ -81,7 +81,7 @@ public final class NetFlowStorage {
             parquetFileWriter.writeToPath(batch, tempPath);
             fileStorage.commitAtomic(tempPath, finalPath);
 
-            Map<TopicPartitionKey, Long> offsetsToCommit = batch.getOffsetsToCommit();
+            Map<TopicPartitionKey, Long> offsetsToCommit = batchAccumulator.getPendingOffsets();
 
             batchAccumulator.clear();
 

@@ -106,7 +106,7 @@ class NetFlowStorageTest {
         when(fileNameGenerator.generateTempFileName("netflow-2.parquet"))
                 .thenReturn("netflow-2.parquet.tmp");
 
-        when(batch.getOffsetsToCommit())
+        when(batchAccumulator.getPendingOffsets())
                 .thenReturn(Map.of(
                         new TopicPartitionKey("netflow", 2),
                         101L
@@ -151,7 +151,7 @@ class NetFlowStorageTest {
                 )
         );
 
-        verify(batch).getOffsetsToCommit();
+        verify(batchAccumulator).getPendingOffsets();
         verify(batchAccumulator).clear();
     }
 
@@ -205,7 +205,7 @@ class NetFlowStorageTest {
                         200L
                 );
 
-        when(batch.getOffsetsToCommit())
+        when(batchAccumulator.getPendingOffsets())
                 .thenReturn(expectedOffsets);
 
         Map<TopicPartitionKey, Long> result =
@@ -236,7 +236,7 @@ class NetFlowStorageTest {
                 )
         );
 
-        verify(batch).getOffsetsToCommit();
+        verify(batchAccumulator).getPendingOffsets();
         verify(batchAccumulator).clear();
     }
 

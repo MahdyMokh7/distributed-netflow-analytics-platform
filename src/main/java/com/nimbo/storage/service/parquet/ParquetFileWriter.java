@@ -33,7 +33,7 @@ public final class ParquetFileWriter {
         Objects.requireNonNull(batch, "batch must not be null");
         Objects.requireNonNull(targetPath, "targetPath must not be null");
 
-        Schema schema = extractAndValidateSchema(batch);
+        Schema schema = extractSchema(batch);
         CompressionCodecName codec = CompressionCodecName.valueOf(
                 parquetProperties.getCompressionCodec().toUpperCase()
         );
@@ -66,5 +66,9 @@ public final class ParquetFileWriter {
             }
         }
         return schema;
+    }
+
+    private Schema extractSchema(RecordBatch batch) {
+        return batch.getRecords().get(0).record().getSchema();
     }
 }

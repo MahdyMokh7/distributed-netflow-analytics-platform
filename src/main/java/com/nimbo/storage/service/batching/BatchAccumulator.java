@@ -1,6 +1,8 @@
 package com.nimbo.storage.service.batching;
 
 import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.storage.model.TopicPartitionKey;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -8,7 +10,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-
+import java.util.HashMap;
+import java.util.Map;
 
 public final class BatchAccumulator {
 
@@ -20,6 +23,8 @@ public final class BatchAccumulator {
 
     private Instant firstRecordAt;
     private long accumulatedSizeBytes;
+
+    private final Map<TopicPartitionKey, Long> pendingOffsets = new HashMap<>();
 
     public BatchAccumulator(BatchPolicy batchPolicy) {
         this.batchPolicy = Objects.requireNonNull(
@@ -40,6 +45,9 @@ public final class BatchAccumulator {
 
         buffer.add(record);
         accumulatedSizeBytes += record.serializedSizeBytes();
+
+        TopicPartitionKey key = new TopicPartitionKey(record.topic(), record.partition());
+        pendingOffsets.merge(key, record.offset() + 1, Math::max);
 
 //        logger.debug(
 //                "Record added to batch: count={}, sizeBytes={}",
@@ -85,6 +93,11 @@ public final class BatchAccumulator {
         buffer.clear();
         firstRecordAt = null;
         accumulatedSizeBytes = 0L;
+        pendingOffsets.clear();
+    }
+
+    public Map<TopicPartitionKey, Long> getPendingOffsets() {
+        return Map.copyOf(pendingOffsets);
     }
 
     public int getRecordCount() {
