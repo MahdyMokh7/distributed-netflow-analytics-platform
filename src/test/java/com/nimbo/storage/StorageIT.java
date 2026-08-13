@@ -67,7 +67,7 @@ class StorageIT {
                             9866
                     )
                     .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("scripts/start-hdfs.sh"),
+                            MountableFile.forClasspathResource("hadoop/start-hdfs.sh"),
                             "/opt/hadoop/start-hdfs.sh"
                     )
                     .withCommand("bash", "/opt/hadoop/start-hdfs.sh")

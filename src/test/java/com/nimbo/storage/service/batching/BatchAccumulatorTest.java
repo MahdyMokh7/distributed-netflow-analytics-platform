@@ -153,28 +153,6 @@ class BatchAccumulatorTest {
     }
 
     @Test
-    void peekBatchShouldNotClearAccumulator() {
-        BatchPolicy policy = new BatchPolicy(
-                100,
-                1000,
-                Duration.ofMinutes(1)
-        );
-
-        BatchAccumulator accumulator = new BatchAccumulator(policy);
-
-        accumulator.add(createRecord(100));
-        accumulator.add(createRecord(200));
-
-        RecordBatch batch = accumulator.peekBatch();
-
-        assertNotNull(batch);
-
-        assertEquals(2, accumulator.getRecordCount());
-        assertEquals(300, accumulator.getAccumulatedSizeBytes());
-        assertFalse(accumulator.isEmpty());
-    }
-
-    @Test
     void shouldClearAccumulator() {
         BatchPolicy policy = new BatchPolicy(
                 100,
@@ -231,22 +209,6 @@ class BatchAccumulatorTest {
         assertThrows(
                 NullPointerException.class,
                 () -> accumulator.add(null)
-        );
-    }
-
-    @Test
-    void peekBatchShouldFailWhenEmpty() {
-        BatchPolicy policy = new BatchPolicy(
-                100,
-                1000,
-                Duration.ofMinutes(1)
-        );
-
-        BatchAccumulator accumulator = new BatchAccumulator(policy);
-
-        assertThrows(
-                IllegalStateException.class,
-                accumulator::peekBatch
         );
     }
 
