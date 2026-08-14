@@ -25,6 +25,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class Application {
 
     public static void main(String[] args) {
+        System.setProperty("HADOOP_USER_NAME", "hadoop");
         SpringApplication.run(Application.class, args);
     }
 }

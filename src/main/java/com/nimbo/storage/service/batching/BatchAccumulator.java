@@ -2,6 +2,8 @@ package com.nimbo.storage.service.batching;
 
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.model.TopicPartitionKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -9,6 +11,8 @@ import java.util.Map;
 import java.util.Objects;
 
 public final class BatchAccumulator {
+
+    private static final Logger logger = LoggerFactory.getLogger(BatchAccumulator.class);
 
     private final BatchPolicy batchPolicy;
 
@@ -42,12 +46,23 @@ public final class BatchAccumulator {
     }
 
     public boolean shouldFlush() {
-        return batchPolicy.shouldFlush(
+        boolean flush = batchPolicy.shouldFlush(
                 recordCount,
                 accumulatedSizeBytes,
                 firstRecordAt,
                 Instant.now()
         );
+
+        if (flush) {
+            logger.info(
+                    "Batch flush triggered: recordCount={}, accumulatedSizeBytes={}, firstRecordAt={}",
+                    recordCount,
+                    accumulatedSizeBytes,
+                    firstRecordAt
+            );
+        }
+
+        return flush;
     }
 
     public void clear() {

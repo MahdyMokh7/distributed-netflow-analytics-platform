@@ -43,6 +43,7 @@ public class StorageConfiguration {
 
         String uriStr = hdfsProperties.getUri();
         conf.set("fs.defaultFS", uriStr);
+        conf.set("dfs.replication", "3");
 
         String nameservice = hdfsProperties.getNameservice();
         if (nameservice != null && !nameservice.isBlank()) {
@@ -72,10 +73,6 @@ public class StorageConfiguration {
         conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
         conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
 
-        String user = (hdfsProperties.getUser() != null && !hdfsProperties.getUser().isBlank())
-                ? hdfsProperties.getUser()
-                : "root";
-
-        return FileSystem.get(URI.create(uriStr), conf, user);
+        return FileSystem.get(URI.create(uriStr), conf);
     }
 }

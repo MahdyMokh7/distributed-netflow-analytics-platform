@@ -22,7 +22,6 @@ kafka:
 storage:
   hdfs:
     uri: ${HDFS_URI:hdfs://team1}
-    user: ${HDFS_USER:team1}
     base-path: ${HDFS_BASE_PATH:/netflow/parquet}
     nameservice: team1
     nodes:

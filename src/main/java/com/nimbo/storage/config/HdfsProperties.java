@@ -8,16 +8,12 @@ import java.util.Map;
 public class HdfsProperties {
 
     private String uri;
-    private String user;
     private String basePath;
     private String nameservice;
     private Map<String, String> nodes;
 
     public String getUri() { return uri; }
     public void setUri(String uri) { this.uri = uri; }
-
-    public String getUser() { return user; }
-    public void setUser(String user) { this.user = user; }
 
     public String getBasePath() { return basePath; }
     public void setBasePath(String basePath) { this.basePath = basePath; }
