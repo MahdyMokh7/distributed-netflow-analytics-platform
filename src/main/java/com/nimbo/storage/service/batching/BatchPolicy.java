@@ -4,11 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
-public final class BatchPolicy {
-
-    private final long maxRecordCount;
-    private final long maxSizeBytes;
-    private final Duration maxBatchAge;
+public record BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBatchAge) {
 
     public BatchPolicy(
             long maxRecordCount,
@@ -68,17 +64,5 @@ public final class BatchPolicy {
 
         return Duration.between(firstRecordAt, now)
                 .compareTo(maxBatchAge) >= 0;
-    }
-
-    public long getMaxRecordCount() {
-        return maxRecordCount;
-    }
-
-    public long getMaxSizeBytes() {
-        return maxSizeBytes;
-    }
-
-    public Duration getMaxBatchAge() {
-        return maxBatchAge;
     }
 }

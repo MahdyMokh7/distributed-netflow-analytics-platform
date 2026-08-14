@@ -1,9 +1,13 @@
 package com.nimbo.storage.config;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.Map;
 
+@Setter
+@Getter
 @ConfigurationProperties(prefix = "storage.hdfs")
 public class HdfsProperties {
 
@@ -12,15 +16,4 @@ public class HdfsProperties {
     private String nameservice;
     private Map<String, String> nodes;
 
-    public String getUri() { return uri; }
-    public void setUri(String uri) { this.uri = uri; }
-
-    public String getBasePath() { return basePath; }
-    public void setBasePath(String basePath) { this.basePath = basePath; }
-
-    public String getNameservice() { return nameservice; }
-    public void setNameservice(String nameservice) { this.nameservice = nameservice; }
-
-    public Map<String, String> getNodes() { return nodes; }
-    public void setNodes(Map<String, String> nodes) { this.nodes = nodes; }
 }

@@ -1,9 +1,13 @@
 package com.nimbo.storage.config;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 
+@Setter
+@Getter
 @ConfigurationProperties(prefix = "rolling")
 public class RollingProperties {
 
@@ -11,24 +15,4 @@ public class RollingProperties {
     private long maxSizeBytes;
     private Duration maxAge;
 
-    public int getMaxRecordCount() {
-        return maxRecordCount;
-    }
-    public void setMaxRecordCount(int maxRecordCount) {
-        this.maxRecordCount = maxRecordCount;
-    }
-
-    public long getMaxSizeBytes() {
-        return maxSizeBytes;
-    }
-    public void setMaxSizeBytes(long maxSizeBytes) {
-        this.maxSizeBytes = maxSizeBytes;
-    }
-
-    public Duration getMaxAge() {
-        return maxAge;
-    }
-    public void setMaxAge(Duration maxAge) {
-        this.maxAge = maxAge;
-    }
 }

@@ -1,6 +1,7 @@
 package com.nimbo.ingester.deserializer;
 
 import com.nimbo.ingester.exception.DeserializationException;
+import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -9,6 +10,7 @@ import org.apache.avro.io.DecoderFactory;
 
 public class AvroDeserializer {
 
+    @Getter
     private final Schema schema;
     private final GenericDatumReader<GenericRecord> reader;
     private final DecoderFactory decoderFactory = DecoderFactory.get();
@@ -27,7 +29,4 @@ public class AvroDeserializer {
         }
     }
 
-    public Schema getSchema() {
-        return schema;
-    }
 }

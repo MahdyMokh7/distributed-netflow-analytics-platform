@@ -291,7 +291,7 @@ public class NetflowValidationService {
             String error
     ) {
 
-        if (errors.length() > 0) {
+        if (!errors.isEmpty()) {
             errors.append(" | ");
         }
 

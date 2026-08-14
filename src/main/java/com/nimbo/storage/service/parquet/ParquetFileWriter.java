@@ -1,6 +1,5 @@
 package com.nimbo.storage.service.parquet;
 
-import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.exception.ParquetWriteException;
 import org.apache.avro.Schema;

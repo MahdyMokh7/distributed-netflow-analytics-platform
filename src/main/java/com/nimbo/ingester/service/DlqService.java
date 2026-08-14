@@ -7,9 +7,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -17,9 +14,6 @@ import java.util.concurrent.ExecutionException;
 
 @Service
 public class DlqService {
-
-    private static final Logger log =
-            LoggerFactory.getLogger(DlqService.class);
 
     private final KafkaProducer<byte[], byte[]> kafkaProducer;
     private final KafkaProperties kafkaProperties;
@@ -88,16 +82,6 @@ public class DlqService {
             kafkaProducer
                     .send(dlqRecord)
                     .get();
-
-
-//            log.warn(
-//                    "Record published to DLQ: topic={}, partition={}, offset={}, errorType={}",
-//                    originalRecord.topic(),
-//                    originalRecord.partition(),
-//                    originalRecord.offset(),
-//                    errorType
-//            );
-
 
         } catch (InterruptedException e) {
 

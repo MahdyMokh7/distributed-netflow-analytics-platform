@@ -121,14 +121,6 @@ public class NetflowConsumer {
         );
     }
 
-    private Set<TopicPartitionKey> toKeys(Collection<TopicPartition> partitions) {
-        Set<TopicPartitionKey> keys = new HashSet<>();
-        for (TopicPartition tp : partitions) {
-            keys.add(new TopicPartitionKey(tp.topic(), tp.partition()));
-        }
-        return keys;
-    }
-
     public void start() {
         log.info("Starting consumer instance #{} for topic: {}",
                 instanceId, kafkaProperties.getTopic());

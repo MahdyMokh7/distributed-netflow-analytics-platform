@@ -40,5 +40,5 @@ application-local.yml
 /docs/project_contents.txt
 /docs/project_java_contents.txt
 /scripts/project-content-extracter.py
-/scripts/project_java_contents.txt
+/scripts/code-extracter.py
 terminal.log

@@ -2,9 +2,6 @@ package com.nimbo.ingester.config;
 
 import com.nimbo.ingester.deserializer.AvroDeserializer;
 import org.apache.avro.Schema;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

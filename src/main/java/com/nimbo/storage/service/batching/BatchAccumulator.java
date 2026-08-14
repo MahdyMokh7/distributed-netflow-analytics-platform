@@ -2,6 +2,7 @@ package com.nimbo.storage.service.batching;
 
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.model.TopicPartitionKey;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,8 +17,11 @@ public final class BatchAccumulator {
 
     private final BatchPolicy batchPolicy;
 
+    @Getter
     private Instant firstRecordAt;
+    @Getter
     private long accumulatedSizeBytes;
+    @Getter
     private long recordCount;
 
     // Nested map: topic -> partition -> nextOffset
@@ -87,18 +91,6 @@ public final class BatchAccumulator {
                 )
         );
         return Map.copyOf(result);
-    }
-
-    public long getRecordCount() {
-        return recordCount;
-    }
-
-    public long getAccumulatedSizeBytes() {
-        return accumulatedSizeBytes;
-    }
-
-    public Instant getFirstRecordAt() {
-        return firstRecordAt;
     }
 
     public boolean isEmpty() {
