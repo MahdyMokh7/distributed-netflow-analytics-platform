@@ -5,9 +5,13 @@ RUN mvn -q -B dependency:go-offline
 COPY src ./src
 RUN mvn -q -B clean package -DskipTests
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 WORKDIR /app
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
+RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app/target/nimbo.jar app.jar
 RUN chown appuser:appgroup app.jar
 USER appuser

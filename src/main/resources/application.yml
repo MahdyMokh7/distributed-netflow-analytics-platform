@@ -58,7 +58,7 @@ ingester:
     consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer}
     enable-auto-commit: false
     poll-timeout-ms: 1000
-    max-poll-records: 500
+    max-poll-records: 5000
     session-timeout-ms: 30000
     heartbeat-interval-ms: 3000
     max-poll-interval-ms: 300000

@@ -174,13 +174,13 @@ public class NetflowConsumer {
 
             if (!result.valid()) {
 
-                log.warn(
-                        "Invalid Netflow record: topic={}, partition={}, offset={}, error={}",
-                        record.topic(),
-                        record.partition(),
-                        record.offset(),
-                        result.errorMessage()
-                );
+//                log.warn(
+//                        "Invalid Netflow record: topic={}, partition={}, offset={}, error={}",
+//                        record.topic(),
+//                        record.partition(),
+//                        record.offset(),
+//                        result.errorMessage()
+//                );
 
                 dlqService.publish(
                         record,
