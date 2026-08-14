@@ -1,10 +1,7 @@
 package com.nimbo.ingester.config;
 
 import com.nimbo.ingester.deserializer.AvroDeserializer;
-import com.nimbo.storage.service.NetFlowStorage;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -17,8 +14,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Properties;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 
 @Configuration
 @EnableConfigurationProperties(KafkaProperties.class)
@@ -39,6 +37,40 @@ public class IngesterConfiguration {
     @Bean
     public AvroDeserializer avroDeserializer(Schema schema) {
         return new AvroDeserializer(schema);
+    }
+
+    @Bean(destroyMethod = "close")
+    public KafkaProducer<byte[], byte[]> kafkaProducer(
+            KafkaProperties properties
+    ) {
+
+        Map<String, Object> configs =
+                new HashMap<>();
+
+        configs.put(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                properties.getBootstrapServers()
+        );
+
+        configs.put(
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                ByteArraySerializer.class.getName()
+        );configs.put(
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                ByteArraySerializer.class.getName()
+        );
+
+        configs.put(
+                ProducerConfig.ACKS_CONFIG,
+                "all"
+        );
+
+        configs.put(
+                ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+                true
+        );
+
+        return new KafkaProducer<>(configs);
     }
 
     @Bean

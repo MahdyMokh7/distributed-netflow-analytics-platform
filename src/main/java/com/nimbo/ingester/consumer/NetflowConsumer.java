@@ -2,9 +2,13 @@ package com.nimbo.ingester.consumer;
 
 import com.nimbo.ingester.config.KafkaProperties;
 import com.nimbo.ingester.deserializer.AvroDeserializer;
+import com.nimbo.ingester.exception.DeserializationException;
 import com.nimbo.ingester.exception.KafkaConsumerException;
 import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.ingester.model.ValidationResult;
 import com.nimbo.ingester.service.DataProcessingService;
+import com.nimbo.ingester.service.DlqService;
+import com.nimbo.ingester.service.NetflowValidationService;
 import com.nimbo.storage.model.TopicPartitionKey;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -31,8 +35,9 @@ public class NetflowConsumer {
     private final KafkaProperties kafkaProperties;
     private final AvroDeserializer avroDeserializer;
     private final DataProcessingService dataProcessingService;
-
+    private final NetflowValidationService validationService;
     private final AtomicBoolean running = new AtomicBoolean(true);
+    private final DlqService dlqService;
     private Thread consumerThread;
 
 
@@ -40,15 +45,18 @@ public class NetflowConsumer {
             KafkaConsumer<byte[], byte[]> kafkaConsumer,
             KafkaProperties kafkaProperties,
             AvroDeserializer avroDeserializer,
-            DataProcessingService dataProcessingService) {
+            DataProcessingService dataProcessingService,
+            NetflowValidationService validationService, DlqService dlqService
+    ) {
         this.kafkaConsumer = kafkaConsumer;
         this.kafkaProperties = kafkaProperties;
         this.avroDeserializer = avroDeserializer;
         this.dataProcessingService = dataProcessingService;
+        this.validationService = validationService;
+        this.dlqService = dlqService;
 
         registerRebalanceListener();
     }
-
     private void registerRebalanceListener() {
         this.kafkaConsumer.subscribe(
                 Collections.singletonList(kafkaProperties.getTopic()),
@@ -101,6 +109,9 @@ public class NetflowConsumer {
                     );
 
                     if (records.isEmpty()) {
+                        System.out.println(
+                                "No records received..."
+                        );
                         continue;
                     }
 
@@ -143,23 +154,80 @@ public class NetflowConsumer {
         }
     }
 
-    private Optional<Map<TopicPartitionKey, Long>> processRecord(ConsumerRecord<byte[], byte[]> record) {
-        try {
-            var genericRecord = avroDeserializer.deserialize(record.value());
+    private Optional<Map<TopicPartitionKey, Long>> processRecord(
+            ConsumerRecord<byte[], byte[]> record
+    ) {
 
-            IngestedRecord ingestedRecord = new IngestedRecord(
-                    genericRecord,
+        try {
+
+            var genericRecord =
+                    avroDeserializer.deserialize(
+                            record.value()
+                    );
+
+
+            ValidationResult result =
+                    validationService.validate(
+                            genericRecord
+                    );
+
+
+            if (!result.valid()) {
+
+                log.warn(
+                        "Invalid Netflow record: topic={}, partition={}, offset={}, error={}",
+                        record.topic(),
+                        record.partition(),
+                        record.offset(),
+                        result.errorMessage()
+                );
+
+                dlqService.publish(
+                        record,
+                        "VALIDATION_ERROR",
+                        result.errorMessage()
+                );
+
+                return Optional.empty();
+            }
+
+
+            IngestedRecord ingestedRecord =
+                    new IngestedRecord(
+                            genericRecord,
+                            record.topic(),
+                            record.partition(),
+                            record.offset(),
+                            record.value().length
+                    );
+
+
+            return dataProcessingService
+                    .processRecord(
+                            ingestedRecord
+                    );
+
+
+        } catch (DeserializationException e) {
+
+            dlqService.publish(
+                    record,
+                    "DESERIALIZATION_ERROR",
+                    e.getMessage()
+            );
+            return Optional.empty();
+
+
+        } catch (Exception e) {
+
+            log.error(
+                    "Error processing record: topic={}, partition={}, offset={}",
                     record.topic(),
                     record.partition(),
                     record.offset(),
-                    record.value().length
+                    e
             );
 
-            return dataProcessingService.processRecord(ingestedRecord);
-
-        } catch (Exception e) {
-            log.error("Error processing record: topic={}, partition={}, offset={}",
-                    record.topic(), record.partition(), record.offset(), e);
             return Optional.empty();
         }
     }

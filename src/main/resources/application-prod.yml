@@ -17,7 +17,20 @@ management:
 kafka:
   bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
   topic: ${KAFKA_TOPIC:netflow}
-  consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer8}
+  dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
+  consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer}
+#  consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer-${INSTANCE_ID:1}}
+  consumer:
+    auto-offset-reset: earliest
+
+#                  in server must do:
+#
+#                  kafka-topics.sh \
+#                  --bootstrap-server 10.10.61.51:9092 \
+#                  --create \
+#                  --topic netflow-dlq \
+#                  --partitions 3 \
+#                  --replication-factor 3
 
 storage:
   hdfs:

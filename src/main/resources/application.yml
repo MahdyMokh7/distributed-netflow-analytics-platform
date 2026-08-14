@@ -52,7 +52,10 @@ ingester:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
     topic: ${KAFKA_TOPIC:netflow}
-    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer8}
+    consumer:
+      auto-offset-reset: earliest
+    dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer}
     enable-auto-commit: false
     poll-timeout-ms: 1000
     max-poll-records: 500

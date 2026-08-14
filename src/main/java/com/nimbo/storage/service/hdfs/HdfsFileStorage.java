@@ -30,6 +30,7 @@ public final class HdfsFileStorage implements FileStorage {
             }
             logger.info("Created HDFS directory: {}", path);
         }
+
     }
 
     @Override
