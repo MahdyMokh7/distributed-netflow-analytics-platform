@@ -23,14 +23,22 @@ public final class HdfsFileStorage implements FileStorage {
 
     @Override
     public void ensureDirectoryExists(Path path) throws IOException {
-        if (!fileSystem.exists(path)) {
-            boolean created = fileSystem.mkdirs(path);
-            if (!created && !fileSystem.exists(path)) {
-                throw new HdfsStorageException("Failed to create HDFS directory: " + path);
-            }
-            logger.info("Created HDFS directory: {}", path);
+        if (fileSystem.exists(path)) {
+            return;
         }
 
+        boolean created = fileSystem.mkdirs(path);
+
+        if (created) {
+            logger.info("Created HDFS directory: {}", path);
+            return;
+        }
+
+        if (!fileSystem.exists(path)) {
+            throw new HdfsStorageException("Failed to create HDFS directory: " + path);
+        }
+
+        logger.debug("HDFS directory already created by another consumer: {}", path);
     }
 
     @Override

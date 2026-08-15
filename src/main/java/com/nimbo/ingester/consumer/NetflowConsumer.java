@@ -53,7 +53,6 @@ public class NetflowConsumer {
         this.instanceId = instanceId;
 
         this.kafkaConsumer = createKafkaConsumer();
-        registerRebalanceListener();
     }
 
     private KafkaConsumer<byte[], byte[]> createKafkaConsumer() {
@@ -132,6 +131,7 @@ public class NetflowConsumer {
 
     private void consumeLoop() {
         try {
+            registerRebalanceListener();
             log.info("Instance #{}: Subscribed to topic: {}",
                     instanceId, kafkaProperties.getTopic());
 
@@ -142,6 +142,33 @@ public class NetflowConsumer {
                     );
 
                     if (records.isEmpty()) {
+                        log.debug("No records received from Kafka");
+
+                        Map<TopicPartitionKey, Long> offsetsToCommit =
+                                dataProcessingService.flushIfNeeded();
+
+                        if (!kafkaProperties.isEnableAutoCommit() && !offsetsToCommit.isEmpty()) {
+
+                            Map<TopicPartition, OffsetAndMetadata> commitMap = new HashMap<>();
+
+                            offsetsToCommit.forEach((key, offset) -> {
+                                TopicPartition partition =
+                                        new TopicPartition(key.topic(), key.partition());
+
+                                commitMap.put(
+                                        partition,
+                                        new OffsetAndMetadata(offset)
+                                );
+                            });
+
+                            kafkaConsumer.commitSync(commitMap);
+
+                            log.debug(
+                                    "Committed offsets for remaining records: {}",
+                                    offsetsToCommit
+                            );
+                        }
+
                         continue;
                     }
 
@@ -154,11 +181,17 @@ public class NetflowConsumer {
                     }
 
                     if (!kafkaProperties.isEnableAutoCommit() && !offsetsToCommit.isEmpty()) {
+
                         Map<TopicPartition, OffsetAndMetadata> commitMap = new HashMap<>();
+
                         offsetsToCommit.forEach((key, offset) -> {
-                            TopicPartition partition = new TopicPartition(key.topic(), key.partition());
-                            commitMap.put(partition, new OffsetAndMetadata(offset));
+                            TopicPartition partition =
+                                    new TopicPartition(key.topic(), key.partition());
+
+                            commitMap.put(partition, new OffsetAndMetadata(offset)
+                            );
                         });
+
                         kafkaConsumer.commitSync(commitMap);
                         log.debug("Instance #{}: Committed offsets: {}", instanceId, offsetsToCommit);
                     }
@@ -216,7 +249,9 @@ public class NetflowConsumer {
         log.info("Instance #{}: Shutting down...", instanceId);
         running.set(false);
 
+        // SCENARIO 1: GRACEFUL SHUTDOWN - Flush remaining records
         try {
+            log.info("Flushing remaining buffered records before shutdown...");
             Map<TopicPartitionKey, Long> flushedOffsets = dataProcessingService.flush();
             if (!flushedOffsets.isEmpty()) {
                 Map<TopicPartition, OffsetAndMetadata> commitMap = new HashMap<>();

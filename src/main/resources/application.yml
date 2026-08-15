@@ -20,8 +20,8 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
 rolling:
-  max-record-count: ${ROLLING_MAX_RECORD_COUNT:8000000}
-  max-size-bytes: ${ROLLING_MAX_SIZE_BYTES:805306368}
+  max-record-count: ${ROLLING_MAX_RECORD_COUNT:3400000}
+  max-size-bytes: ${ROLLING_MAX_SIZE_BYTES:341835776}
   max-age: ${ROLLING_MAX_AGE:2m}
 
 storage:
@@ -48,7 +48,7 @@ ingester:
     consumer:
       auto-offset-reset: earliest
     dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
-    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer-scalled}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer-scalled-4}
     enable-auto-commit: false
     poll-timeout-ms: 1000
     max-poll-records: 5000

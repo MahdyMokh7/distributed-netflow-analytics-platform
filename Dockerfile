@@ -16,7 +16,7 @@ COPY --from=build /app/target/nimbo.jar app.jar
 RUN chown appuser:appgroup app.jar
 USER appuser
 
-ENV JAVA_OPTS="-Xmx512m -Xms256m"
+ENV JAVA_OPTS="-Xmx1024m -Xms256m"
 ENV JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8 -Duser.timezone=UTC"
 
 EXPOSE 8080

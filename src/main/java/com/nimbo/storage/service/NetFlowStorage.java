@@ -97,6 +97,29 @@ public final class NetFlowStorage {
         }
     }
 
+    public Map<TopicPartitionKey, Long> flushIfNeeded() {
+        if (batchAccumulator.isEmpty()) {
+            return Map.of();
+        }
+
+        if (!batchAccumulator.shouldFlush()) {
+            return Map.of();
+        }
+
+        logger.info(
+                "Flushed remainings, Partition is Empty now...",
+                batchAccumulator.getRecordCount(),
+                batchAccumulator.getAccumulatedSizeBytes()
+        );
+
+        try {
+            return commitCurrentBatch();
+        } catch (Exception e) {
+            handleWriteFailure(e);
+            throw new StorageException("Failed to flush Parquet batch to HDFS", e);
+        }
+    }
+
     private void openWriter(IngestedRecord firstRecord) throws Exception {
         int primaryPartition = firstRecord.partition();
 
@@ -133,8 +156,6 @@ public final class NetFlowStorage {
         currentTempPath = null;
         currentFinalPath = null;
         currentSchema = null;
-
-        logger.info("Successfully committed streaming batch of {} records to {}", offsets.size(), currentFinalPath);
 
         return offsets;
     }

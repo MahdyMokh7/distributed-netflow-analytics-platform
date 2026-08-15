@@ -19,14 +19,14 @@ kafka:
   bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
   topic: ${KAFKA_TOPIC:netflow}
   dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
-  consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer-scalled-2}
+  consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer-scalled-4}
   consumer:
     auto-offset-reset: earliest
 
 storage:
   hdfs:
     uri: ${HDFS_URI:hdfs://team1}
-    base-path: ${HDFS_BASE_PATH:/netflow/parquet-2}
+    base-path: ${HDFS_BASE_PATH:/netflow/parquet-4}
     nameservice: team1
     nodes:
       team1-node1: ${HDFS_NODE1:10.10.61.51:8020}

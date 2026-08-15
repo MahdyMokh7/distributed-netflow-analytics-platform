@@ -38,4 +38,13 @@ public class DataProcessingService {
             throw e;
         }
     }
+
+    public Map<TopicPartitionKey, Long> flushIfNeeded() {
+        try {
+            return netFlowStorage.flushIfNeeded();
+        } catch (Exception e) {
+            log.error("Failed to conditionally flush storage", e);
+            throw e;
+        }
+    }
 }
