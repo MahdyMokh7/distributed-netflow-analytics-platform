@@ -3,15 +3,12 @@ package com.nimbo.ingester.service;
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.model.TopicPartitionKey;
 import com.nimbo.storage.service.NetFlowStorage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 
 import java.util.Map;
 import java.util.Optional;
 
 public class DataProcessingService {
-
-    private static final Logger log = LoggerFactory.getLogger(DataProcessingService.class);
 
     private final NetFlowStorage netFlowStorage;
 
@@ -19,32 +16,30 @@ public class DataProcessingService {
         this.netFlowStorage = netFlowStorage;
     }
 
-    public Optional<Map<TopicPartitionKey, Long>> processRecord(IngestedRecord record) {
-        try {
-            return netFlowStorage.accept(record);
-        } catch (Exception e) {
-            log.error("Failed to process record: topic={}, partition={}, offset={}",
-                    record.topic(), record.partition(), record.offset(), e);
-            throw e;
-        }
+    public Optional<Map<TopicPartitionKey, Long>> processRecord(
+            IngestedRecord ingestedRecord) {
+
+        return netFlowStorage.accept(ingestedRecord);
     }
 
-    // Lifecycle flush - only for partitions the caller currently owns (rebalance/shutdown)
+    // rebalance/shutdown
     public Map<TopicPartitionKey, Long> flush() {
-        try {
-            return netFlowStorage.flush();
-        } catch (Exception e) {
-            log.error("Failed to flush storage for partitions: ");
-            throw e;
-        }
+        return netFlowStorage.flush();
     }
 
-    public Map<TopicPartitionKey, Long> flushIfNeeded() {
-        try {
-            return netFlowStorage.flushIfNeeded();
-        } catch (Exception e) {
-            log.error("Failed to conditionally flush storage", e);
-            throw e;
-        }
+    public Map<TopicPartitionKey, Long> flushRemaining() {
+        return netFlowStorage.flushRemaining();
+    }
+
+    public Optional<Map<TopicPartitionKey, Long>> recordSkippedOffset(
+            String topic,
+            int partition,
+            long nextOffset) {
+
+        return netFlowStorage.recordSkippedOffset(
+                topic,
+                partition,
+                nextOffset
+        );
     }
 }

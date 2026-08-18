@@ -29,6 +29,7 @@ public class KafkaProperties {
     private String consumerGroup;
 
     private boolean enableAutoCommit = false;
+    private String autoOffsetReset = "earliest";
 
     @Min(100)
     private int pollTimeoutMs = 1000;

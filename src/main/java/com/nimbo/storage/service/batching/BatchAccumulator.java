@@ -3,6 +3,7 @@ package com.nimbo.storage.service.batching;
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.model.TopicPartitionKey;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,10 +11,10 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
+@Slf4j
 public final class BatchAccumulator {
-
-    private static final Logger logger = LoggerFactory.getLogger(BatchAccumulator.class);
 
     private final BatchPolicy batchPolicy;
 
@@ -34,19 +35,19 @@ public final class BatchAccumulator {
         );
     }
 
-    public void add(IngestedRecord record) {
-        Objects.requireNonNull(record, "record must not be null");
+    public void add(IngestedRecord ingestedRecord) {
+        Objects.requireNonNull(ingestedRecord, "record must not be null");
 
         if (firstRecordAt == null) {
             firstRecordAt = Instant.now();
         }
 
         recordCount++;
-        accumulatedSizeBytes += record.serializedSizeBytes();
+        accumulatedSizeBytes += ingestedRecord.serializedSizeBytes();
 
         pendingOffsets
-                .computeIfAbsent(record.topic(), t -> new HashMap<>())
-                .merge(record.partition(), record.offset() + 1, Math::max);
+                .computeIfAbsent(ingestedRecord.topic(), t -> new HashMap<>())
+                .merge(ingestedRecord.partition(), ingestedRecord.offset() + 1, Math::max);
     }
 
     public boolean shouldFlush() {
@@ -58,7 +59,7 @@ public final class BatchAccumulator {
         );
 
         if (flush) {
-            logger.info(
+            log.info(
                     "Batch flush triggered: recordCount={}, accumulatedSizeBytes={}, firstRecordAt={}",
                     recordCount,
                     accumulatedSizeBytes,
@@ -78,6 +79,19 @@ public final class BatchAccumulator {
         accumulatedSizeBytes = 0L;
         firstRecordAt = null;
         pendingOffsets.clear();
+    }
+
+    public Optional<Map<TopicPartitionKey, Long>> recordSkippedOffset(String topic, int partition, long nextOffset) {
+
+        if (firstRecordAt == null) {
+            firstRecordAt = Instant.now();
+        }
+
+        pendingOffsets
+                .computeIfAbsent(topic, t -> new HashMap<>())
+                .merge(partition, nextOffset, Math::max);
+
+        return Optional.empty();
     }
 
     public Map<TopicPartitionKey, Long> getPendingOffsets() {

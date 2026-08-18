@@ -9,6 +9,7 @@ import com.nimbo.storage.service.batching.BatchPolicy;
 import com.nimbo.storage.service.hdfs.FileStorage;
 import com.nimbo.storage.service.naming.FileNameGenerator;
 import com.nimbo.storage.service.parquet.ParquetFileWriter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
@@ -16,15 +17,14 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+@Slf4j
 public final class NetFlowStorage {
 
-    private static final Logger logger = LoggerFactory.getLogger(NetFlowStorage.class);
-
-    private final BatchPolicy batchPolicy;
     private final ParquetFileWriter parquetFileWriter;
     private final FileStorage fileStorage;
     private final FileNameGenerator fileNameGenerator;
@@ -45,7 +45,6 @@ public final class NetFlowStorage {
             FileNameGenerator fileNameGenerator,
             HdfsProperties hdfsProperties
     ) {
-        this.batchPolicy = Objects.requireNonNull(batchPolicy);
         this.parquetFileWriter = Objects.requireNonNull(parquetFileWriter);
         this.fileStorage = Objects.requireNonNull(fileStorage);
         this.fileNameGenerator = Objects.requireNonNull(fileNameGenerator);
@@ -53,20 +52,20 @@ public final class NetFlowStorage {
 
         this.batchAccumulator = new BatchAccumulator(batchPolicy);
 
-        logger.info("NetFlowStorage initialized (streaming writer) with HDFS target path: {}", hdfsProperties.getBasePath());
+        log.info("NetFlowStorage initialized (streaming writer) with HDFS target path: {}", hdfsProperties.getBasePath());
     }
 
-    public Optional<Map<TopicPartitionKey, Long>> accept(IngestedRecord record) {
-        Objects.requireNonNull(record);
+    public Optional<Map<TopicPartitionKey, Long>> accept(IngestedRecord ingestedRecord) {
+        Objects.requireNonNull(ingestedRecord);
 
         try {
             if (!writerOpen) {
-                openWriter(record);
+                openWriter(ingestedRecord);
             }
 
-            parquetFileWriter.write(currentWriter, record.record());
+            parquetFileWriter.write(currentWriter, ingestedRecord.record());
 
-            batchAccumulator.add(record);
+            batchAccumulator.add(ingestedRecord);
 
             if (batchAccumulator.shouldFlush()) {
                 Map<TopicPartitionKey, Long> offsets = commitCurrentBatch();
@@ -76,28 +75,40 @@ public final class NetFlowStorage {
             return Optional.empty();
 
         } catch (Exception e) {
-            handleWriteFailure(e);
-            throw new StorageException("Failed to process record in streaming Parquet writer", e);
+            handleWriteFailure();
+
+            log.error(
+                    "Failed writing record: topic={}, partition={}, offset={}",
+                    ingestedRecord.topic(),
+                    ingestedRecord.partition(),
+                    ingestedRecord.offset(),
+                    e
+            );
+
+            throw new StorageException(
+                    "Failed to process record in streaming Parquet writer",
+                    e
+            );
         }
     }
 
     public Map<TopicPartitionKey, Long> flush() {
         if (batchAccumulator.isEmpty()) {
-            logger.debug("Flush requested but accumulator is empty");
+            log.debug("Flush requested but accumulator is empty");
             return Map.of();
         }
 
-        logger.info("Executing lifecycle flush for {} records", batchAccumulator.getRecordCount());
+        log.info("Executing lifecycle flush for {} records", batchAccumulator.getRecordCount());
 
         try {
             return commitCurrentBatch();
         } catch (Exception e) {
-            handleWriteFailure(e);
+            handleWriteFailure();
             throw new StorageException("Failed to flush Parquet batch to HDFS", e);
         }
     }
 
-    public Map<TopicPartitionKey, Long> flushIfNeeded() {
+    public Map<TopicPartitionKey, Long> flushRemaining() {
         if (batchAccumulator.isEmpty()) {
             return Map.of();
         }
@@ -106,8 +117,8 @@ public final class NetFlowStorage {
             return Map.of();
         }
 
-        logger.info(
-                "Flushed remainings, Partition is Empty now...",
+        log.info(
+                "Flushed remaining records. Record count: {}, accumulated size: {} bytes",
                 batchAccumulator.getRecordCount(),
                 batchAccumulator.getAccumulatedSizeBytes()
         );
@@ -115,12 +126,16 @@ public final class NetFlowStorage {
         try {
             return commitCurrentBatch();
         } catch (Exception e) {
-            handleWriteFailure(e);
-            throw new StorageException("Failed to flush Parquet batch to HDFS", e);
+            handleWriteFailure();
+            throw new StorageException("Failed to flush remainings to HDFS", e);
         }
     }
 
-    private void openWriter(IngestedRecord firstRecord) throws Exception {
+    public Optional<Map<TopicPartitionKey, Long>> recordSkippedOffset(String topic, int partition, long nextOffset) {
+        return batchAccumulator.recordSkippedOffset(topic, partition, nextOffset);
+    }
+
+    private void openWriter(IngestedRecord firstRecord) throws IOException {
         int primaryPartition = firstRecord.partition();
 
         String finalFileName = fileNameGenerator.generateFileName(primaryPartition);
@@ -135,10 +150,10 @@ public final class NetFlowStorage {
         currentWriter = parquetFileWriter.createWriter(currentTempPath, currentSchema);
         writerOpen = true;
 
-        logger.debug("Opened streaming writer for partition {} at {}", primaryPartition, currentTempPath);
+        log.debug("Opened streaming writer for partition {} at {}", primaryPartition, currentTempPath);
     }
 
-    private Map<TopicPartitionKey, Long> commitCurrentBatch() throws Exception {
+    private Map<TopicPartitionKey, Long> commitCurrentBatch() throws IOException {
         if (!writerOpen) {
             return Map.of();
         }
@@ -160,12 +175,12 @@ public final class NetFlowStorage {
         return offsets;
     }
 
-    private void handleWriteFailure(Exception e) {
+    private void handleWriteFailure() {
         if (writerOpen) {
             try {
                 parquetFileWriter.closeWriter(currentWriter);
             } catch (Exception closeException) {
-                logger.warn("Failed closing writer during error handling", closeException);
+                log.warn("Failed closing writer during error handling", closeException);
             }
             writerOpen = false;
         }

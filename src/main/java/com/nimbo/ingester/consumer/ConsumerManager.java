@@ -6,14 +6,18 @@ import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
 import com.nimbo.ingester.service.NetflowValidationService;
 import com.nimbo.storage.config.HdfsProperties;
+import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.service.NetFlowStorage;
 import com.nimbo.storage.service.batching.BatchPolicy;
-import com.nimbo.storage.service.hdfs.FileStorage;
+import com.nimbo.storage.service.hdfs.HdfsFileStorage;
 import com.nimbo.storage.service.naming.FileNameGenerator;
 import com.nimbo.storage.service.parquet.ParquetFileWriter;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import com.nimbo.storage.service.hdfs.HdfsFileSystemFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -30,12 +34,13 @@ public class ConsumerManager {
     private final AvroDeserializer avroDeserializer;
     private final NetflowValidationService validationService;
     private final DlqService dlqService;
-
     private final BatchPolicy batchPolicy;
-    private final ParquetFileWriter parquetFileWriter;
-    private final FileStorage fileStorage;
+    private final ParquetProperties parquetProperties;
     private final FileNameGenerator fileNameGenerator;
     private final HdfsProperties hdfsProperties;
+    private final KafkaConsumerFactory kafkaConsumerFactory;
+    private final HdfsFileSystemFactory hdfsFileSystemFactory;
+    private final KafkaOffsetCommitter kafkaOffsetCommitter;
 
     private final List<NetflowConsumer> consumers = new ArrayList<>();
     private ExecutorService consumerExecutor;
@@ -46,19 +51,23 @@ public class ConsumerManager {
             NetflowValidationService validationService,
             DlqService dlqService,
             BatchPolicy batchPolicy,
-            ParquetFileWriter parquetFileWriter,
-            FileStorage fileStorage,
+            ParquetProperties parquetProperties,
             FileNameGenerator fileNameGenerator,
-            HdfsProperties hdfsProperties) {
+            HdfsProperties hdfsProperties,
+            KafkaConsumerFactory kafkaConsumerFactory,
+            HdfsFileSystemFactory hdfsFileSystemFactory,
+            KafkaOffsetCommitter kafkaOffsetCommitter) {
         this.kafkaProperties = kafkaProperties;
         this.avroDeserializer = avroDeserializer;
         this.validationService = validationService;
         this.dlqService = dlqService;
         this.batchPolicy = batchPolicy;
-        this.parquetFileWriter = parquetFileWriter;
-        this.fileStorage = fileStorage;
+        this.parquetProperties = parquetProperties;
         this.fileNameGenerator = fileNameGenerator;
         this.hdfsProperties = hdfsProperties;
+        this.kafkaConsumerFactory = kafkaConsumerFactory;
+        this.hdfsFileSystemFactory = hdfsFileSystemFactory;
+        this.kafkaOffsetCommitter = kafkaOffsetCommitter;
     }
 
     @PostConstruct
@@ -77,27 +86,46 @@ public class ConsumerManager {
         );
 
         for (int i = 0; i < instanceCount; i++) {
-            NetFlowStorage storage = new NetFlowStorage(
-                    batchPolicy,
-                    parquetFileWriter,
-                    fileStorage,
-                    fileNameGenerator,
-                    hdfsProperties
-            );
+            try {
+                FileSystem fs = hdfsFileSystemFactory.create(hdfsProperties);
+                HdfsFileStorage fileStorage = new HdfsFileStorage(fs);
+                ParquetFileWriter parquetWriter = new ParquetFileWriter(fs, parquetProperties);
 
-            DataProcessingService processingService = new DataProcessingService(storage);
+                NetFlowStorage storage = new NetFlowStorage(
+                        batchPolicy,
+                        parquetWriter,
+                        fileStorage,
+                        fileNameGenerator,
+                        hdfsProperties
+                );
 
-            NetflowConsumer consumer = new NetflowConsumer(
-                    kafkaProperties,
-                    avroDeserializer,
-                    processingService,
-                    validationService,
-                    dlqService,
-                    i + 1
-            );
-            consumers.add(consumer);
-            consumerExecutor.submit(consumer::start);
-            log.info("Started consumer instance #{}", i + 1);
+                DataProcessingService processingService = new DataProcessingService(storage);
+
+                KafkaConsumer<byte[], byte[]> kafkaConsumer =
+                        kafkaConsumerFactory.createConsumer(i + 1);
+
+                NetflowConsumer consumer = new NetflowConsumer(
+                        kafkaConsumer,
+                        kafkaProperties,
+                        avroDeserializer,
+                        processingService,
+                        validationService,
+                        dlqService,
+                        kafkaOffsetCommitter,
+                        i + 1
+                );
+
+                consumers.add(consumer);
+                consumerExecutor.submit(consumer::start);
+                log.info("Started consumer instance #{}", i + 1);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Thread interrupted while creating consumer instance #{}", i + 1, e);
+                break;
+
+            } catch (Exception e) {
+                log.error("Failed to create consumer instance #{}", i + 1, e);
+            }
         }
     }
 

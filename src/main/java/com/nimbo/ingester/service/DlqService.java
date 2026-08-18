@@ -34,77 +34,34 @@ public class DlqService {
     ) {
 
         ProducerRecord<byte[], byte[]> dlqRecord =
-                new ProducerRecord<>(
-                        kafkaProperties.getDlqTopic(),
-
-                        originalRecord.key(),
-
-                        originalRecord.value()
-                );
+                new ProducerRecord<>(kafkaProperties.getDlqTopic(), originalRecord.key(), originalRecord.value());
 
 
-        addHeader(
-                dlqRecord,
-                "original-topic",
-                originalRecord.topic()
-        );
-
-        addHeader(
-                dlqRecord,
-                "original-partition",
-                String.valueOf(
-                        originalRecord.partition()
-                )
-        );
-
-        addHeader(
-                dlqRecord,
-                "original-offset",
-                String.valueOf(
-                        originalRecord.offset()
-                )
-        );
-
-        addHeader(
-                dlqRecord,
-                "error-type",
-                errorType
-        );
-
-        addHeader(
-                dlqRecord,
-                "error-message",
-                errorMessage
-        );
+        addHeader(dlqRecord, "original-topic", originalRecord.topic());
+        addHeader(dlqRecord, "original-partition", String.valueOf(originalRecord.partition()));
+        addHeader(dlqRecord, "original-offset", String.valueOf(originalRecord.offset()));
+        addHeader(dlqRecord, "error-type", errorType);
+        addHeader(dlqRecord, "error-message", errorMessage);
 
 
         try {
-            kafkaProducer
-                    .send(dlqRecord)
-                    .get();
+            kafkaProducer.send(dlqRecord).get();
 
         } catch (InterruptedException e) {
 
             Thread.currentThread().interrupt();
 
-            throw new DlqPublishException(
-                    "Interrupted while publishing record to DLQ",
-                    e
-            );
-
+            throw new DlqPublishException("Interrupted while publishing record to DLQ", e);
 
         } catch (ExecutionException e) {
 
-            throw new DlqPublishException(
-                    "Failed to publish record to DLQ",
-                    e
-            );
+            throw new DlqPublishException("Failed to publish record to DLQ", e);
         }
     }
 
 
     private void addHeader(
-            ProducerRecord<byte[], byte[]> record,
+            ProducerRecord<byte[], byte[]> dlqRecord,
             String key,
             String value
     ) {
@@ -113,11 +70,6 @@ public class DlqService {
             return;
         }
 
-        record.headers().add(
-                key,
-                value.getBytes(
-                        StandardCharsets.UTF_8
-                )
-        );
+        dlqRecord.headers().add(key, value.getBytes(StandardCharsets.UTF_8));
     }
 }

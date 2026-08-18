@@ -22,12 +22,16 @@ public class IngesterConfiguration {
     private static final String AVRO_SCHEMA_PATH = "avro/NetFlowV2Record.avsc";
 
     @Bean
-    public Schema avroSchema() throws IOException {
-        try (InputStream schemaStream = new ClassPathResource(AVRO_SCHEMA_PATH).getInputStream()) {
-            if (schemaStream == null) {
-                throw new IllegalStateException("Avro schema not found at: " + AVRO_SCHEMA_PATH);
-            }
+    public Schema avroSchema() {
+        try (InputStream schemaStream =
+                     new ClassPathResource(AVRO_SCHEMA_PATH).getInputStream()) {
+
             return new Schema.Parser().parse(schemaStream);
+
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "Failed to load Avro schema from: " + AVRO_SCHEMA_PATH, e
+            );
         }
     }
 

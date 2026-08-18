@@ -6,6 +6,8 @@ import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
 import com.nimbo.ingester.service.NetflowValidationService;
 import com.nimbo.storage.model.TopicPartitionKey;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -39,6 +42,12 @@ class NetflowConsumerTest {
     @Mock
     private DlqService dlqService;
 
+    @Mock
+    private KafkaConsumer<byte[], byte[]> kafkaConsumer;
+
+    @Mock
+    private KafkaOffsetCommitter kafkaOffsetCommitter;
+
     private NetflowConsumer netflowConsumer;
 
     @BeforeEach
@@ -53,13 +62,16 @@ class NetflowConsumerTest {
         lenient().when(kafkaProperties.getHeartbeatIntervalMs()).thenReturn(3000);
         lenient().when(kafkaProperties.getMaxPollIntervalMs()).thenReturn(300000);
         lenient().when(kafkaProperties.getAdditionalConfigs()).thenReturn(null);
+        lenient().when(kafkaConsumer.poll(any(Duration.class))).thenReturn(ConsumerRecords.empty());
 
         netflowConsumer = new NetflowConsumer(
+                kafkaConsumer,
                 kafkaProperties,
                 avroDeserializer,
                 dataProcessingService,
                 validationService,
                 dlqService,
+                kafkaOffsetCommitter,
                 1
         );
     }
@@ -68,20 +80,24 @@ class NetflowConsumerTest {
     @DisplayName("Should create consumer with unique instance ID")
     void shouldCreateConsumerWithUniqueInstanceId() {
         NetflowConsumer consumer1 = new NetflowConsumer(
+                kafkaConsumer,
                 kafkaProperties,
                 avroDeserializer,
                 dataProcessingService,
                 validationService,
                 dlqService,
+                kafkaOffsetCommitter,
                 1
         );
 
         NetflowConsumer consumer2 = new NetflowConsumer(
+                kafkaConsumer,
                 kafkaProperties,
                 avroDeserializer,
                 dataProcessingService,
                 validationService,
                 dlqService,
+                kafkaOffsetCommitter,
                 2
         );
 
@@ -100,6 +116,7 @@ class NetflowConsumerTest {
     void shouldShutdownGracefullyAndCloseConsumer() {
         netflowConsumer.start();
         assertThatCode(() -> netflowConsumer.shutdown()).doesNotThrowAnyException();
+        verify(kafkaConsumer, atLeastOnce()).close();
     }
 
     @Test
@@ -112,6 +129,7 @@ class NetflowConsumerTest {
         netflowConsumer.shutdown();
 
         verify(dataProcessingService, atLeastOnce()).flush();
+        verify(kafkaOffsetCommitter, atLeastOnce()).commit(eq(kafkaConsumer), anyMap());
     }
 
     @Test
@@ -124,6 +142,7 @@ class NetflowConsumerTest {
         assertThatCode(() -> netflowConsumer.shutdown()).doesNotThrowAnyException();
 
         verify(dataProcessingService, atLeastOnce()).flush();
+        verify(kafkaOffsetCommitter, never()).commit(any(), anyMap());
     }
 
     @Test

@@ -10,12 +10,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.Objects;
 
-@Component
 public final class ParquetFileWriter {
 
     private final Configuration hadoopConfiguration;
@@ -39,13 +37,13 @@ public final class ParquetFileWriter {
         return buildWriter(targetPath, schema, codec);
     }
 
-    public void write(ParquetWriter<GenericRecord> writer, GenericRecord record)
+    public void write(ParquetWriter<GenericRecord> writer, GenericRecord ingestedRecord)
             throws ParquetWriteException {
         Objects.requireNonNull(writer, "writer must not be null");
-        Objects.requireNonNull(record, "record must not be null");
+        Objects.requireNonNull(ingestedRecord, "record must not be null");
 
         try {
-            writer.write(record);
+            writer.write(ingestedRecord);
         } catch (IOException e) {
             throw new ParquetWriteException("Failed writing record to Parquet writer", e);
         }

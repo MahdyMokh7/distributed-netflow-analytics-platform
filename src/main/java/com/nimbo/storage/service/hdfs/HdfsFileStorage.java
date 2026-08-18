@@ -1,19 +1,17 @@
 package com.nimbo.storage.service.hdfs;
 
 import com.nimbo.storage.exception.HdfsStorageException;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.Objects;
 
-@Component
+@Slf4j
 public final class HdfsFileStorage implements FileStorage {
-
-    private static final Logger logger = LoggerFactory.getLogger(HdfsFileStorage.class);
 
     private final FileSystem fileSystem;
 
@@ -30,7 +28,7 @@ public final class HdfsFileStorage implements FileStorage {
         boolean created = fileSystem.mkdirs(path);
 
         if (created) {
-            logger.info("Created HDFS directory: {}", path);
+            log.info("Created HDFS directory: {}", path);
             return;
         }
 
@@ -38,7 +36,7 @@ public final class HdfsFileStorage implements FileStorage {
             throw new HdfsStorageException("Failed to create HDFS directory: " + path);
         }
 
-        logger.debug("HDFS directory already created by another consumer: {}", path);
+        log.debug("HDFS directory already created by another consumer: {}", path);
     }
 
     @Override
@@ -59,11 +57,11 @@ public final class HdfsFileStorage implements FileStorage {
             if (fileSystem.exists(tempPath)) {
                 boolean deleted = fileSystem.delete(tempPath, false);
                 if (!deleted) {
-                    logger.warn("Failed to delete temporary HDFS file: {}", tempPath);
+                    log.warn("Failed to delete temporary HDFS file: {}", tempPath);
                 }
             }
         } catch (IOException e) {
-            logger.warn("Failed during temporary file cleanup: {}", tempPath, e);
+            log.warn("Failed during temporary file cleanup: {}", tempPath, e);
         }
     }
 }

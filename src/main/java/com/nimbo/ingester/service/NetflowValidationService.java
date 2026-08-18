@@ -7,15 +7,18 @@ import org.springframework.stereotype.Service;
 @Service
 public class NetflowValidationService {
 
-    public ValidationResult validate(GenericRecord record) {
+    private static final String NULL_ERROR = " is null";
+    private static final String INVALID_IPV4_ERROR = " invalid IPv4: ";
+
+    public ValidationResult validate(GenericRecord genericRecord) {
 
         StringBuilder errors = new StringBuilder();
 
-        checkIpv4(record, "IPV4_SRC_ADDR", errors);
-        checkIpv4(record, "IPV4_DST_ADDR", errors);
+        checkIpv4(genericRecord, "IPV4_SRC_ADDR", errors);
+        checkIpv4(genericRecord, "IPV4_DST_ADDR", errors);
 
         checkRange(
-                record,
+                genericRecord,
                 "L4_SRC_PORT",
                 0,
                 65535,
@@ -23,7 +26,7 @@ public class NetflowValidationService {
         );
 
         checkRange(
-                record,
+                genericRecord,
                 "L4_DST_PORT",
                 0,
                 65535,
@@ -31,31 +34,31 @@ public class NetflowValidationService {
         );
 
         checkNonNegative(
-                record,
+                genericRecord,
                 "IN_BYTES",
                 errors
         );
 
         checkNonNegative(
-                record,
+                genericRecord,
                 "OUT_BYTES",
                 errors
         );
 
         checkNonNegative(
-                record,
+                genericRecord,
                 "IN_PKTS",
                 errors
         );
 
         checkNonNegative(
-                record,
+                genericRecord,
                 "OUT_PKTS",
                 errors
         );
 
         checkRange(
-                record,
+                genericRecord,
                 "MIN_TTL",
                 0,
                 255,
@@ -63,7 +66,7 @@ public class NetflowValidationService {
         );
 
         checkRange(
-                record,
+                genericRecord,
                 "MAX_TTL",
                 0,
                 255,
@@ -71,45 +74,45 @@ public class NetflowValidationService {
         );
 
         checkMinMax(
-                record,
+                genericRecord,
                 "MIN_TTL",
                 "MAX_TTL",
                 errors
         );
 
         checkNonNegative(
-                record,
+                genericRecord,
                 "LONGEST_FLOW_PKT",
                 errors
         );
 
         checkNonNegative(
-                record,
+                genericRecord,
                 "SHORTEST_FLOW_PKT",
                 errors
         );
 
         checkMinMax(
-                record,
+                genericRecord,
                 "SHORTEST_FLOW_PKT",
                 "LONGEST_FLOW_PKT",
                 errors
         );
 
         checkNonNegative(
-                record,
+                genericRecord,
                 "MIN_IP_PKT_LEN",
                 errors
         );
 
         checkNonNegative(
-                record,
+                genericRecord,
                 "MAX_IP_PKT_LEN",
                 errors
         );
 
         checkMinMax(
-                record,
+                genericRecord,
                 "MIN_IP_PKT_LEN",
                 "MAX_IP_PKT_LEN",
                 errors
@@ -125,17 +128,17 @@ public class NetflowValidationService {
     }
 
     private void checkNonNegative(
-            GenericRecord record,
+            GenericRecord genericRecord,
             String field,
             StringBuilder errors
     ) {
 
-        Object value = record.get(field);
+        Object value = genericRecord.get(field);
 
         if (value == null) {
             addError(
                     errors,
-                    field + " is null"
+                    field + NULL_ERROR
             );
             return;
         }
@@ -154,19 +157,19 @@ public class NetflowValidationService {
     }
 
     private void checkRange(
-            GenericRecord record,
+            GenericRecord genericRecord,
             String field,
             long min,
             long max,
             StringBuilder errors
     ) {
 
-        Object value = record.get(field);
+        Object value = genericRecord.get(field);
 
         if (value == null) {
             addError(
                     errors,
-                    field + " is null"
+                    field + NULL_ERROR
             );
             return;
         }
@@ -185,17 +188,17 @@ public class NetflowValidationService {
     }
 
     private void checkMinMax(
-            GenericRecord record,
+            GenericRecord genericRecord,
             String minField,
             String maxField,
             StringBuilder errors
     ) {
 
         Object minObject =
-                record.get(minField);
+                genericRecord.get(minField);
 
         Object maxObject =
-                record.get(maxField);
+                genericRecord.get(maxField);
 
         if (minObject == null || maxObject == null) {
             return;
@@ -223,17 +226,17 @@ public class NetflowValidationService {
     }
 
     private void checkIpv4(
-            GenericRecord record,
+            GenericRecord genericRecord,
             String field,
             StringBuilder errors
     ) {
 
-        Object value = record.get(field);
+        Object value = genericRecord.get(field);
 
         if (value == null) {
             addError(
                     errors,
-                    field + " is null"
+                    field + NULL_ERROR
             );
             return;
         }
@@ -248,7 +251,7 @@ public class NetflowValidationService {
             addError(
                     errors,
                     field
-                            + " invalid IPv4: "
+                            + INVALID_IPV4_ERROR
                             + ip
             );
             return;
@@ -268,7 +271,7 @@ public class NetflowValidationService {
                     addError(
                             errors,
                             field
-                                    + " invalid IPv4: "
+                                    + INVALID_IPV4_ERROR
                                     + ip
                     );
                     return;
@@ -280,7 +283,7 @@ public class NetflowValidationService {
             addError(
                     errors,
                     field
-                            + " invalid IPv4: "
+                            + INVALID_IPV4_ERROR
                             + ip
             );
         }
