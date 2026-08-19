@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="
+         http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Spring Boot parent:
+        dependency versions and plugin defaults are managed here.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.4.3</version>
+        <relativePath/>
+    </parent>
+
+
+    <!-- =========================
+         PROJECT IDENTITY
+         ========================= -->
+
+    <groupId>com.nimbo</groupId>
+    <artifactId>nimbo-realtime</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+
+    <packaging>jar</packaging>
+
+    <name>Nimbo Realtime Ingester</name>
+
+    <description>
+        Kafka to StarRocks realtime ingestion service for NetFlow data.
+    </description>
+
+
+    <!-- =========================
+         VERSIONS
+         ========================= -->
+
+    <properties>
+
+        <java.version>17</java.version>
+
+        <project.build.sourceEncoding>
+            UTF-8
+        </project.build.sourceEncoding>
+
+        <project.reporting.outputEncoding>
+            UTF-8
+        </project.reporting.outputEncoding>
+
+        <avro.version>1.11.3</avro.version>
+        <kafka.version>3.9.0</kafka.version>
+        <lombok.version>1.18.36</lombok.version>
+
+        <maven.compiler.plugin.version>
+            3.13.0
+        </maven.compiler.plugin.version>
+
+    </properties>
+
+
+    <!-- =========================
+         DEPENDENCIES
+         ========================= -->
+
+    <dependencies>
+
+        <!--
+            Core Spring Boot functionality.
+            Gives us dependency injection, configuration,
+            lifecycle management, logging, etc.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+
+        <!--
+            HTTP server.
+
+            We are not using this for StarRocks Stream Load.
+            Stream Load is performed by our HttpClient.
+
+            We keep this because the application has an HTTP
+            server for things such as actuator/health endpoints.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+
+        <!--
+            /actuator/health and other operational endpoints.
+            Useful later for Docker/Jenkins health checks.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+
+        <!--
+            Allows annotations such as:
+                @NotBlank
+                @Min
+                @Validated
+
+            We will use these in KafkaProperties
+            and StarRocksProperties.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+
+        <!--
+            Helps Spring understand @ConfigurationProperties
+            classes and provides IDE metadata/autocomplete.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+
+        <!-- =====================
+             KAFKA
+             ===================== -->
+
+        <!--
+            We use KafkaConsumer directly:
+
+                KafkaConsumer<byte[], byte[]>
+
+            Therefore kafka-clients is the dependency
+            that we actually need.
+
+            We do NOT need Spring Kafka for the current design.
+        -->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>${kafka.version}</version>
+        </dependency>
+
+
+        <!-- =====================
+             AVRO
+             ===================== -->
+
+        <!--
+            Used for:
+                Schema
+                GenericRecord
+                GenericDatumReader
+                BinaryDecoder
+
+            This is what our AvroDeserializer needs.
+        -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
+        </dependency>
+
+
+        <!-- =====================
+             JSON
+             ===================== -->
+
+        <!--
+            Used by StarRocksStreamLoadClient:
+
+                ObjectMapper
+
+            Converts List<StarRocksRow> into JSON.
+        -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+
+        <!-- =====================
+             UTILITY
+             ===================== -->
+
+        <!--
+            For annotations such as:
+                @Getter
+                @Setter
+                @Slf4j
+        -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+
+        <!-- =====================
+             TEST
+             ===================== -->
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+
+    <!-- =========================
+         BUILD
+         ========================= -->
+
+    <build>
+
+        <finalName>nimbo-realtime</finalName>
+
+        <plugins>
+
+            <!-- Java 17 compilation -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin.version}</version>
+
+                <configuration>
+                    <release>${java.version}</release>
+                    <encoding>UTF-8</encoding>
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+
+
+            <!--
+                Reads:
+                    src/main/resources/avro/*.avsc
+
+                during generate-sources.
+            -->
+            <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <version>${avro.version}</version>
+
+                <executions>
+                    <execution>
+
+                        <phase>generate-sources</phase>
+
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+
+                        <configuration>
+
+                            <sourceDirectory>
+                                ${project.basedir}/src/main/resources/avro
+                            </sourceDirectory>
+
+                            <outputDirectory>
+                                ${project.build.directory}/generated-sources/avro
+                            </outputDirectory>
+
+                            <stringType>String</stringType>
+
+                        </configuration>
+
+                    </execution>
+                </executions>
+
+            </plugin>
+
+
+            <!--
+                Creates an executable Spring Boot JAR.
+            -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+
+                <configuration>
+
+                    <mainClass>
+                        com.nimbo.realtime.RealtimeApplication
+                    </mainClass>
+
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+
+                </configuration>
+
+            </plugin>
+
+        </plugins>
+
+    </build>
+
+</project>

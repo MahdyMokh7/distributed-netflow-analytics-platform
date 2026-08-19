@@ -1,0 +1,41 @@
+# Production-specific configuration
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+logging:
+  level:
+    com.nimbo.ingester: INFO
+    com.nimbo.storage: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+ingester:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
+    topic: ${KAFKA_TOPIC:netflow}
+    dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer-scalled-test}
+    consumer-instances: ${CONSUMER_INSTANCES:3}
+    enable-auto-commit: false
+    poll-timeout-ms: ${KAFKA_POLL_TIMEOUT_MS:1000}
+    max-poll-records: ${KAFKA_MAX_POLL_RECORDS:500}
+    session-timeout-ms: ${KAFKA_SESSION_TIMEOUT_MS:30000}
+    heartbeat-interval-ms: ${KAFKA_HEARTBEAT_INTERVAL_MS:3000}
+    max-poll-interval-ms: ${KAFKA_MAX_POLL_INTERVAL_MS:300000}
+    auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+
+storage:
+  hdfs:
+    uri: ${HDFS_URI:hdfs://team1}
+    base-path: ${HDFS_BASE_PATH:/netflow/parquetFiles-test}
+    nameservice: team1
+    nodes:
+      team1-node1: ${HDFS_NODE1:10.10.61.51:8020}
+      team1-node2: ${HDFS_NODE2:10.10.61.52:8020}
+      team1-node3: ${HDFS_NODE3:10.10.61.53:8020}

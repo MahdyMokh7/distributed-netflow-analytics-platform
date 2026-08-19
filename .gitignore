@@ -42,3 +42,42 @@ application-local.yml
 /scripts/project-content-extracter.py
 /scripts/code-extracter.py
 terminal.log
+
+
+# Multi-module generated files
+
+# Maven build output for all modules
+**/target/
+
+# Compiled Java files anywhere in the project
+**/*.class
+
+# IntelliJ module/project generated files inside modules
+**/.idea/
+**/*.iml
+
+# VS Code configuration inside modules
+**/.vscode/
+
+# Editor temporary files inside modules
+**/*.swp
+**/*.swo
+
+# Logs generated inside any module
+**/*.log
+
+# PID files generated inside modules
+**/*.pid
+**/*.pid.lock
+
+# OS-generated files inside subdirectories
+**/.DS_Store
+**/Thumbs.db
+
+# Local environment files inside modules
+**/.env
+**/.env.*
+**/application-local.yml
+
+# Keep example environment files trackable
+!**/.env.example
