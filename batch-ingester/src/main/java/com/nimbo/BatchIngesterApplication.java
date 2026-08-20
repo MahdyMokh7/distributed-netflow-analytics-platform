@@ -22,10 +22,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableConfigurationProperties
 @EnableScheduling
-public class Application {
+public class BatchIngesterApplication {
 
     public static void main(String[] args) {
         System.setProperty("HADOOP_USER_NAME", "hadoop");
-        SpringApplication.run(Application.class, args);
+        SpringApplication.run(BatchIngesterApplication.class, args);
     }
 }

@@ -110,7 +110,7 @@ This report documents the complete implementation of the data processing pipelin
 
 ### 3.1 ConsumerManager - Multi-Instance Orchestration
 
-**File:** `../../../ingester/src/main/java/com/nimbo/ingester/consumer/ConsumerManager.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/ingester/consumer/ConsumerManager.java`
 
 The `ConsumerManager` is responsible for orchestrating multiple consumer instances. It creates and manages a configurable number of consumer threads, each running in its own JVM thread with a unique instance ID.
 
@@ -143,7 +143,7 @@ public class ConsumerManager {
 
 ### 3.2 NetflowConsumer - Individual Consumer Implementation
 
-**File:** `../../../ingester/src/main/java/com/nimbo/ingester/consumer/NetflowConsumer.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/ingester/consumer/NetflowConsumer.java`
 
 Each consumer instance handles a subset of Kafka partitions as assigned by the consumer group. The consumer implements:
 
@@ -184,7 +184,7 @@ ingester:
 
 ### 3.3 KafkaProperties - Externalized Configuration
 
-**File:** `../../../ingester/src/main/java/com/nimbo/ingester/config/KafkaProperties.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/ingester/config/KafkaProperties.java`
 
 All Kafka and consumer configuration is externalized using Spring Boot's `@ConfigurationProperties` with validation.
 
@@ -212,7 +212,7 @@ public class KafkaProperties {
 
 ### 4.1 AvroDeserializer
 
-**File:** `../../../ingester/src/main/java/com/nimbo/ingester/deserializer/AvroDeserializer.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/ingester/deserializer/AvroDeserializer.java`
 
 The `AvroDeserializer` converts binary Avro data from Kafka into `GenericRecord` objects.
 
@@ -232,7 +232,7 @@ public GenericRecord deserialize(byte[] data) {
 
 ### 4.2 Avro Schema
 
-**File:** `../../../ingester/src/main/resources/avro/NetFlowV2Record.avsc`
+**File:** `../../../batch-ingester/src/main/resources/avro/NetFlowV2Record.avsc`
 
 The Avro schema defines the Netflow record structure with 43 fields including:
 
@@ -248,7 +248,7 @@ The Avro schema defines the Netflow record structure with 43 fields including:
 
 ### 5.1 DataProcessingService - Orchestration Layer
 
-**File:** `../../../ingester/src/main/java/com/nimbo/ingester/service/DataProcessingService.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/ingester/service/DataProcessingService.java`
 
 The `DataProcessingService` acts as the bridge between the consumer and the storage layer, providing a clean separation of concerns.
 
@@ -274,7 +274,7 @@ public class DataProcessingService {
 
 ### 5.2 IngestedRecord - Data Model
 
-**File:** `../../../ingester/src/main/java/com/nimbo/ingester/model/IngestedRecord.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/ingester/model/IngestedRecord.java`
 
 The `IngestedRecord` is a Java Record that wraps an Avro `GenericRecord` with Kafka metadata.
 
@@ -308,7 +308,7 @@ public record IngestedRecord(
 
 ### 6.1 BatchAccumulator
 
-**File:** `../../../ingester/src/main/java/com/nimbo/storage/service/batching/BatchAccumulator.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/storage/service/batching/BatchAccumulator.java`
 
 The `BatchAccumulator` buffers incoming records until a flush condition is met, enabling efficient batch writes to HDFS.
 
@@ -334,7 +334,7 @@ private final Maptopicpartitionkey, pendingOffsets = new HashMap<>();
 
 ### 6.2 BatchPolicy - Flush Triggers
 
-**File:** `../../../ingester/src/main/java/com/nimbo/storage/service/batching/BatchPolicy.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/storage/service/batching/BatchPolicy.java`
 
 The `BatchPolicy` determines when a batch should be flushed based on three configurable thresholds:
 
@@ -356,7 +356,7 @@ public boolean shouldFlush(int recordCount, long totalSizeBytes,
 
 ### 6.3 RecordBatch - Immutable Batch Representation
 
-**File:** `../../../ingester/src/main/java/com/nimbo/storage/service/batching/RecordBatch.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/storage/service/batching/RecordBatch.java`
 
 The `RecordBatch` is an immutable snapshot of the accumulator's state at flush time.
 
@@ -383,7 +383,7 @@ public final class RecordBatch {
 
 ### 7.1 NetFlowStorage - Storage Orchestration
 
-**File:** `../../../ingester/src/main/java/com/nimbo/storage/service/NetFlowStorage.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/storage/service/NetFlowStorage.java`
 
 The `NetFlowStorage` service orchestrates the complete storage flow from batch accumulation to HDFS persistence.
 
@@ -401,7 +401,7 @@ The `NetFlowStorage` service orchestrates the complete storage flow from batch a
 
 ### 7.2 FileNameGenerator - File Naming Convention
 
-**File:** `../../../ingester/src/main/java/com/nimbo/storage/service/naming/FileNameGenerator.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/storage/service/naming/FileNameGenerator.java`
 
 Generates unique Parquet filenames with partition, timestamp, and UUID to prevent collisions.
 
@@ -426,7 +426,7 @@ public String generateTempFileName(String finalFileName) {
 
 ### 7.3 ParquetFileWriter - Parquet Serialization
 
-**File:** `../../../ingester/src/main/java/com/nimbo/storage/service/parquet/ParquetFileWriter.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/storage/service/parquet/ParquetFileWriter.java`
 
 The `ParquetFileWriter` handles the actual serialization of Avro records to Parquet format.
 
@@ -456,7 +456,7 @@ public void writeToPath(RecordBatch batch, Path targetPath) {
 
 ### 7.4 HdfsFileStorage - HDFS File Operations
 
-**File:** `../../../ingester/src/main/java/com/nimbo/storage/service/hdfs/HdfsFileStorage.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/storage/service/hdfs/HdfsFileStorage.java`
 
 The `HdfsFileStorage` implementation handles low-level HDFS file operations.
 
@@ -483,7 +483,7 @@ public void commitAtomic(Path tempPath, Path finalPath) {
 
 ### 7.5 StorageConfiguration - HDFS Client Setup
 
-**File:** `../../../ingester/src/main/java/com/nimbo/storage/config/StorageConfiguration.java`
+**File:** `../../../batch-ingester/src/main/java/com/nimbo/storage/config/StorageConfiguration.java`
 
 Configures the HDFS `FileSystem` client with support for HA Namenodes.
 
