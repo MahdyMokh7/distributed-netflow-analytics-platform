@@ -1,6 +1,6 @@
 pipeline {
     agent {
-        label 'nimbo-nibmyte'
+        label 'nimbo-nimbyte'
     }
 
     options {
