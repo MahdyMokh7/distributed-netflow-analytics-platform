@@ -57,6 +57,11 @@
     <maven.failsafe.plugin.version>3.5.2</maven.failsafe.plugin.version>
     <jacoco.version>0.8.12</jacoco.version>
 
+    <jib.version>3.5.2</jib.version>
+    <jib.image.prefix>nimbo-nimbyte</jib.image.prefix>
+    <jib.image.tag>local</jib.image.tag>
+
+    <sonar-maven-plugin.version>4.0.0.4121</sonar-maven-plugin.version>
 </properties>
 
 
@@ -245,6 +250,32 @@
                 </configuration>
             </plugin>
 
+            <plugin>
+                <groupId>com.google.cloud.tools</groupId>
+                <artifactId>jib-maven-plugin</artifactId>
+                <version>${jib.version}</version>
+
+                <configuration>
+                    <from>
+                        <image>eclipse-temurin:17-jre</image>
+                    </from>
+
+                    <container>
+                        <user>1000:1000</user>
+                        <ports>
+                            <port>8080</port>
+                        </ports>
+                        <creationTime>USE_CURRENT_TIMESTAMP</creationTime>
+                    </container>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>${sonar-maven-plugin.version}</version>
+            </plugin>
+
         </plugins>
     </pluginManagement>
 
@@ -283,8 +314,39 @@
             </executions>
         </plugin>
 
+        <plugin>
+            <groupId>org.sonarsource.scanner.maven</groupId>
+            <artifactId>sonar-maven-plugin</artifactId>
+        </plugin>
+
     </plugins>
 
 </build>
+
+    <profiles>
+        <profile>
+            <id>dev</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <spring.profiles.active>dev</spring.profiles.active>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>prod</id>
+            <properties>
+                <spring.profiles.active>prod</spring.profiles.active>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>skip-tests</id>
+            <properties>
+                <maven.test.skip>true</maven.test.skip>
+            </properties>
+        </profile>
+    </profiles>
 
 </project>

@@ -1,0 +1,74 @@
+pipeline {
+    agent {
+        label 'team-nibmyte'
+    }
+
+    options {
+        timestamps()
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    environment {
+        MAVEN_OPTS = '-Xmx1024m'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        SPRING_PROFILES_ACTIVE = 'prod'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build & Test') {
+            steps {
+                // Runs unit and integration tests while generating JaCoCo coverage reports
+                sh 'mvn -B clean verify'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube'){
+                    sh '''
+                        mvn sonar:sonar \
+                        -Dsonar.projectKey=nimbo-nimbyte \
+                        -Dsonar.host.url=https://sonarqube.inside.sahab.ir \
+                    '''
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Build Container Image (Jib)') {
+            steps {
+                sh "mvn -B jib:dockerBuild -DskipTests -Djib.image.tag=${IMAGE_TAG}"
+            }
+        }
+    }
+
+    post {
+        always {
+            junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+            junit testResults: '**/target/failsafe-reports/*.xml', allowEmptyResults: true
+            archiveArtifacts artifacts: 'target/*.jar', fingerprint: true, allowEmptyArchive: true
+        }
+        success {
+            echo "CI completed successfully. Image nimbo-nimbyte:${IMAGE_TAG} ready for CD."
+        }
+        failure {
+            echo 'CI pipeline failed quality gate or test stages.'
+        }
+    }
+}
