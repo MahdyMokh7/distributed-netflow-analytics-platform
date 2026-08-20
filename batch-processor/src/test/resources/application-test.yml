@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: batch-processor-test
+
+logging:
+  level:
+    com.nimbo.batch: DEBUG
+    org.apache.spark: WARN
+    org.apache.hadoop: WARN
+    org.testcontainers: INFO
+
+spark:
+  master: local[*]
+  app-name: nimbo-batch-processor-test
+  adaptive-enabled: true
+  adaptive-coalesce-partitions-enabled: true
+  ui-enabled: false
+  io-mode-default: NIO
+
+hdfs:
+  uri: hdfs://10.10.61.53:8020
+  parquet-path: /netflow/parquetFiles-test/
+
+output:
+  mode: console
+
+postgres:
+  host: localhost
+  port: 5432
+  database: test_db
+  username: test_user
+  password: test_pass
+  pool-size: 2
+
+batch:
+  schedule: "0 */5 * * * ?"
+  window-hours: 1
+  enabled: true
+
+test:
+  parquet:
+    local-path: src/test/resources/sample-data/parquet/
+    empty-path: src/test/resources/empty/
+    invalid-path: hdfs://invalid/path/
+    sample-path: src/test/resources/sample-data/
+    records-per-file: 1000
+    files-per-partition: 3

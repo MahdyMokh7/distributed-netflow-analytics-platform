@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: batch-processor
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+logging:
+  level:
+    com.nimbo.batch: INFO
+    org.apache.spark: WARN
+    org.apache.hadoop: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always

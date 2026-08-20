@@ -43,6 +43,9 @@ application-local.yml
 /scripts/code-extracter.py
 terminal.log
 
+/batch-processor/docs/
+/batch-processor/code-extracter.py
+/batch-processor/src/test/resources/sample-data/parquet/
 
 # Multi-module generated files
 
@@ -81,3 +84,8 @@ terminal.log
 
 # Keep example environment files trackable
 !**/.env.example
+
+# Logs
+./logs/
+**/logs/
+*.log

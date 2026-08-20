@@ -1,0 +1,35 @@
+spark:
+  master: spark://10.10.61.71:7077
+  app-name: nimbo-batch-processor
+  executor-memory: 4g
+  executor-cores: 4
+  num-executors: 4
+  driver-memory: 2g
+  shuffle-partitions: 200
+  adaptive-enabled: true
+  adaptive-coalesce-partitions-enabled: true
+  serializer: org.apache.spark.serializer.KryoSerializer
+  ui-enabled: true
+  io-mode-default: NIO
+  driver-host: ${DRIVER_HOST:10.10.61.53}
+  driver-bind-address: 0.0.0.0
+
+hdfs:
+  uri: hdfs://10.10.61.53:8020
+  parquet-path: /netflow/parquetFiles/
+
+output:
+  mode: database
+
+postgres:
+  host: 10.10.61.70
+  port: 5432
+  database: nimbo_db
+  username: ${DB_USERNAME:nimbo_batch}
+  password: ${DB_PASSWORD:123456}
+  pool-size: 20
+
+batch:
+  schedule: "0 0 * * * ?"
+  window-hours: 1
+  enabled: true

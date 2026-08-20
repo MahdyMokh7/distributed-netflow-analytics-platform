@@ -8,29 +8,28 @@ ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT / "docs"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-OUTPUT_FILE = OUTPUT_DIR / "project_java_contents.txt"
+OUTPUT_FILE = OUTPUT_DIR / "project_contents.txt"
 
 SEPARATOR = "\n" + "=" * 120 + "\n\n"
 
+
 # -----------------------------------------------------------------------------
-# Directories to completely skip while iterating
+# Files to exclude
 # -----------------------------------------------------------------------------
-EXCLUDED_DIRECTORIES = {
-    "gradle",
-    "docs",
-    "build",
-    ".idea",
-    ".gradle",
-    "target",
-    ".vscode",
-    ".settings",
-    "out",
-    "logs",
+
+EXCLUDED_EXTENSIONS = {
+    ".pdf",
 }
+
+EXCLUDED_FILE_PATTERNS = {
+    "*.java",  # handled separately because we allow non-test java files
+}
+
 
 # -----------------------------------------------------------------------------
 # .gitignore rules (copied manually)
 # -----------------------------------------------------------------------------
+
 GITIGNORE_PATTERNS = [
     # Java / Maven
     "target/",
@@ -93,62 +92,51 @@ GITIGNORE_PATTERNS = [
 ]
 
 
-def is_excluded_directory(path: Path) -> bool:
-    """
-    Ignore excluded directories and hidden directories.
-    """
-    relative = path.relative_to(ROOT)
-
-    excluded = {
-        directory.lower()
-        for directory in EXCLUDED_DIRECTORIES
-    }
-
-    for part in relative.parts:
-        if part.lower() in excluded:
-            return True
-
-        if part.startswith("."):
-            return True
-
-    return False
-
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
 
 def is_test_file(file_path: Path) -> bool:
     """
-    Ignore Java test files and anything located inside a test directory.
+    Ignore Java test files and files inside test directories.
     """
+
     relative = file_path.relative_to(ROOT)
 
-    test_directories = {
-        "test",
-        "tests",
-        "src-test",
-        "test-output",
-    }
+    for part in relative.parts:
+        lower = part.lower()
 
-    # Ignore anything inside a test directory.
-    for part in relative.parts[:-1]:
-        if part.lower() in test_directories:
+        if lower in {
+            "test",
+            "tests",
+            "src-test",
+            "test-output",
+        }:
             return True
 
     name = file_path.name.lower()
 
-    # Ignore common Java test naming conventions.
-    return (
-        name.startswith("test")
-        or name.endswith("test.java")
-        or name.endswith("tests.java")
-    )
+    if file_path.suffix.lower() == ".java":
+        return (
+            name.endswith("test.java")
+            or name.endswith("tests.java")
+            or name.startswith("test")
+        )
+
+    return False
+
 
 
 def is_gitignored(path: Path) -> bool:
     """
-    Very small .gitignore matcher supporting the patterns above.
+    Small .gitignore matcher supporting the patterns above.
     """
+
     relative = path.relative_to(ROOT).as_posix()
 
     for pattern in GITIGNORE_PATTERNS:
+
+        # directory rule
         if pattern.endswith("/"):
             directory = pattern.rstrip("/")
 
@@ -159,6 +147,7 @@ def is_gitignored(path: Path) -> bool:
             ):
                 return True
 
+        # wildcard rule
         if "*" in pattern:
             if fnmatch.fnmatch(relative, pattern):
                 return True
@@ -166,46 +155,39 @@ def is_gitignored(path: Path) -> bool:
             if fnmatch.fnmatch(path.name, pattern):
                 return True
 
+        # exact match
         if relative == pattern:
             return True
 
     return False
 
 
+
 def should_export(file_path: Path) -> bool:
-    """
-    Export only non-test Java source files.
-    """
 
-    # Ignore everything that is not a Java file.
-    if file_path.suffix.lower() != ".java":
-        return False
-
-    # Ignore excluded directories.
-    if is_excluded_directory(file_path.parent):
-        return False
-
-    # Ignore gitignored files/directories.
     if is_gitignored(file_path):
         return False
 
-    # Ignore test files/directories.
     if is_test_file(file_path):
+        return False
+
+    if file_path.suffix.lower() in EXCLUDED_EXTENSIONS:
         return False
 
     return True
 
 
+
 def write_file_content(file_path: Path, output):
-    """
-    Write filename, path, and file contents to the output file.
-    """
+
     try:
         content = file_path.read_text(encoding="utf-8")
 
     except UnicodeDecodeError:
+
         try:
             content = file_path.read_text(encoding="latin-1")
+
         except Exception:
             print(f"Skipping unreadable file: {file_path}")
             return
@@ -214,19 +196,27 @@ def write_file_content(file_path: Path, output):
         print(f"Could not read {file_path}: {e}")
         return
 
+
     relative_path = file_path.relative_to(ROOT)
 
     output.write(SEPARATOR)
     output.write(f"File: {file_path.name}\n")
     output.write(f"Path: {relative_path}\n")
     output.write(SEPARATOR)
+
     output.write(content)
 
     if not content.endswith("\n"):
         output.write("\n")
 
 
+
+# -----------------------------------------------------------------------------
+# Main
+# -----------------------------------------------------------------------------
+
 def main():
+
     with OUTPUT_FILE.open("w", encoding="utf-8") as output:
 
         for file in sorted(ROOT.rglob("*")):
@@ -237,7 +227,9 @@ def main():
             if should_export(file):
                 write_file_content(file, output)
 
+
     print(f"Done! Output written to:\n{OUTPUT_FILE}")
+
 
 
 if __name__ == "__main__":

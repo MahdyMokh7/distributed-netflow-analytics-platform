@@ -46,7 +46,7 @@ Dockerfile*
 *.secret
 
 # Test files
-ingester/src/test/
+batch-ingester/src/test/
 
 # Scripts
 scripts/
