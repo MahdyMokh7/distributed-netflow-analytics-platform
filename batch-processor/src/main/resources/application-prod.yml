@@ -1,11 +1,11 @@
 spark:
   master: spark://10.10.61.71:7077
   app-name: nimbo-batch-processor
-  executor-memory: 4g
-  executor-cores: 4
-  num-executors: 4
-  driver-memory: 2g
-  shuffle-partitions: 200
+  executor-memory: 2g
+  executor-cores: 2
+  num-executors: 2
+  driver-memory: 1g
+  shuffle-partitions: 12
   adaptive-enabled: true
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer
