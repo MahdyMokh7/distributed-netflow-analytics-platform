@@ -28,6 +28,6 @@ postgres:
   pool-size: 5
 
 batch:
-  schedule: "0 */5 * * * ?"
+  schedule: "0 */2 * * * ?"
   window-hours: 1
   enabled: true

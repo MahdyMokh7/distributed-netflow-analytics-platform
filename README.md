@@ -28,6 +28,10 @@ ssh team1@10.10.61.53
 
 # Run with prod profile
 java -jar batch-processor-1.0.0-SNAPSHOT.jar --spring.profiles.active=prod
+
+java -jar batch-processor-1.0.0-SNAPSHOT.jar \
+  --spring.profiles.active=prod \
+  --batch.schedule="0 */1 * * * ?"
 ```
 
 **Note:** The `--add-opens` flags are **already configured** in your `pom.xml` `spring-boot-maven-plugin`, but when using `java -jar` directly, you must include them manually.
@@ -81,6 +85,8 @@ Create `run-prod.sh`:
 #!/bin/bash
 JAVA_OPTS="--add-opens=java.base/sun.nio.ch=ALL-UNNAMED ..."
 java $JAVA_OPTS -jar batch-processor-1.0.0-SNAPSHOT.jar --spring.profiles.active=prod
+
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 Then:
