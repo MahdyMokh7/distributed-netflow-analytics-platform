@@ -1,5 +1,6 @@
 package com.nimbo.batch.processor;
 
+import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 class TrafficAggregationProcessorTest extends BaseProcessorTest {
 
     private HdfsConfig hdfsConfig;
+    private BatchConfig batchConfig;
     private TrafficAggregationProcessor processor;
 
     @BeforeEach
@@ -18,7 +20,9 @@ class TrafficAggregationProcessorTest extends BaseProcessorTest {
         hdfsConfig = mock(HdfsConfig.class);
         when(hdfsConfig.getFullParquetPath())
                 .thenReturn(testParquetConfig.getLocalPath());
-        processor = new TrafficAggregationProcessor(spark, hdfsConfig);
+        batchConfig = mock(BatchConfig.class);
+        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
+        processor = new TrafficAggregationProcessor(spark, hdfsConfig, batchConfig);
     }
 
     @Test
@@ -30,7 +34,7 @@ class TrafficAggregationProcessorTest extends BaseProcessorTest {
     void shouldThrowExceptionOnEmptyDataset() {
         when(hdfsConfig.getFullParquetPath())
                 .thenReturn(testParquetConfig.getEmptyPath());
-        TrafficAggregationProcessor emptyProcessor = new TrafficAggregationProcessor(spark, hdfsConfig);
+        TrafficAggregationProcessor emptyProcessor = new TrafficAggregationProcessor(spark, hdfsConfig, batchConfig);
 
         assertThatThrownBy(emptyProcessor::process)
                 .isInstanceOf(RuntimeException.class)
@@ -41,7 +45,7 @@ class TrafficAggregationProcessorTest extends BaseProcessorTest {
     void shouldThrowExceptionOnInvalidPath() {
         when(hdfsConfig.getFullParquetPath())
                 .thenReturn(testParquetConfig.getInvalidPath());
-        TrafficAggregationProcessor invalidProcessor = new TrafficAggregationProcessor(spark, hdfsConfig);
+        TrafficAggregationProcessor invalidProcessor = new TrafficAggregationProcessor(spark, hdfsConfig, batchConfig);
 
         assertThatThrownBy(invalidProcessor::process)
                 .isInstanceOf(RuntimeException.class)

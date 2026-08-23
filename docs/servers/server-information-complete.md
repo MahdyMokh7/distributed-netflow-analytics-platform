@@ -351,9 +351,23 @@
 
 ### 2.1 Server Inventory
 
-| Server          | Role  | HDFS                | Kafka    | Spark    | PostgreSQL | Kubernetes      |
-| --------------- | ----- | ------------------- | -------- | -------- | ---------- | --------------- |
-| **10.10.61.51** | Node1 | ✅ DataNode          | ✅ Broker | ✅ Worker | ❌          | ✅ Control Plane |
-| **10.10.61.52** | Node2 | ✅ NameNode          | ❌        | ✅ Worker | ✅ Replica  | ✅ Control Plane |
-| **10.10.61.53** | Node3 | ✅ NameNode (Active) | ✅ Broker | ✅ Worker | ❌          | ✅ Control Plane |
-| **10.10.61.54** | Node4 | ✅ DataNode          | ✅ Broker | ✅ Master | ✅ Master   | ❌               |
+| Server          | Role  | HDFS                | Kafka    | Spark    | PostgreSQL            | Kubernetes      |
+| --------------- | ----- | ------------------- | -------- | -------- | --------------------- | --------------- |
+| **10.10.61.51** | Node1 | ✅ DataNode          | ✅ Broker | ✅ Worker | ✅ PostgreSQL instance | ✅ Control Plane |
+| **10.10.61.52** | Node2 | ✅ NameNode          | ❌        | ✅ Worker | ✅ PostgreSQL instance | ✅ Control Plane |
+| **10.10.61.53** | Node3 | ✅ NameNode (Active) | ✅ Broker | ✅ Worker | ❌                     | ✅ Control Plane |
+| **10.10.61.54** | Node4 | ✅ DataNode          | ✅ Broker | ✅ Master | ✅ PostgreSQL instance | ❌               |
+
+### 2.2 PostgreSQL
+
+| Component                 | Type                 | Endpoint              | Purpose                    |
+| ------------------------- | -------------------- | --------------------- | -------------------------- |
+| `postgresql-master`       | LoadBalancer Service | **10.10.61.70:5432**  | **Primary/write endpoint** |
+| `postgresql-replica`      | ClusterIP Service    | `10.108.146.128:5432` | Replica/read endpoint      |
+| `postgresql`              | ClusterIP Service    | `10.100.167.184:5432` | PostgreSQL service         |
+| `patroni`                 | ClusterIP Service    | `10.100.225.173:8000` | Patroni/HA management      |
+| `postgresql-postgresql-0` | PostgreSQL Pod       | Node4                 | PostgreSQL instance        |
+| `postgresql-postgresql-1` | PostgreSQL Pod       | Node2                 | PostgreSQL instance        |
+| `postgresql-postgresql-2` | PostgreSQL Pod       | Node1                 | PostgreSQL instance        |
+
+

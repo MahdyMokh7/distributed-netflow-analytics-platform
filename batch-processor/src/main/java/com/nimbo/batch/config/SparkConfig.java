@@ -35,49 +35,53 @@ public class SparkConfig {
                 .master(master)
                 .appName(appName);
 
-        if (executorMemory != null && !executorMemory.isBlank()) {
-            builder.config("spark.executor.memory", executorMemory);
-        }
+        setIfPresent(builder, "spark.executor.memory", executorMemory);
+        setIfPositive(builder, "spark.executor.cores", executorCores);
+        setIfPositive(builder, "spark.sql.shuffle.partitions", shufflePartitions);
 
-        if (executorCores > 0) {
-            builder.config("spark.executor.cores", executorCores);
-        }
+        setIfPresent(builder, "spark.sql.adaptive.enabled", adaptiveEnabled);
+        setIfPresent(
+                builder,
+                "spark.sql.adaptive.coalescePartitions.enabled",
+                adaptiveCoalescePartitionsEnabled
+        );
 
-        if (shufflePartitions > 0) {
-            builder.config("spark.sql.shuffle.partitions", shufflePartitions);
-        }
-
-        if (adaptiveEnabled != null) {
-            builder.config("spark.sql.adaptive.enabled", adaptiveEnabled);
-        }
-
-        if (adaptiveCoalescePartitionsEnabled != null) {
-            builder.config(
-                    "spark.sql.adaptive.coalescePartitions.enabled",
-                    adaptiveCoalescePartitionsEnabled
-            );
-        }
-
-        if (serializer != null && !serializer.isBlank()) {
-            builder.config("spark.serializer", serializer);
-        }
-
-        if (uiEnabled != null) {
-            builder.config("spark.ui.enabled", uiEnabled);
-        }
-
-        if (ioModeDefault != null && !ioModeDefault.isBlank()) {
-            builder.config("spark.io.mode.default", ioModeDefault);
-        }
-
-        if (driverHost != null && !driverHost.isBlank()) {
-            builder.config("spark.driver.host", driverHost);
-        }
-
-        if (driverBindAddress != null && !driverBindAddress.isBlank()) {
-            builder.config("spark.driver.bindAddress", driverBindAddress);
-        }
+        setIfPresent(builder, "spark.serializer", serializer);
+        setIfPresent(builder, "spark.ui.enabled", uiEnabled);
+        setIfPresent(builder, "spark.io.mode.default", ioModeDefault);
+        setIfPresent(builder, "spark.driver.host", driverHost);
+        setIfPresent(builder, "spark.driver.bindAddress", driverBindAddress);
 
         return builder.getOrCreate();
+    }
+
+    private void setIfPresent(
+            SparkSession.Builder builder,
+            String key,
+            String value
+    ) {
+        if (value != null && !value.isBlank()) {
+            builder.config(key, value);
+        }
+    }
+
+    private void setIfPresent(
+            SparkSession.Builder builder,
+            String key,
+            Boolean value
+    ) {
+        if (value != null) {
+            builder.config(key, value);
+        }
+    }
+
+    private void setIfPositive(
+            SparkSession.Builder builder,
+            String key,
+            int value
+    ) {
+        if (value > 0) {
+            builder.config(key, value);
+        }
     }
 }

@@ -3,12 +3,17 @@ package com.nimbo.batch.model;
 import java.time.LocalDateTime;
 
 public class ProtocolAggregate {
+    private double l7Protocol;
 
-    private int protocol;
-    private LocalDateTime hourTimestamp;
-    private long totalBytes;
-    private long totalPackets;
+    private LocalDateTime windowStart;
+    private LocalDateTime windowEnd;
+
+    private long inBytes;
+    private long outBytes;
+
+    private long inPackets;
+    private long outPackets;
+
     private long connectionCount;
-
     // Getters, Setters, Builder, toString
 }

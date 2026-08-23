@@ -56,7 +56,7 @@ We are building a **batch processor** for NetFlow analytics as part of Phase 2 o
 
 ### 2.5 PostgreSQL Setup
 - **Database**: `nimbo_db`
-- **User**: `nimbo_batch`
+- **User**: `nimbo_user`
 - **Status**: Running in Kubernetes (1 master + 2 replicas)
 - **External Access**: `10.10.61.70:5432`
 
@@ -122,7 +122,7 @@ postgres:
   host: 10.10.61.70
   port: 5432
   database: nimbo_db
-  username: nimbo_batch
+  username: nimbo_user
   password: 123456
   pool-size: 5
 
@@ -137,7 +137,7 @@ batch:
 output:
   mode: database  # Switch to PostgreSQL
 postgres:
-  username: ${DB_USERNAME:nimbo_batch}
+  username: ${DB_USERNAME:nimbo_user}
   password: ${DB_PASSWORD:123456}
   pool-size: 20
 batch:

@@ -25,11 +25,11 @@ postgres:
   host: 10.10.61.70
   port: 5432
   database: nimbo_db
-  username: ${DB_USERNAME:nimbo_batch}
+  username: ${DB_USERNAME:nimbo_user}
   password: ${DB_PASSWORD:123456}
   pool-size: 20
 
 batch:
-  schedule: "0 0 * * * ?"
-  window-hours: 1
+  schedule: "0 */2 * * * ?"  ## should change
+  window-duration: "1 hour"
   enabled: true

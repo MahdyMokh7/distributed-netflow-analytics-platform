@@ -7,27 +7,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Slf4j
 @Component
 public class BatchJobRunner {
 
-    private final TrafficAggregationProcessor trafficProcessor;
-    private final ConnectionProcessor connectionProcessor;
-    private final ProtocolProcessor protocolProcessor;
-    private final TopIpProcessor topIpProcessor;
+    private final List<BaseProcessor> processors;
     private final BatchConfig batchConfig;
     private final OutputConfig outputConfig;
 
-    public BatchJobRunner(TrafficAggregationProcessor trafficProcessor,
-                          ConnectionProcessor connectionProcessor,
-                          ProtocolProcessor protocolProcessor,
-                          TopIpProcessor topIpProcessor,
+    public BatchJobRunner(List<BaseProcessor> processors,
                           BatchConfig batchConfig,
                           OutputConfig outputConfig) {
-        this.trafficProcessor = trafficProcessor;
-        this.connectionProcessor = connectionProcessor;
-        this.protocolProcessor = protocolProcessor;
-        this.topIpProcessor = topIpProcessor;
+        this.processors = processors;
         this.batchConfig = batchConfig;
         this.outputConfig = outputConfig;
     }
@@ -43,17 +36,15 @@ public class BatchJobRunner {
         long startTime = System.currentTimeMillis();
 
         try {
-            log.info("=== RUNNING ALL PROCESSORS ===");
-
-            trafficProcessor.process();
-            connectionProcessor.process();
-            protocolProcessor.process();
-            topIpProcessor.process();
+            log.info("=== RUNNING ALL PROCESSORS ({}) ===", processors.size());
+            for (BaseProcessor processor : processors) {
+                log.info("Running processor: {}", processor.getClass().getSimpleName());
+                processor.process();
+            }
 
             long duration = System.currentTimeMillis() - startTime;
             log.info("Batch job completed successfully in {} ms ({} seconds)",
                     duration, duration / 1000);
-
         } catch (Exception e) {
             log.error("Batch job failed", e);
             throw new RuntimeException("Batch job execution failed", e);

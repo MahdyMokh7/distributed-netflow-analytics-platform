@@ -34,7 +34,7 @@ postgres:
 
 batch:
   schedule: "0 */5 * * * ?"
-  window-hours: 1
+  window-duration: "1 hour"
   enabled: true
 
 test:

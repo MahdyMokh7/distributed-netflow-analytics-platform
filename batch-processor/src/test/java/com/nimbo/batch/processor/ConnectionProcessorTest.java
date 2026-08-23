@@ -1,5 +1,6 @@
 package com.nimbo.batch.processor;
 
+import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 class ConnectionProcessorTest extends BaseProcessorTest {
 
     private HdfsConfig hdfsConfig;
+    private BatchConfig batchConfig;
     private ConnectionProcessor processor;
 
     @BeforeEach
@@ -18,7 +20,9 @@ class ConnectionProcessorTest extends BaseProcessorTest {
         hdfsConfig = mock(HdfsConfig.class);
         when(hdfsConfig.getFullParquetPath())
                 .thenReturn(testParquetConfig.getLocalPath());
-        processor = new ConnectionProcessor(spark, hdfsConfig);
+        batchConfig = mock(BatchConfig.class);
+        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
+        processor = new ConnectionProcessor(spark, hdfsConfig, batchConfig);
     }
 
     @Test
@@ -30,7 +34,7 @@ class ConnectionProcessorTest extends BaseProcessorTest {
     void shouldThrowExceptionOnEmptyDataset() {
         when(hdfsConfig.getFullParquetPath())
                 .thenReturn(testParquetConfig.getEmptyPath());
-        ConnectionProcessor emptyProcessor = new ConnectionProcessor(spark, hdfsConfig);
+        ConnectionProcessor emptyProcessor = new ConnectionProcessor(spark, hdfsConfig, batchConfig);
 
         assertThatThrownBy(emptyProcessor::process)
                 .isInstanceOf(RuntimeException.class)
@@ -41,7 +45,7 @@ class ConnectionProcessorTest extends BaseProcessorTest {
     void shouldThrowExceptionOnInvalidPath() {
         when(hdfsConfig.getFullParquetPath())
                 .thenReturn(testParquetConfig.getInvalidPath());
-        ConnectionProcessor invalidProcessor = new ConnectionProcessor(spark, hdfsConfig);
+        ConnectionProcessor invalidProcessor = new ConnectionProcessor(spark, hdfsConfig, batchConfig);
 
         assertThatThrownBy(invalidProcessor::process)
                 .isInstanceOf(RuntimeException.class)

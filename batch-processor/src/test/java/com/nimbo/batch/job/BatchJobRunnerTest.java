@@ -10,6 +10,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.api.Assertions;
 
+import java.util.List;
+
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,10 +40,7 @@ class BatchJobRunnerTest {
     @BeforeEach
     void setUp() {
         batchJobRunner = new BatchJobRunner(
-                trafficProcessor,
-                connectionProcessor,
-                protocolProcessor,
-                topIpProcessor,
+                List.of(trafficProcessor, connectionProcessor, protocolProcessor, topIpProcessor),
                 batchConfig,
                 outputConfig
         );
@@ -79,7 +78,6 @@ class BatchJobRunnerTest {
         doThrow(new RuntimeException("Processor failed"))
                 .when(trafficProcessor).process();
 
-        // The runner should propagate the exception
         Assertions.assertThrows(
                 RuntimeException.class,
                 () -> batchJobRunner.runBatchJob()
@@ -93,8 +91,6 @@ class BatchJobRunnerTest {
 
         batchJobRunner.runBatchJob();
 
-        // Verify output mode was logged (via log output)
-        // This is tested indirectly by verifying process calls
         verify(trafficProcessor).process();
         verify(connectionProcessor).process();
         verify(protocolProcessor).process();

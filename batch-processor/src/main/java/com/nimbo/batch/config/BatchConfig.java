@@ -12,6 +12,6 @@ import org.springframework.context.annotation.Configuration;
 public class BatchConfig {
 
     private String schedule;
-    private int windowHours;
+    private String windowDuration;
     private boolean enabled;
 }

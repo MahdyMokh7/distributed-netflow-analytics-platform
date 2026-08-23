@@ -1,45 +1,53 @@
 package com.nimbo.batch.processor;
 
+import com.nimbo.batch.config.BatchConfig;
+import com.nimbo.batch.config.HdfsConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import com.nimbo.batch.config.HdfsConfig;
-
-import static org.apache.spark.sql.functions.*;
+import static org.apache.spark.sql.functions.col;
+import static org.apache.spark.sql.functions.window;
+import static org.apache.spark.sql.functions.sum;
+import static org.apache.spark.sql.functions.count;
 
 @Component
 @Slf4j
+@Order(1)
 public class TrafficAggregationProcessor extends BaseProcessor {
 
-    private static final String HOUR_WINDOW = "1 hour";
-
-    public TrafficAggregationProcessor(SparkSession spark, HdfsConfig hdfsConfig) {
-        super(spark, hdfsConfig.getFullParquetPath());
+    public TrafficAggregationProcessor(SparkSession spark,
+                                       HdfsConfig hdfsConfig,
+                                       BatchConfig batchConfig) {
+        super(spark, hdfsConfig.getFullParquetPath(), batchConfig.getWindowDuration());
     }
 
     @Override
     public void process() {
-        logHeader("=== TRAFFIC AGGREGATION (IP Bandwidth by Hour) ===");
+        logHeader("=== TRAFFIC AGGREGATION (IP Bandwidth by {} Windows) ===", windowDuration);
 
         try {
             Dataset<Row> parquetDf = readParquetFiles();
 
             Dataset<Row> aggregated = parquetDf
                     .groupBy(
-                            col("IPV4_SRC_ADDR").alias("ip"),
-                            window(col("processing_time"), HOUR_WINDOW)
+                            col("IPV4_SRC_ADDR").alias("src_ip"),
+                            window(col("processing_time"), windowDuration)
                     )
                     .agg(
-                            sum(col("IN_BYTES").plus(col("OUT_BYTES"))).alias("total_bytes"),
-                            sum(col("IN_PKTS").plus(col("OUT_PKTS"))).alias("total_packets"),
+                            sum(col("IN_BYTES")).alias("in_bytes"),
+                            sum(col("OUT_BYTES")).alias("out_bytes"),
+                            sum(col("IN_PKTS")).alias("in_packets"),
+                            sum(col("OUT_PKTS")).alias("out_packets"),
                             count("*").alias("record_count")
                     )
-                    .withColumn("hour_timestamp", col("window.start"))
+                    .withColumn("window_start", col("window.start"))
+                    .withColumn("window_end", col("window.end"))
                     .drop("window")
-                    .orderBy(col("hour_timestamp").desc(), col("total_bytes").desc());
+                    .orderBy(col("window_start").desc(), col("in_bytes").plus(col("out_bytes")).desc());
 
             long recordCount = aggregated.count();
             log.info("Total aggregation records: {}", recordCount);
@@ -50,8 +58,8 @@ public class TrafficAggregationProcessor extends BaseProcessor {
             }
 
             log.info("Top 20 Traffic Aggregations (Source IP):");
-            log.info("IP | Hour | Total Bytes | Total Packets | Record Count");
-            log.info("-".repeat(80));
+            log.info("Src IP | Window Start | Window End | In Bytes | Out Bytes | In Packets | Out Packets | Record Count");
+            log.info("-".repeat(120));
 
             aggregated.show(20, false);
 
