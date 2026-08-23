@@ -19,7 +19,6 @@
     <description>Kafka to HDFS Parquet data ingestion service for NetFlow data.</description>
 
     <dependencies>
-        <!-- Spring Boot starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
@@ -46,7 +45,6 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Kafka -->
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
@@ -57,7 +55,6 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
-        <!-- Avro -->
         <dependency>
             <groupId>org.apache.avro</groupId>
             <artifactId>avro</artifactId>
@@ -82,7 +79,6 @@
             </exclusions>
         </dependency>
 
-        <!-- HDFS -->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-client</artifactId>
@@ -110,7 +106,6 @@
             </exclusions>
         </dependency>
 
-        <!-- Parquet -->
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-hadoop</artifactId>
@@ -124,7 +119,6 @@
             <artifactId>parquet-common</artifactId>
         </dependency>
 
-        <!-- Utilities -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -144,7 +138,6 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
-        <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -172,7 +165,6 @@
         </dependency>
     </dependencies>
 
-    <!-- Confluent repository -->
     <repositories>
         <repository>
             <id>confluent</id>
@@ -185,7 +177,6 @@
         <finalName>${project.artifactId}</finalName>
 
         <plugins>
-            <!-- Avro code generation -->
             <plugin>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro-maven-plugin</artifactId>
@@ -205,7 +196,6 @@
                 </executions>
             </plugin>
 
-            <!-- Spring Boot executable JAR -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
@@ -220,7 +210,7 @@
 
                 <configuration>
                     <to>
-                        <image>${jib.image.prefix}-${project.artifactId}:${jib.image.tag}</image>
+                        <image>10.10.10.54:8084/${jib.image.prefix}-${project.artifactId}:${jib.image.tag}</image>
                     </to>
 
                     <container>

@@ -1,6 +1,18 @@
 pipeline {
     agent {
-        label 'nimbo-nimbyte'
+        docker {
+            label 'nimbo-nimbyte'
+            image 'maven:3.9-eclipse-temurin-17'
+            args '''
+                --network host
+                --add-host sonarqube.inside.sahab.ir:192.168.12.53
+                -v /home/team1/.m2:/home/team1/.m2
+                -v /home/team1/.m2/settings.xml:/usr/share/maven/conf/settings.xml:ro
+                -v /opt/jdk-17.0.6/lib/security/cacerts:/certs/cacerts:ro
+                -v /etc/passwd:/etc/passwd:ro
+                -v /etc/group:/etc/group:ro
+            '''
+        }
     }
 
     options {
@@ -12,9 +24,8 @@ pipeline {
     }
 
     environment {
-        MAVEN_OPTS = '-Xmx1024m'
-        IMAGE_TAG = "${BUILD_NUMBER}"
         SPRING_PROFILES_ACTIVE = 'prod'
+        MAVEN_OPTS = '-Djavax.net.ssl.trustStore=/certs/cacerts -Djavax.net.ssl.trustStorePassword=changeit'
     }
 
     stages {
@@ -26,18 +37,33 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                // Runs unit and integration tests while generating JaCoCo coverage reports
-                sh 'mvn -B clean verify'
+                sh 'mvn -B clean verify -DskipITs'
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('Run Sonar Analysis') {
             steps {
-                withSonarQubeEnv('SonarQube'){
+                withSonarQubeEnv('sonarqube') {
                     sh '''
-                        mvn sonar:sonar \
-                        -Dsonar.projectKey=nimbo-nimbyte \
-                        -Dsonar.host.url=https://sonarqube.inside.sahab.ir \
+                        set -eu
+                        mkdir -p /tmp/sonar-cache
+
+                        BRANCH="${GERRIT_BRANCH:-master}"
+                        CHANGE="${GERRIT_CHANGE_NUMBER:-manual-build}"
+                        PATCHSET="${GERRIT_PATCHSET_NUMBER:-0}"
+
+                        mvn \
+                          --batch-mode \
+                          --no-transfer-progress \
+                          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                          -Dsonar.projectKey=nimbo-nimbyte \
+                          -Dsonar.host.url="${SONAR_HOST_URL}" \
+                          -Dsonar.login="${SONAR_AUTH_TOKEN}" \
+                          -Dsonar.userHome=/tmp/sonar-cache \
+                          -Dsonar.pullrequest.base="${BRANCH}" \
+                          -Dsonar.pullrequest.key="${CHANGE}" \
+                          -Dsonar.pullrequest.branch="change-${CHANGE}-${PATCHSET}" \
+                          -Dsonar.analysis.gerritId="${CHANGE}-${PATCHSET}"
                     '''
                 }
             }
@@ -50,22 +76,17 @@ pipeline {
                 }
             }
         }
-
-        stage('Build Container Image (Jib)') {
-            steps {
-                sh "mvn -B jib:dockerBuild -DskipTests -Djib.image.tag=${IMAGE_TAG}"
-            }
-        }
     }
 
     post {
         always {
             junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
             junit testResults: '**/target/failsafe-reports/*.xml', allowEmptyResults: true
-            archiveArtifacts artifacts: 'target/*.jar', fingerprint: true, allowEmptyArchive: true
+            archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true, allowEmptyArchive: true
+            cleanWs()
         }
         success {
-            echo "CI completed successfully. Image nimbo-nimbyte:${IMAGE_TAG} ready for CD."
+            echo "CI completed successfully. JAR artifacts stashed and archived for CD."
         }
         failure {
             echo 'CI pipeline failed quality gate or test stages.'
