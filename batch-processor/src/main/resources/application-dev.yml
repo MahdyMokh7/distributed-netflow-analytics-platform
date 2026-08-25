@@ -1,3 +1,10 @@
+spring:
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    locations: classpath:db.migration
+
 spark:
   master: local[*]
   app-name: nimbo-batch-processor-dev
@@ -17,15 +24,25 @@ hdfs:
   parquet-path: /netflow/parquetFiles/
 
 output:
-  mode: console
+  mode: both
 
 postgres:
-  host: 10.10.61.70
+  host: localhost
   port: 5432
   database: nimbo_db
   username: nimbo_user
   password: 123456
-  pool-size: 5
+  batch-size: 1000
+
+  pool:
+    size: 20
+    connection-timeout: 10000
+    pool-name: nimbo-batch-pg-pool
+
+  retry:
+    max-attempts: 3
+    initial-delay-ms: 1000
+    max-delay-ms: 10000
 
 batch:
   schedule: "0 */2 * * * ?"

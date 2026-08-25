@@ -1,13 +1,13 @@
 package com.nimbo.batch.processor;
 
-import com.nimbo.batch.config.BatchConfig;
+import com.nimbo.batch.writer.PostgresWriter;
+import com.nimbo.batch.writer.TableMapping;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.util.UUID;
 
 import static org.apache.spark.sql.functions.current_timestamp;
 
@@ -17,25 +17,22 @@ public abstract class BaseProcessor {
     protected final SparkSession spark;
     protected final String parquetPath;
     protected final String windowDuration;
+    protected final PostgresWriter postgresWriter;
 
-    private static final DateTimeFormatter TIME_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
-    protected BaseProcessor(SparkSession spark, String parquetPath, String windowDuration) {
+    protected BaseProcessor(SparkSession spark,
+                            String parquetPath,
+                            String windowDuration,
+                            PostgresWriter postgresWriter) {
         this.spark = spark;
         this.parquetPath = parquetPath;
         this.windowDuration = windowDuration;
+        this.postgresWriter = postgresWriter;
     }
 
     protected Dataset<Row> readParquetFiles() {
         log.info("Reading Parquet files from: {}", parquetPath);
         Dataset<Row> df = spark.read().parquet(parquetPath);
-
         return df.withColumn("processing_time", current_timestamp());
-    }
-
-    protected String formatTimestamp(LocalDateTime timestamp) {
-        return timestamp != null ? timestamp.format(TIME_FORMATTER) : "N/A";
     }
 
     protected void logSeparator() {
@@ -48,5 +45,24 @@ public abstract class BaseProcessor {
         logSeparator();
     }
 
-    public abstract void process();
+    protected long writeToDatabase(Dataset<Row> dataset, TableMapping mapping, UUID batchId) {
+        long startTime = System.currentTimeMillis();
+        long recordCount = dataset.count();
+
+        log.info("Writing {} records to table: {} with batch_id: {}", recordCount, mapping.getTableName(), batchId);
+
+        try {
+            long written = postgresWriter.write(dataset, mapping, batchId);
+            long duration = System.currentTimeMillis() - startTime;
+
+            log.info("Successfully wrote {} records to table: {} in {} ms", written, mapping.getTableName(), duration);
+
+            return written;
+        } catch (Exception e) {
+            log.error("Failed to write to table: {} with batch_id: {}", mapping.getTableName(), batchId, e);
+            throw new RuntimeException("Database write failed for table: " + mapping.getTableName(), e);
+        }
+    }
+
+    public abstract void process(UUID batchId);
 }

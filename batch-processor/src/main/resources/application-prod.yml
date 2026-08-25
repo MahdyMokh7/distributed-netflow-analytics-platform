@@ -1,3 +1,10 @@
+spring:
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    locations: classpath:db.migration
+
 spark:
   master: spark://10.10.61.71:7077
   app-name: nimbo-batch-processor
@@ -27,7 +34,17 @@ postgres:
   database: nimbo_db
   username: ${DB_USERNAME:nimbo_user}
   password: ${DB_PASSWORD:123456}
-  pool-size: 20
+  batch-size: 1000
+
+  pool:
+    size: 20
+    connection-timeout: 10000
+    pool-name: nimbo-batch-pg-pool
+
+  retry:
+    max-attempts: 5
+    initial-delay-ms: 2000
+    max-delay-ms: 30000
 
 batch:
   schedule: "0 */2 * * * ?"  ## should change

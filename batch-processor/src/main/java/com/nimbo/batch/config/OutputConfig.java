@@ -11,13 +11,36 @@ import org.springframework.context.annotation.Configuration;
 @Setter
 public class OutputConfig {
 
-    private String mode; // console or database
+    private Mode mode = Mode.CONSOLE;
+
+    public enum Mode {
+        CONSOLE(true, false),
+        DATABASE(false, true),
+        BOTH(true, true),
+        NONE(false, false);
+
+        private final boolean consoleEnabled;
+        private final boolean databaseEnabled;
+
+        Mode(boolean consoleEnabled, boolean databaseEnabled) {
+            this.consoleEnabled = consoleEnabled;
+            this.databaseEnabled = databaseEnabled;
+        }
+
+        public boolean isConsoleEnabled() {
+            return consoleEnabled;
+        }
+
+        public boolean isDatabaseEnabled() {
+            return databaseEnabled;
+        }
+    }
 
     public boolean isConsoleMode() {
-        return "console".equalsIgnoreCase(mode);
+        return mode.isConsoleEnabled();
     }
 
     public boolean isDatabaseMode() {
-        return "database".equalsIgnoreCase(mode);
+        return mode.isDatabaseEnabled();
     }
 }

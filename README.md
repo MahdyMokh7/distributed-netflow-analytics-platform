@@ -53,6 +53,9 @@ docker run -it --rm \
   --class com.nimbo.batch.BatchProcessorApplication \
   /app/batch-processor.jar \
   --spring.profiles.active=prod
+  
+  
+mvn clean spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 ## Monitor
