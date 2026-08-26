@@ -7,7 +7,6 @@ pipeline {
                 --network host
                 --add-host sonarqube.inside.sahab.ir:192.168.12.53
                 -v /home/team1/.m2:/home/team1/.m2
-                -v /home/team1/.m2/settings.xml:/usr/share/maven/conf/settings.xml:ro
                 -v /opt/jdk-17.0.6/lib/security/cacerts:/certs/cacerts:ro
                 -v /etc/passwd:/etc/passwd:ro
                 -v /etc/group:/etc/group:ro
@@ -37,7 +36,14 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                sh 'mvn -B clean verify -DskipITs'
+                sh '''
+                    mvn \
+                      --settings jenkins/maven-settings.xml \
+                      --batch-mode \
+                      --no-transfer-progress \
+                      clean verify \
+                      -DskipITs
+                '''
             }
         }
 
@@ -48,11 +54,11 @@ pipeline {
                         set -eu
                         mkdir -p /tmp/sonar-cache
 
-                        BRANCH="${GERRIT_BRANCH:-master}"
                         CHANGE="${GERRIT_CHANGE_NUMBER:-manual-build}"
                         PATCHSET="${GERRIT_PATCHSET_NUMBER:-0}"
 
                         mvn \
+                          --settings jenkins/maven-settings.xml \
                           --batch-mode \
                           --no-transfer-progress \
                           org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
@@ -60,10 +66,8 @@ pipeline {
                           -Dsonar.host.url="${SONAR_HOST_URL}" \
                           -Dsonar.login="${SONAR_AUTH_TOKEN}" \
                           -Dsonar.userHome=/tmp/sonar-cache \
-                          -Dsonar.pullrequest.base="${BRANCH}" \
                           -Dsonar.pullrequest.key="${CHANGE}" \
-                          -Dsonar.pullrequest.branch="change-${CHANGE}-${PATCHSET}" \
-                          -Dsonar.analysis.gerritId="${CHANGE}-${PATCHSET}"
+                          -Dsonar.pullrequest.branch="gerrit-${CHANGE}-${PATCHSET}" \
                     '''
                 }
             }
@@ -82,14 +86,13 @@ pipeline {
         always {
             junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
             junit testResults: '**/target/failsafe-reports/*.xml', allowEmptyResults: true
-            archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true, allowEmptyArchive: true
             cleanWs()
         }
         success {
-            echo "CI completed successfully. JAR artifacts stashed and archived for CD."
+            echo "CI completed successfully."
         }
         failure {
-            echo 'CI pipeline failed quality gate or test stages.'
+            echo 'CI pipeline failed.'
         }
     }
 }
