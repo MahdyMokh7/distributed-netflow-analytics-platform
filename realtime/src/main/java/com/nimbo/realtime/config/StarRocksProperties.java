@@ -35,6 +35,8 @@ public class StarRocksProperties {
     private boolean mergeCommitEnabled;
 
     private boolean mergeCommitAsync;
+    @Min(1)
+    private int maxInFlightRequests;
 
     @Min(1)
     private long mergeCommitIntervalMs;

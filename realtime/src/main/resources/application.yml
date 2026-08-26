@@ -16,22 +16,31 @@ realtime:
     poll-timeout-ms: ${KAFKA_POLL_TIMEOUT_MS:1000}
     consumer-count: ${KAFKA_CONSUMER_COUNT:3}
     max-partition-fetch-bytes: ${KAFKA_MAX_PARTITION_FETCH_BYTES:4194304}
+    session-timeout-ms: ${KAFKA_SESSION_TIMEOUT_MS:30000}
+    heartbeat-interval-ms: ${KAFKA_HEARTBEAT_INTERVAL_MS:3000}
+    max-poll-interval-ms: ${KAFKA_MAX_POLL_INTERVAL_MS:900000}
+
   starrocks:
-    stream-load-url: ${STARROCKS_STREAM_LOAD_URL:http://10.10.61.54:8030}
+
+    stream-load-backends:
+      - http://10.10.61.51:8040
+      - http://10.10.61.52:8040
+      - http://10.10.61.53:8040
+      - http://10.10.61.54:8040
     database: ${STARROCKS_DATABASE:nimbo}
     table: ${STARROCKS_TABLE:netflow_realtime_v2}
     username: ${STARROCKS_USERNAME:root}
     password: ${STARROCKS_PASSWORD:s@hWater}
     merge-commit-enabled: ${STARROCKS_MERGE_COMMIT_ENABLED:true}
     merge-commit-async: ${STARROCKS_MERGE_COMMIT_ASYNC:false}
-    merge-commit-interval-ms: ${STARROCKS_MERGE_COMMIT_INTERVAL_MS:50}
+    merge-commit-interval-ms: ${STARROCKS_MERGE_COMMIT_INTERVAL_MS:1000}
     merge-commit-parallel: ${STARROCKS_MERGE_COMMIT_PARALLEL:3}
+    max-in-flight-requests: ${STARROCKS_MAX_IN_FLIGHT_REQUESTS:9}
     retry-backoff-ms: ${STARROCKS_RETRY_BACKOFF_MS:1000}
+    max-batch-size-rows: ${STARROCKS_MAX_BATCH_SIZE_ROWS:100000}
+    max-batch-time-ms: ${STARROCKS_MAX_BATCH_TIME_MS:1500}
 
-
-#18.30
-#60
-#17.49
-#  ALTER TABLE nimbo.netflow_realtime_v2 RENAME netflow_realtime_v2_4;/
-#  SELECT COUNT(*)  FROM nimbo.netflow_realtime_v2;
-#  CREATE TABLE nimbo.netflow_realtime_v2 LIKE nimbo.netflow_realtime_v2_1;
+#08.10:20
+##  ALTER TABLE nimbo.netflow_realtime_v2 RENAME netflow_realtime_v2_4;/
+##  SELECT COUNT(*)  FROM nimbo.netflow_realtime_v2;
+##  CREATE TABLE nimbo.netflow_realtime_v2 LIKE nimbo.netflow_realtime_v2_1;

@@ -1,68 +1,82 @@
 package com.nimbo.realtime.consumer;
 
 import com.nimbo.realtime.avro.AvroDeserializer;
+import com.nimbo.realtime.client.StarRocksStreamLoadClient;
 import com.nimbo.realtime.config.KafkaProperties;
 import com.nimbo.realtime.config.StarRocksProperties;
-import com.nimbo.realtime.client.StarRocksStreamLoadClient;
 import com.nimbo.realtime.mapper.StarRocksRecordMapper;
 import com.nimbo.realtime.model.StarRocksRow;
 import com.nimbo.realtime.model.StreamLoadResult;
 import com.nimbo.realtime.validation.NetflowValidationService;
 import com.nimbo.realtime.validation.ValidationResult;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
+@Slf4j
+@RequiredArgsConstructor
 public class StarRocksConsumerWorker implements Runnable {
-
-    private static final Logger log =
-            LoggerFactory.getLogger(StarRocksConsumerWorker.class);
 
     private final int workerNumber;
 
     private final KafkaConsumer<byte[], byte[]> consumer;
+
     private final KafkaProperties kafkaProperties;
     private final StarRocksProperties starRocksProperties;
 
     private final AvroDeserializer avroDeserializer;
     private final NetflowValidationService validationService;
     private final StarRocksRecordMapper mapper;
+
     private final StarRocksStreamLoadClient streamLoadClient;
 
     private volatile boolean running = true;
 
-    public StarRocksConsumerWorker(
-            int workerNumber,
-            KafkaConsumer<byte[], byte[]> consumer,
-            KafkaProperties kafkaProperties,
-            StarRocksProperties starRocksProperties,
-            AvroDeserializer avroDeserializer,
-            NetflowValidationService validationService,
-            StarRocksRecordMapper mapper,
-            StarRocksStreamLoadClient streamLoadClient
+
+    private record PendingLoad(
+            String label,
+            int rowCount,
+            Map<TopicPartition, OffsetAndMetadata> offsets,
+            CompletableFuture<StreamLoadResult> future
     ) {
-        this.workerNumber = workerNumber;
-        this.consumer = consumer;
-        this.kafkaProperties = kafkaProperties;
-        this.starRocksProperties = starRocksProperties;
-        this.avroDeserializer = avroDeserializer;
-        this.validationService = validationService;
-        this.mapper = mapper;
-        this.streamLoadClient = streamLoadClient;
     }
+
 
     @Override
     public void run() {
+
+        List<StarRocksRow> rowBatch = new ArrayList<>();
+
+        Map<TopicPartition, OffsetAndMetadata> pendingOffsets =
+                new HashMap<>();
+
+        Deque<PendingLoad> inFlightLoads =
+                new ArrayDeque<>();
+
+        long lastFlushTime =
+                System.currentTimeMillis();
+
+        boolean kafkaPaused = false;
 
         try {
 
@@ -75,7 +89,76 @@ public class StarRocksConsumerWorker implements Runnable {
                     workerNumber
             );
 
+
             while (running) {
+
+                /*
+                 * First check if previously submitted HTTP requests
+                 * have finished.
+                 */
+                drainCompletedLoads(inFlightLoads);
+
+
+                /*
+                 * Backpressure.
+                 *
+                 * If StarRocks is slower than Kafka, don't keep
+                 * allocating memory forever.
+                 */
+                if (inFlightLoads.size()
+                        >= starRocksProperties.getMaxInFlightRequests()) {
+
+                    if (!kafkaPaused && !consumer.assignment().isEmpty()) {
+
+                        consumer.pause(
+                                consumer.assignment()
+                        );
+
+                        kafkaPaused = true;
+
+                        log.debug(
+                                "Worker {} paused Kafka. inFlight={}",
+                                workerNumber,
+                                inFlightLoads.size()
+                        );
+                    }
+
+
+                    /*
+                     * Still call poll().
+                     *
+                     * This is important for consumer-group lifecycle,
+                     * rebalances, etc.
+                     *
+                     * Because partitions are paused, we don't pull
+                     * more application data.
+                     */
+                    consumer.poll(
+                            Duration.ofMillis(100)
+                    );
+
+                    continue;
+                }
+
+
+                /*
+                 * StarRocks has capacity again.
+                 */
+                if (kafkaPaused) {
+
+                    consumer.resume(
+                            consumer.assignment()
+                    );
+
+                    kafkaPaused = false;
+
+                    log.debug(
+                            "Worker {} resumed Kafka. inFlight={}",
+                            workerNumber,
+                            inFlightLoads.size()
+                    );
+                }
+
 
                 ConsumerRecords<byte[], byte[]> records =
                         consumer.poll(
@@ -84,15 +167,86 @@ public class StarRocksConsumerWorker implements Runnable {
                                 )
                         );
 
-                if (records.isEmpty()) {
-                    continue;
+
+                for (ConsumerRecord<byte[], byte[]> kafkaRecord : records) {
+
+                    GenericRecord avroRecord =
+                            avroDeserializer.deserialize(
+                                    kafkaRecord.value()
+                            );
+
+                    ValidationResult validation =
+                            validationService.validate(
+                                    avroRecord
+                            );
+
+
+                    TopicPartition topicPartition =
+                            new TopicPartition(
+                                    kafkaRecord.topic(),
+                                    kafkaRecord.partition()
+                            );
+
+                    if (!validation.valid()) {
+                        log.warn(
+                                "Skipping invalid record. topic={}, partition={}, offset={}, reason={}",
+                                kafkaRecord.topic(),
+                                kafkaRecord.partition(),
+                                kafkaRecord.offset(),
+                                validation.reason()
+                        );
+
+                        pendingOffsets.put(
+                                topicPartition,
+                                new OffsetAndMetadata(
+                                        kafkaRecord.offset() + 1
+                                )
+                        );
+
+                        continue;
+                    }
+
+                    StarRocksRow row =
+                            mapper.map(
+                                    avroRecord,
+                                    kafkaRecord.topic(),
+                                    kafkaRecord.partition(),
+                                    kafkaRecord.offset(),
+                                    kafkaRecord.timestamp()
+                            );
+
+                    rowBatch.add(row);
+                    pendingOffsets.put(
+                            topicPartition,
+                            new OffsetAndMetadata(
+                                    kafkaRecord.offset() + 1
+                            )
+                    );
                 }
 
-                processBatch(records);
+                long now = System.currentTimeMillis();
+                boolean sizeThresholdReached = rowBatch.size()
+                                >= starRocksProperties.getMaxBatchSizeRows();
+
+                boolean timeThresholdReached = !rowBatch.isEmpty()
+                                && now - lastFlushTime
+                                >= starRocksProperties.getMaxBatchTimeMs();
+
+                if (sizeThresholdReached || timeThresholdReached) {
+                    submitAsync(
+                            rowBatch,
+                            pendingOffsets,
+                            inFlightLoads
+                    );
+
+                    rowBatch.clear();
+                    pendingOffsets.clear();
+
+                    lastFlushTime = System.currentTimeMillis();
+                }
             }
 
         } catch (WakeupException e) {
-
             if (running) {
                 log.error(
                         "Worker {} received unexpected wakeup",
@@ -100,217 +254,286 @@ public class StarRocksConsumerWorker implements Runnable {
                         e
                 );
             }
-
-        } catch (InterruptedException e) {
-
-            Thread.currentThread().interrupt();
-
-            log.info(
-                    "Worker {} interrupted",
-                    workerNumber
-            );
-
         } catch (Exception e) {
-
             log.error(
-                    "Worker {} stopped because of an unexpected error",
+                    "Worker {} stopped due to unexpected error",
                     workerNumber,
                     e
             );
 
         } finally {
-
-            consumer.close();
-
-            log.info(
-                    "StarRocks consumer worker {} stopped",
-                    workerNumber
-            );
-        }
-    }
-
-    private void processBatch(
-            ConsumerRecords<byte[], byte[]> records
-    ) throws Exception {
-
-
-
-        long batchStart = System.nanoTime();
-
-        long transformStart = System.nanoTime();
-
-        List<StarRocksRow> rows =
-                new ArrayList<>(records.count());
-
-        for (ConsumerRecord<byte[], byte[]> kafkaRecord : records) {
-
-            GenericRecord avroRecord =
-                    avroDeserializer.deserialize(
-                            kafkaRecord.value()
-                    );
-
-            ValidationResult validation =
-                    validationService.validate(avroRecord);
-
-            if (!validation.valid()) {
-
-                throw new IllegalStateException(
-                        "Invalid NetFlow record. "
-                                + "topic="
-                                + kafkaRecord.topic()
-                                + ", partition="
-                                + kafkaRecord.partition()
-                                + ", offset="
-                                + kafkaRecord.offset()
-                                + ", reason="
-                                + validation.reason()
-                );
-
-            }
-
-            StarRocksRow row =
-                    mapper.map(
-                            avroRecord,
-                            kafkaRecord.topic(),
-                            kafkaRecord.partition(),
-                            kafkaRecord.offset(),
-                            kafkaRecord.timestamp()
-                    );
-
-            rows.add(row);
-        }
-        long transformMs =
-                (System.nanoTime() - transformStart)
-                        / 1_000_000;
-
-        long loadStart = System.nanoTime();
-
-        loadWithRetry(rows);
-
-        long loadMs =
-                (System.nanoTime() - loadStart)
-                        / 1_000_000;
-        long commitStart = System.nanoTime();
-
-        consumer.commitSync();
-
-        long commitMs =
-                (System.nanoTime() - commitStart)
-                        / 1_000_000;
-
-
-        long totalMs =
-                (System.nanoTime() - batchStart)
-                        / 1_000_000;
-
-        log.info(
-                "Worker {} batch timing: rows={}, transform={}ms, load={}ms, commit={}ms, total={}ms",
-                workerNumber,
-                rows.size(),
-                transformMs,
-                loadMs,
-                commitMs,
-                totalMs
-        );
-
-    }
-
-    private void loadWithRetry(
-            List<StarRocksRow> rows
-    ) throws InterruptedException {
-
-        while (running) {
-
-            String label =
-                    "nimbo-realtime-worker-"
-                            + workerNumber
-                            + "-"
-                            + UUID.randomUUID();
-
             try {
-
-                long start =
-                        System.currentTimeMillis();
-
-                StreamLoadResult result =
-                        streamLoadClient.load(
-                                rows,
-                                label
-                        );
-
-                long elapsed =
-                        System.currentTimeMillis() - start;
-
+                consumer.close();
+            } finally {
                 log.info(
-                        "Worker {} StarRocks timing: rows={}, "
-                                + "clientTime={}ms, loadTime={}ms, "
-                                + "beginTxn={}ms, read={}ms, "
-                                + "write={}ms, publish={}ms",
-                        workerNumber,
-                        rows.size(),
-                        elapsed,
-                        result.loadTimeMs(),
-                        result.beginTxnTimeMs(),
-                        result.readDataTimeMs(),
-                        result.writeDataTimeMs(),
-                        result.commitAndPublishTimeMs()
+                        "StarRocks consumer worker {} stopped",
+                        workerNumber
                 );
+            }
+        }
+    }
 
-                if (result.isSuccessful()) {
+    private void submitAsync(
+            List<StarRocksRow> rows,
+            Map<TopicPartition, OffsetAndMetadata> offsets,
+            Deque<PendingLoad> inFlightLoads
+    ) {
 
-                    log.info(
-                            "Worker {} StarRocks Stream Load succeeded. "
-                                    + "label={}, rows={}",
-                            workerNumber,
-                            label,
-                            rows.size()
-                    );
+        /*
+         * Critical.
+         *
+         * rowBatch and pendingOffsets are reused after this method,
+         * so the async request must own immutable copies.
+         */
+        List<StarRocksRow> rowsCopy =
+                List.copyOf(rows);
 
-                    return;
-                }
+        Map<TopicPartition, OffsetAndMetadata> offsetsCopy =
+                Map.copyOf(offsets);
 
-                if ("Publish Timeout".equalsIgnoreCase(
-                        result.status()
-                )) {
 
-                    log.warn(
-                            "Worker {} received Publish Timeout. label={}",
-                            workerNumber,
-                            label
-                    );
+        String label =
+                generateDeterministicLabel(offsetsCopy);
 
-                    return;
-                }
 
-                log.error(
-                        "Worker {} StarRocks Stream Load failed. "
-                                + "status={}, message={}, label={}. Retrying...",
-                        workerNumber,
-                        result.status(),
-                        result.message(),
+        CompletableFuture<StreamLoadResult> future =
+                loadWithRetryAsync(
+                        rowsCopy,
                         label
                 );
 
-            } catch (IOException e) {
 
-                log.error(
-                        "Worker {} StarRocks request failed. "
-                                + "label={}. Retrying...",
-                        workerNumber,
+        inFlightLoads.addLast(
+                new PendingLoad(
                         label,
-                        e
-                );
+                        rowsCopy.size(),
+                        offsetsCopy,
+                        future
+                )
+        );
+
+
+        log.debug(
+                "Worker {} submitted async Stream Load. label={}, rows={}, inFlight={}",
+                workerNumber,
+                label,
+                rowsCopy.size(),
+                inFlightLoads.size()
+        );
+    }
+
+
+    private void drainCompletedLoads(
+            Deque<PendingLoad> inFlightLoads
+    ) {
+
+        /*
+         * We intentionally process the queue in submission order.
+         *
+         * Example:
+         *
+         * batch 1 = offsets 0..19999
+         * batch 2 = offsets 20000..39999
+         *
+         * If batch 2 finishes first, we MUST NOT commit 40000 yet.
+         *
+         * First batch 1 must become successful.
+         */
+        while (!inFlightLoads.isEmpty()) {
+
+            PendingLoad pending =
+                    inFlightLoads.peekFirst();
+
+
+            if (!pending.future().isDone()) {
+                return;
             }
 
-            Thread.sleep(
-                    starRocksProperties.getRetryBackoffMs()
+
+            StreamLoadResult result;
+
+            try {
+
+                result =
+                        pending.future().join();
+
+            } catch (CompletionException e) {
+
+                /*
+                 * Retry future should normally only finish
+                 * exceptionally during shutdown or an unrecoverable
+                 * situation.
+                 */
+                throw e;
+            }
+
+
+            /*
+             * HTTP/StarRocks succeeded.
+             *
+             * NOW Kafka offset may be committed.
+             *
+             * commitAsync means we don't block here either.
+             */
+            consumer.commitAsync(
+                    pending.offsets(),
+                    (offsets, exception) -> {
+
+                        if (exception != null) {
+
+                            log.error(
+                                    "Worker {} Kafka async commit failed. offsets={}",
+                                    workerNumber,
+                                    offsets,
+                                    exception
+                            );
+
+                        } else {
+
+                            log.debug(
+                                    "Worker {} Kafka offsets committed: {}",
+                                    workerNumber,
+                                    offsets
+                            );
+                        }
+                    }
+            );
+
+
+            inFlightLoads.removeFirst();
+
+
+            log.info(
+                    "Worker {} completed Stream Load. label={}, rows={}, status={}, remainingInFlight={}",
+                    workerNumber,
+                    pending.label(),
+                    pending.rowCount(),
+                    result.status(),
+                    inFlightLoads.size()
+            );
+        }
+    }
+
+
+    private CompletableFuture<StreamLoadResult> loadWithRetryAsync(
+            List<StarRocksRow> rows,
+            String label
+    ) {
+
+        if (!running) {
+
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException(
+                            "Worker is stopping"
+                    )
             );
         }
 
-        throw new InterruptedException(
-                "Worker is shutting down"
+
+        return streamLoadClient
+                .loadAsync(
+                        rows,
+                        label
+                )
+                .handle(
+                        (result, error) -> {
+
+                            if (error == null) {
+
+                                if (result.isSuccessful()
+                                        || "Publish Timeout".equalsIgnoreCase(
+                                        result.status()
+                                )) {
+
+                                    return CompletableFuture.completedFuture(
+                                            result
+                                    );
+                                }
+
+
+                                log.error(
+                                        "Worker {} Stream Load failed. status={}, message={}, label={}. Retrying...",
+                                        workerNumber,
+                                        result.status(),
+                                        result.message(),
+                                        label
+                                );
+
+                            } else {
+
+                                log.error(
+                                        "Worker {} Stream Load HTTP failure. label={}. Retrying...",
+                                        workerNumber,
+                                        label,
+                                        error
+                                );
+                            }
+
+
+                            return delay(
+                                    starRocksProperties.getRetryBackoffMs()
+                            ).thenCompose(
+                                    ignored ->
+                                            loadWithRetryAsync(
+                                                    rows,
+                                                    label
+                                            )
+                            );
+                        }
+                )
+                .thenCompose(
+                        Function.identity()
+                );
+    }
+
+
+    private CompletableFuture<Void> delay(long milliseconds) {
+
+        return CompletableFuture.runAsync(
+                () -> {
+                },
+                CompletableFuture.delayedExecutor(
+                        milliseconds,
+                        TimeUnit.MILLISECONDS
+                )
         );
     }
+
+
+    private String generateDeterministicLabel(
+            Map<TopicPartition, OffsetAndMetadata> offsets
+    ) {
+
+        StringBuilder builder =
+                new StringBuilder("nimbo-w")
+                        .append(workerNumber);
+
+
+        offsets.entrySet()
+                .stream()
+                .sorted(
+                        Comparator.comparingInt(
+                                entry ->
+                                        entry.getKey().partition()
+                        )
+                )
+                .forEach(
+                        entry ->
+                                builder
+                                        .append("-p")
+                                        .append(
+                                                entry.getKey().partition()
+                                        )
+                                        .append("-o")
+                                        .append(
+                                                entry.getValue().offset()
+                                        )
+                );
+
+
+        return builder.toString();
+    }
+
 
     public void stop() {
 

@@ -47,10 +47,7 @@ public record StreamLoadResult(
 
         @JsonProperty("LoadTimeMs")
         Long loadTimeMs
-
-
 ) {
-
     public boolean isSuccessful() {
         return status != null
                 && "Success".equalsIgnoreCase(status);
