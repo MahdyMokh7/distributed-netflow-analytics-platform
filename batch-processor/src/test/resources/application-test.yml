@@ -53,6 +53,7 @@ batch:
   schedule: "0 */5 * * * ?"
   window-duration: "1 hour"
   enabled: true
+  max-files-per-batch: 5
 
 test:
   parquet:

@@ -36,8 +36,42 @@ public class IngesterConfiguration {
     }
 
     @Bean
-    public AvroDeserializer avroDeserializer(Schema schema) {
-        return new AvroDeserializer(schema);
+    public Schema storageSchema(Schema avroSchema) {
+        Schema.Field processingTimeField = new Schema.Field(
+                "PROCESSING_TIME",
+                Schema.createUnion(
+                        Schema.create(Schema.Type.NULL),
+                        Schema.create(Schema.Type.LONG)
+                ),
+                "Time when the record was ingested into HDFS (UTC epoch microseconds).",
+                (Object) null
+        );
+
+        java.util.List<Schema.Field> fields = new java.util.ArrayList<>();
+        for (Schema.Field field : avroSchema.getFields()) {
+            Schema.Field copy = new Schema.Field(
+                    field.name(),
+                    field.schema(),
+                    field.doc(),
+                    field.defaultVal()
+            );
+            fields.add(copy);
+        }
+
+        fields.add(processingTimeField);
+
+        return Schema.createRecord(
+                avroSchema.getName(),
+                avroSchema.getDoc(),
+                avroSchema.getNamespace(),
+                avroSchema.isError(),
+                fields
+        );
+    }
+
+    @Bean
+    public AvroDeserializer avroDeserializer(Schema avroSchema) {
+        return new AvroDeserializer(avroSchema);
     }
 
     @Bean(destroyMethod = "close")
@@ -56,7 +90,8 @@ public class IngesterConfiguration {
         configs.put(
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 ByteArraySerializer.class.getName()
-        );configs.put(
+        );
+        configs.put(
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 ByteArraySerializer.class.getName()
         );
@@ -73,5 +108,4 @@ public class IngesterConfiguration {
 
         return new KafkaProducer<>(configs);
     }
-
 }

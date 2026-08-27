@@ -6,12 +6,14 @@ import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.apache.spark.sql.functions.col;
@@ -38,11 +40,16 @@ public class ProtocolProcessor extends BaseProcessor {
     }
 
     @Override
-    public void process(UUID batchId) {
+    public void process(List<Path> files, UUID batchId) {
         logHeader("=== PROTOCOL STATISTICS (Protocol Usage {} Windows) ===", windowDuration);
 
         try {
-            Dataset<Row> aggregated = aggregateProtocols();
+            if (files == null || files.isEmpty()) {
+                log.warn("No files provided, skipping connection aggregation");
+                return;
+            }
+
+            Dataset<Row> aggregated = aggregateProtocols(files);
 
             long recordCount = aggregated.count();
             log.info("Total protocol aggregation records: {}", recordCount);
@@ -54,16 +61,14 @@ public class ProtocolProcessor extends BaseProcessor {
 
             writeOutput(aggregated, batchId);
 
-            log.info("Total protocol records: {}", recordCount);
-
         } catch (Exception e) {
             log.error("Error processing protocol aggregation", e);
             throw new RuntimeException("Protocol aggregation failed", e);
         }
     }
 
-    private Dataset<Row> aggregateProtocols() {
-        Dataset<Row> parquetDf = readParquetFiles();
+    private Dataset<Row> aggregateProtocols(List<Path> files) {
+        Dataset<Row> parquetDf = readParquetFiles(files);
 
         return parquetDf
                 .groupBy(

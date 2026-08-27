@@ -33,7 +33,7 @@ ingester:
 storage:
   hdfs:
     uri: ${HDFS_URI:hdfs://team1}
-    base-path: ${HDFS_BASE_PATH:/netflow/parquetFiles-test}
+    base-path: ${HDFS_BASE_PATH:/netflow/parquetFiles-new}
     nameservice: team1
     nodes:
       team1-node1: ${HDFS_NODE1:10.10.61.51:8020}

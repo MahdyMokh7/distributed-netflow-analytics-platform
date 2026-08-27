@@ -6,12 +6,14 @@ import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.apache.spark.sql.functions.col;
@@ -46,11 +48,16 @@ public class TrafficAggregationProcessor extends BaseProcessor {
     }
 
     @Override
-    public void process(UUID batchId) {
+    public void process(List<Path> files, UUID batchId) {
         logHeader("=== TRAFFIC AGGREGATION (IP Bandwidth by {} Windows) ===", windowDuration);
 
         try {
-            Dataset<Row> aggregated = aggregateTraffic();
+            if (files == null || files.isEmpty()) {
+                log.warn("No files provided, skipping connection aggregation");
+                return;
+            }
+
+            Dataset<Row> aggregated = aggregateTraffic(files);
 
             long recordCount = aggregated.count();
             log.info("Total aggregation records: {}", recordCount);
@@ -62,16 +69,14 @@ public class TrafficAggregationProcessor extends BaseProcessor {
 
             writeOutput(aggregated, batchId);
 
-            log.info("Total aggregated records: {}", recordCount);
-
         } catch (Exception e) {
             log.error("Error processing traffic aggregation", e);
             throw new RuntimeException("Traffic aggregation failed", e);
         }
     }
 
-    private Dataset<Row> aggregateTraffic() {
-        Dataset<Row> parquetDf = readParquetFiles();
+    private Dataset<Row> aggregateTraffic(List<Path> files) {
+        Dataset<Row> parquetDf = readParquetFiles(files);
 
         return parquetDf
                 .groupBy(
@@ -109,7 +114,7 @@ public class TrafficAggregationProcessor extends BaseProcessor {
     private void writeToConsole(Dataset<Row> aggregated) {
         log.info("Top 20 Traffic Aggregations (Source IP):");
         log.info("Src IP | Window Start | Window End | In Bytes | Out Bytes | In Packets | Out Packets | Record Count");
-        log.info("-".repeat(120));
+        log.info("-".repeat(140));
 
         aggregated.show(DISPLAY_LIMIT, false);
     }

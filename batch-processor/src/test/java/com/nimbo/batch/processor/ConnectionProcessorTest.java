@@ -4,9 +4,11 @@ import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.writer.PostgresWriter;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,6 +22,7 @@ class ConnectionProcessorTest extends BaseProcessorTest {
     private OutputConfig outputConfig;
     private PostgresWriter postgresWriter;
     private ConnectionProcessor processor;
+    private List<Path> testFiles;
 
     @BeforeEach
     void setUp() {
@@ -39,12 +42,15 @@ class ConnectionProcessorTest extends BaseProcessorTest {
         processor = new ConnectionProcessor(
                 spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
         );
+
+        // Create test file paths
+        testFiles = List.of(new Path(testParquetConfig.getLocalPath()));
     }
 
     @Test
     void shouldProcessWithConsoleOutputWithoutException() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
@@ -57,7 +63,10 @@ class ConnectionProcessorTest extends BaseProcessorTest {
         );
 
         UUID batchId = UUID.randomUUID();
-        assertThatThrownBy(() -> emptyProcessor.process(batchId))
+        List<Path> emptyFiles = List.of(
+                new Path(testParquetConfig.getEmptyPath() + "/empty.parquet")
+        );
+        assertThatThrownBy(() -> emptyProcessor.process(emptyFiles, batchId))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Connection aggregation failed");
     }
@@ -72,7 +81,10 @@ class ConnectionProcessorTest extends BaseProcessorTest {
         );
 
         UUID batchId = UUID.randomUUID();
-        assertThatThrownBy(() -> invalidProcessor.process(batchId))
+        List<Path> invalidFiles = List.of(
+                new Path(testParquetConfig.getInvalidPath() + "/invalid.parquet")
+        );
+        assertThatThrownBy(() -> invalidProcessor.process(invalidFiles, batchId))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Connection aggregation failed");
     }
@@ -83,7 +95,7 @@ class ConnectionProcessorTest extends BaseProcessorTest {
         when(outputConfig.isDatabaseMode()).thenReturn(true);
 
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
@@ -92,7 +104,7 @@ class ConnectionProcessorTest extends BaseProcessorTest {
         when(outputConfig.isDatabaseMode()).thenReturn(false);
 
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
@@ -101,7 +113,7 @@ class ConnectionProcessorTest extends BaseProcessorTest {
         when(outputConfig.isDatabaseMode()).thenReturn(false);
 
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
@@ -110,24 +122,30 @@ class ConnectionProcessorTest extends BaseProcessorTest {
         when(outputConfig.isDatabaseMode()).thenReturn(true);
 
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
     void shouldGenerateSha256IdForEachConnection() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
     void shouldOrderResultsByBytesDescending() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
     void shouldHandleLargeDatasetWithoutErrors() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
+    }
+
+    @Test
+    void shouldProcessWithEmptyFileListWithoutException() {
+        UUID batchId = UUID.randomUUID();
+        processor.process(List.of(), batchId);
     }
 }

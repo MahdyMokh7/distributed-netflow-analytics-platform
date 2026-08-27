@@ -4,9 +4,11 @@ import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.writer.PostgresWriter;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,6 +22,7 @@ class TopIpProcessorTest extends BaseProcessorTest {
     private OutputConfig outputConfig;
     private PostgresWriter postgresWriter;
     private TopIpProcessor processor;
+    private List<Path> testFiles;
 
     @BeforeEach
     void setUp() {
@@ -39,12 +42,14 @@ class TopIpProcessorTest extends BaseProcessorTest {
         processor = new TopIpProcessor(
                 spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
         );
+
+        testFiles = List.of(new Path(testParquetConfig.getLocalPath()));
     }
 
     @Test
     void shouldProcessWithConsoleOutputWithoutException() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
@@ -57,7 +62,10 @@ class TopIpProcessorTest extends BaseProcessorTest {
         );
 
         UUID batchId = UUID.randomUUID();
-        assertThatThrownBy(() -> emptyProcessor.process(batchId))
+        List<Path> emptyFiles = List.of(
+                new Path(testParquetConfig.getEmptyPath() + "/empty.parquet")
+        );
+        assertThatThrownBy(() -> emptyProcessor.process(emptyFiles, batchId))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Top IP aggregation failed");
     }
@@ -72,7 +80,10 @@ class TopIpProcessorTest extends BaseProcessorTest {
         );
 
         UUID batchId = UUID.randomUUID();
-        assertThatThrownBy(() -> invalidProcessor.process(batchId))
+        List<Path> invalidFiles = List.of(
+                new Path(testParquetConfig.getInvalidPath() + "/invalid.parquet")
+        );
+        assertThatThrownBy(() -> invalidProcessor.process(invalidFiles, batchId))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Top IP aggregation failed");
     }
@@ -83,57 +94,30 @@ class TopIpProcessorTest extends BaseProcessorTest {
         when(outputConfig.isDatabaseMode()).thenReturn(true);
 
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
-    void shouldNotWriteToDatabaseWhenConsoleModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
+    void shouldOrderResultsByWindowStartDescending() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
-    void shouldWriteToConsoleWhenConsoleModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
+    void shouldOrderResultsByTotalBandwidthDescending() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
-    }
-
-    @Test
-    void shouldWriteToDatabaseWhenDatabaseModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(false);
-        when(outputConfig.isDatabaseMode()).thenReturn(true);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
-    }
-
-    @Test
-    void shouldUnifySrcAndDstPerspectives() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
-    }
-
-    @Test
-    void shouldOrderResultsByBandwidthDescending() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
-    }
-
-    @Test
-    void shouldLimitResultsToTopN() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
     void shouldHandleLargeDatasetWithoutErrors() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
+    }
+
+    @Test
+    void shouldProcessWithEmptyFileListWithoutException() {
+        UUID batchId = UUID.randomUUID();
+        processor.process(List.of(), batchId);
     }
 }

@@ -14,4 +14,5 @@ public class BatchConfig {
     private String schedule;
     private String windowDuration;
     private boolean enabled;
+    private int maxFilesPerBatch;
 }

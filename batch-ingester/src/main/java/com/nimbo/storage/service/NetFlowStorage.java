@@ -29,13 +29,13 @@ public final class NetFlowStorage {
     private final FileStorage fileStorage;
     private final FileNameGenerator fileNameGenerator;
     private final HdfsProperties hdfsProperties;
+    private final Schema storageSchema;
 
     private final BatchAccumulator batchAccumulator;
 
     private ParquetWriter<GenericRecord> currentWriter;
     private Path currentTempPath;
     private Path currentFinalPath;
-    private Schema currentSchema;
     private boolean writerOpen = false;
 
     public NetFlowStorage(
@@ -43,12 +43,14 @@ public final class NetFlowStorage {
             ParquetFileWriter parquetFileWriter,
             FileStorage fileStorage,
             FileNameGenerator fileNameGenerator,
-            HdfsProperties hdfsProperties
+            HdfsProperties hdfsProperties,
+            Schema storageSchema
     ) {
         this.parquetFileWriter = Objects.requireNonNull(parquetFileWriter);
         this.fileStorage = Objects.requireNonNull(fileStorage);
         this.fileNameGenerator = Objects.requireNonNull(fileNameGenerator);
         this.hdfsProperties = Objects.requireNonNull(hdfsProperties);
+        this.storageSchema = Objects.requireNonNull(storageSchema);
 
         this.batchAccumulator = new BatchAccumulator(batchPolicy);
 
@@ -147,8 +149,7 @@ public final class NetFlowStorage {
         currentTempPath = new Path(basePath, tempFileName);
 
         fileStorage.ensureDirectoryExists(basePath);
-        currentSchema = firstRecord.record().getSchema();
-        currentWriter = parquetFileWriter.createWriter(currentTempPath, currentSchema);
+        currentWriter = parquetFileWriter.createWriter(currentTempPath, storageSchema);
         writerOpen = true;
 
         log.debug("Opened streaming writer for partition {} at {}", primaryPartition, currentTempPath);
@@ -171,7 +172,6 @@ public final class NetFlowStorage {
         currentWriter = null;
         currentTempPath = null;
         currentFinalPath = null;
-        currentSchema = null;
 
         return offsets;
     }
@@ -195,15 +195,15 @@ public final class NetFlowStorage {
         currentWriter = null;
         currentTempPath = null;
         currentFinalPath = null;
-        currentSchema = null;
     }
 
     private GenericRecord enrichWithProcessingTime(GenericRecord original) {
-        Schema schema = original.getSchema();
-        GenericRecord enriched = new GenericData.Record(schema);
-        long processingTimeMicros = Instant.now().getEpochSecond() * 1_000_000 + Instant.now().getNano() / 1000;
+        GenericRecord enriched = new GenericData.Record(storageSchema);
 
-        for (Schema.Field field : schema.getFields()) {
+        Instant now = Instant.now();
+        long processingTimeMicros = now.getEpochSecond() * 1_000_000 + now.getNano() / 1000;
+
+        for (Schema.Field field : storageSchema.getFields()) {
             String fieldName = field.name();
             if ("PROCESSING_TIME".equals(fieldName)) {
                 enriched.put("PROCESSING_TIME", processingTimeMicros);

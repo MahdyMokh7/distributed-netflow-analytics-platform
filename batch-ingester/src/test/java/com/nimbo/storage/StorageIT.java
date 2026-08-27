@@ -71,12 +71,14 @@ class StorageIT {
     private static NetFlowStorage netFlowStorage;
     private static Configuration hadoopConfiguration;
     private static Schema avroSchema;
+    private static Schema storageSchema;
 
     private static final List<GenericRecord> ingestedRecords = new ArrayList<>();
 
     @BeforeAll
     static void setUpAll() throws Exception {
         avroSchema = createAvroSchema();
+        storageSchema = buildStorageSchema(avroSchema);
         hadoopConfiguration = createHadoopConfiguration();
         fileSystem = createFileSystem(hadoopConfiguration);
         netFlowStorage = createStorageFixture(fileSystem);
@@ -96,6 +98,24 @@ class StorageIT {
                 }
                 """;
         return new Schema.Parser().parse(schemaJson);
+    }
+
+    private static Schema buildStorageSchema(Schema wireSchema) {
+        Schema.Field processingTimeField = new Schema.Field(
+                "PROCESSING_TIME",
+                Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)),
+                "Processing time",
+                (Object) null
+        );
+        java.util.List<Schema.Field> fields = new java.util.ArrayList<>(wireSchema.getFields());
+        fields.add(processingTimeField);
+        return Schema.createRecord(
+                wireSchema.getName(),
+                wireSchema.getDoc(),
+                wireSchema.getNamespace(),
+                wireSchema.isError(),
+                fields
+        );
     }
 
     private static Configuration createHadoopConfiguration() {
@@ -136,7 +156,8 @@ class StorageIT {
                 parquetFileWriter,
                 hdfsFileStorage,
                 fileNameGenerator,
-                hdfsProperties
+                hdfsProperties,
+                storageSchema
         );
     }
 
@@ -186,6 +207,9 @@ class StorageIT {
                 assertEquals(expected.get("srcIp").toString(), actual.get("srcIp").toString());
                 assertEquals(expected.get("dstIp").toString(), actual.get("dstIp").toString());
                 assertEquals(expected.get("bytes"), actual.get("bytes"));
+
+                // Verify PROCESSING_TIME exists and is not null
+                assertNotNull(actual.get("PROCESSING_TIME"), "PROCESSING_TIME should be present");
 
                 count++;
             }

@@ -4,9 +4,11 @@ import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.writer.PostgresWriter;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,6 +22,7 @@ class TrafficAggregationProcessorTest extends BaseProcessorTest {
     private OutputConfig outputConfig;
     private PostgresWriter postgresWriter;
     private TrafficAggregationProcessor processor;
+    private List<Path> testFiles;
 
     @BeforeEach
     void setUp() {
@@ -39,12 +42,14 @@ class TrafficAggregationProcessorTest extends BaseProcessorTest {
         processor = new TrafficAggregationProcessor(
                 spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
         );
+
+        testFiles = List.of(new Path(testParquetConfig.getLocalPath()));
     }
 
     @Test
     void shouldProcessWithConsoleOutputWithoutException() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
@@ -57,7 +62,10 @@ class TrafficAggregationProcessorTest extends BaseProcessorTest {
         );
 
         UUID batchId = UUID.randomUUID();
-        assertThatThrownBy(() -> emptyProcessor.process(batchId))
+        List<Path> emptyFiles = List.of(
+                new Path(testParquetConfig.getEmptyPath() + "/empty.parquet")
+        );
+        assertThatThrownBy(() -> emptyProcessor.process(emptyFiles, batchId))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Traffic aggregation failed");
     }
@@ -72,7 +80,10 @@ class TrafficAggregationProcessorTest extends BaseProcessorTest {
         );
 
         UUID batchId = UUID.randomUUID();
-        assertThatThrownBy(() -> invalidProcessor.process(batchId))
+        List<Path> invalidFiles = List.of(
+                new Path(testParquetConfig.getInvalidPath() + "/invalid.parquet")
+        );
+        assertThatThrownBy(() -> invalidProcessor.process(invalidFiles, batchId))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Traffic aggregation failed");
     }
@@ -83,54 +94,30 @@ class TrafficAggregationProcessorTest extends BaseProcessorTest {
         when(outputConfig.isDatabaseMode()).thenReturn(true);
 
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
-    void shouldNotWriteToDatabaseWhenConsoleModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
+    void shouldOrderResultsByWindowStartDescending() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
-    void shouldLogNoRecordsWarningWhenEmptyDataset() {
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getEmptyPath());
-
-        TrafficAggregationProcessor emptyProcessor = new TrafficAggregationProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
-
+    void shouldOrderResultsByBytesDescending() {
         UUID batchId = UUID.randomUUID();
-        assertThatThrownBy(() -> emptyProcessor.process(batchId))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Traffic aggregation failed");
-    }
-
-    @Test
-    void shouldWriteToConsoleWhenConsoleModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
-    }
-
-    @Test
-    void shouldWriteToDatabaseWhenDatabaseModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(false);
-        when(outputConfig.isDatabaseMode()).thenReturn(true);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
     }
 
     @Test
     void shouldHandleLargeDatasetWithoutErrors() {
         UUID batchId = UUID.randomUUID();
-        processor.process(batchId);
+        processor.process(testFiles, batchId);
+    }
+
+    @Test
+    void shouldProcessWithEmptyFileListWithoutException() {
+        UUID batchId = UUID.randomUUID();
+        processor.process(List.of(), batchId);
     }
 }

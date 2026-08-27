@@ -19,6 +19,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import com.nimbo.storage.service.hdfs.HdfsFileSystemFactory;
 import org.springframework.stereotype.Component;
+import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +42,7 @@ public class ConsumerManager {
     private final KafkaConsumerFactory kafkaConsumerFactory;
     private final HdfsFileSystemFactory hdfsFileSystemFactory;
     private final KafkaOffsetCommitter kafkaOffsetCommitter;
+    private final Schema storageSchema;
 
     private final List<NetflowConsumer> consumers = new ArrayList<>();
     private ExecutorService consumerExecutor;
@@ -56,7 +58,8 @@ public class ConsumerManager {
             HdfsProperties hdfsProperties,
             KafkaConsumerFactory kafkaConsumerFactory,
             HdfsFileSystemFactory hdfsFileSystemFactory,
-            KafkaOffsetCommitter kafkaOffsetCommitter) {
+            KafkaOffsetCommitter kafkaOffsetCommitter,
+            Schema storageSchema) {
         this.kafkaProperties = kafkaProperties;
         this.avroDeserializer = avroDeserializer;
         this.validationService = validationService;
@@ -68,6 +71,7 @@ public class ConsumerManager {
         this.kafkaConsumerFactory = kafkaConsumerFactory;
         this.hdfsFileSystemFactory = hdfsFileSystemFactory;
         this.kafkaOffsetCommitter = kafkaOffsetCommitter;
+        this.storageSchema = storageSchema;
     }
 
     @PostConstruct
@@ -96,7 +100,8 @@ public class ConsumerManager {
                         parquetWriter,
                         fileStorage,
                         fileNameGenerator,
-                        hdfsProperties
+                        hdfsProperties,
+                        storageSchema
                 );
 
                 DataProcessingService processingService = new DataProcessingService(storage);

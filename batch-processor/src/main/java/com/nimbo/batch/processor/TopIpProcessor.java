@@ -6,12 +6,14 @@ import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.apache.spark.sql.functions.col;
@@ -37,11 +39,16 @@ public class TopIpProcessor extends BaseProcessor {
     }
 
     @Override
-    public void process(UUID batchId) {
+    public void process(List<Path> files, UUID batchId) {
         logHeader("=== TOP IPs BY BANDWIDTH CONSUMPTION (per {} windows) ===", windowDuration);
 
         try {
-            Dataset<Row> aggregated = aggregateTopIps();
+            if (files == null || files.isEmpty()) {
+                log.warn("No files provided, skipping connection aggregation");
+                return;
+            }
+
+            Dataset<Row> aggregated = aggregateTopIps(files);
 
             long recordCount = aggregated.count();
             log.info("Total unique IPs (src+dst): {}", recordCount);
@@ -53,16 +60,14 @@ public class TopIpProcessor extends BaseProcessor {
 
             writeOutput(aggregated, batchId);
 
-            log.info("Total aggregated records: {}", recordCount);
-
         } catch (Exception e) {
             log.error("Error processing top IP aggregation", e);
             throw new RuntimeException("Top IP aggregation failed", e);
         }
     }
 
-    private Dataset<Row> aggregateTopIps() {
-        Dataset<Row> parquetDf = readParquetFiles();
+    private Dataset<Row> aggregateTopIps(List<Path> files) {
+        Dataset<Row> parquetDf = readParquetFiles(files);
 
         Dataset<Row> srcPerspective = parquetDf
                 .select(

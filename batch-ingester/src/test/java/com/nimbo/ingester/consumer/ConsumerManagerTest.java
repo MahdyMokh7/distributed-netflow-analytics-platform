@@ -9,6 +9,7 @@ import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.service.batching.BatchPolicy;
 import com.nimbo.storage.service.hdfs.HdfsFileSystemFactory;
 import com.nimbo.storage.service.naming.FileNameGenerator;
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -69,6 +70,9 @@ class ConsumerManagerTest {
     @Mock
     private FileSystem fileSystem;
 
+    @Mock
+    private Schema storageSchema;
+
     private ConsumerManager consumerManager;
 
     @BeforeEach
@@ -107,7 +111,8 @@ class ConsumerManagerTest {
                 hdfsProperties,
                 kafkaConsumerFactory,
                 hdfsFileSystemFactory,
-                kafkaOffsetCommitter
+                kafkaOffsetCommitter,
+                storageSchema
         );
     }
 
@@ -139,7 +144,8 @@ class ConsumerManagerTest {
                 hdfsProperties,
                 kafkaConsumerFactory,
                 hdfsFileSystemFactory,
-                kafkaOffsetCommitter
+                kafkaOffsetCommitter,
+                storageSchema
         );
 
         assertThatCode(() -> consumerManager.start()).doesNotThrowAnyException();
@@ -161,7 +167,8 @@ class ConsumerManagerTest {
                 hdfsProperties,
                 kafkaConsumerFactory,
                 hdfsFileSystemFactory,
-                kafkaOffsetCommitter
+                kafkaOffsetCommitter,
+                storageSchema
         );
 
         assertThatCode(() -> consumerManager.start()).doesNotThrowAnyException();

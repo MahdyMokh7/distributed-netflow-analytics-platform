@@ -6,12 +6,14 @@ import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.apache.spark.sql.functions.col;
@@ -39,11 +41,16 @@ public class ConnectionProcessor extends BaseProcessor {
     }
 
     @Override
-    public void process(UUID batchId) {
+    public void process(List<Path> files, UUID batchId) {
         logHeader("=== CONNECTION AGGREGATION (IP Connections {} Windows) ===", windowDuration);
 
         try {
-            Dataset<Row> aggregated = aggregateConnections();
+            if (files == null || files.isEmpty()) {
+                log.warn("No files provided, skipping connection aggregation");
+                return;
+            }
+
+            Dataset<Row> aggregated = aggregateConnections(files);
 
             long recordCount = aggregated.count();
             log.info("Total connection aggregation records: {}", recordCount);
@@ -55,16 +62,14 @@ public class ConnectionProcessor extends BaseProcessor {
 
             writeOutput(aggregated, batchId);
 
-            log.info("Total connection records: {}", recordCount);
-
         } catch (Exception e) {
             log.error("Error processing connection aggregation", e);
             throw new RuntimeException("Connection aggregation failed", e);
         }
     }
 
-    private Dataset<Row> aggregateConnections() {
-        Dataset<Row> parquetDf = readParquetFiles();
+    private Dataset<Row> aggregateConnections(List<Path> files) {
+        Dataset<Row> parquetDf = readParquetFiles(files);
 
         return parquetDf
                 .groupBy(
@@ -109,7 +114,7 @@ public class ConnectionProcessor extends BaseProcessor {
         log.info("Top 20 Connection Aggregations ({} windows):", windowDuration);
         log.info("Id | Src IP | Dst IP | Src Port | Dst Port | Protocol | Window Start " +
                 "| Window End | In Bytes | Out Bytes | In Packets | Out Packets");
-        log.info("-".repeat(150));
+        log.info("-".repeat(140));
 
         aggregated.show(DISPLAY_LIMIT, false);
     }

@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.hadoop.fs.Path;
+import java.util.List;
 
 import java.util.UUID;
 
@@ -28,10 +30,18 @@ public abstract class BaseProcessor {
         this.postgresWriter = postgresWriter;
     }
 
-    protected Dataset<Row> readParquetFiles() {
-        log.info("Reading Parquet files from: {}", parquetPath);
-        Dataset<Row> df = spark.read().parquet(parquetPath);
-        return df ;
+    protected Dataset<Row> readParquetFiles(List<Path> files) {
+        if (files == null || files.isEmpty()) {
+            log.warn("No files provided to read");
+            return spark.emptyDataFrame();
+        }
+
+        String[] paths = files.stream()
+                .map(Path::toString)
+                .toArray(String[]::new);
+
+        log.info("Reading {} Parquet files from: {}", paths.length, paths[0]);
+        return spark.read().parquet(paths);
     }
 
     protected void logSeparator() {
@@ -44,5 +54,4 @@ public abstract class BaseProcessor {
         logSeparator();
     }
 
-    public abstract void process(UUID batchId);
-}
+    public abstract void process(List<Path> files, UUID batchId);}

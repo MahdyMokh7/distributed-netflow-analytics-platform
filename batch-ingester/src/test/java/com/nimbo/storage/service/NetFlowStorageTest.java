@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -50,7 +51,8 @@ class NetFlowStorageTest {
     @Mock
     private ParquetWriter<GenericRecord> writer;
 
-    private Schema schema;
+    private Schema wireSchema;
+    private Schema storageSchema;
     private NetFlowStorage storage;
 
     @BeforeEach
@@ -59,7 +61,7 @@ class NetFlowStorageTest {
         lenient().when(fileNameGenerator.generateFileName(anyInt())).thenReturn("test.parquet");
         lenient().when(fileNameGenerator.generateTempFileName(anyString())).thenReturn(".test.parquet.tmp");
 
-        schema = new Schema.Parser().parse(
+        wireSchema = new Schema.Parser().parse(
                 """
                 {
                   "type": "record",
@@ -71,17 +73,49 @@ class NetFlowStorageTest {
                 """
         );
 
+        storageSchema = buildStorageSchema(wireSchema);
+
         storage = new NetFlowStorage(
                 batchPolicy,
                 parquetFileWriter,
                 fileStorage,
                 fileNameGenerator,
-                hdfsProperties
+                hdfsProperties,
+                storageSchema
+        );
+    }
+
+    private Schema buildStorageSchema(Schema wireSchema) {
+        Schema.Field processingTimeField = new Schema.Field(
+                "PROCESSING_TIME",
+                Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)),
+                "Processing time",
+                (Object) null
+        );
+
+        java.util.List<Schema.Field> fields = new java.util.ArrayList<>();
+        for (Schema.Field field : wireSchema.getFields()) {
+            Schema.Field copy = new Schema.Field(
+                    field.name(),
+                    field.schema(),
+                    field.doc(),
+                    field.defaultVal()
+            );
+            fields.add(copy);
+        }
+        fields.add(processingTimeField);
+
+        return Schema.createRecord(
+                wireSchema.getName(),
+                wireSchema.getDoc(),
+                wireSchema.getNamespace(),
+                wireSchema.isError(),
+                fields
         );
     }
 
     private IngestedRecord createRealRecord(int partition, long offset) {
-        lenient().when(genericRecord.getSchema()).thenReturn(schema);
+        lenient().when(genericRecord.getSchema()).thenReturn(wireSchema);
         return new IngestedRecord(
                 genericRecord,
                 "test-topic",
@@ -93,13 +127,13 @@ class NetFlowStorageTest {
 
     private void setupWriterMocks() throws Exception {
         Path tempPath = new Path("/netflow/parquet", ".test.parquet.tmp");
-        lenient().when(parquetFileWriter.createWriter(tempPath, schema)).thenReturn(writer);
-        lenient().doNothing().when(parquetFileWriter).write(writer, genericRecord);
+        lenient().when(parquetFileWriter.createWriter(tempPath, storageSchema)).thenReturn(writer);
+        lenient().doNothing().when(parquetFileWriter).write(any(ParquetWriter.class), any(GenericRecord.class));
         lenient().doNothing().when(parquetFileWriter).closeWriter(writer);
         lenient().doNothing().when(fileStorage).ensureDirectoryExists(any(Path.class));
         lenient().doNothing().when(fileStorage).commitAtomic(any(Path.class), any(Path.class));
         lenient().doNothing().when(fileStorage).cleanupTempFile(any(Path.class));
-        lenient().when(genericRecord.getSchema()).thenReturn(schema);
+        lenient().when(genericRecord.getSchema()).thenReturn(wireSchema);
     }
 
     @Test
@@ -113,8 +147,15 @@ class NetFlowStorageTest {
         assertTrue(result.isEmpty());
 
         verify(fileStorage).ensureDirectoryExists(any(Path.class));
-        verify(parquetFileWriter).createWriter(any(Path.class), eq(schema));
-        verify(parquetFileWriter).write(eq(writer), eq(genericRecord));
+        verify(parquetFileWriter).createWriter(any(Path.class), eq(storageSchema));
+
+        // Verify write was called with any GenericRecord (enriched record)
+        ArgumentCaptor<GenericRecord> recordCaptor = ArgumentCaptor.forClass(GenericRecord.class);
+        verify(parquetFileWriter).write(eq(writer), recordCaptor.capture());
+
+        // Verify PROCESSING_TIME was added to the enriched record
+        GenericRecord enriched = recordCaptor.getValue();
+        assertNotNull(enriched.get("PROCESSING_TIME"), "PROCESSING_TIME should be present");
     }
 
     @Test
@@ -149,12 +190,12 @@ class NetFlowStorageTest {
     @DisplayName("Should cleanup temp file when write fails")
     void shouldCleanupTempFileWhenWriteFails() throws Exception {
         Path tempPath = new Path("/netflow/parquet", ".test.parquet.tmp");
-        when(parquetFileWriter.createWriter(tempPath, schema)).thenReturn(writer);
+        when(parquetFileWriter.createWriter(tempPath, storageSchema)).thenReturn(writer);
         doThrow(new RuntimeException("write failed"))
                 .when(parquetFileWriter)
-                .write(eq(writer), eq(genericRecord));
+                .write(eq(writer), any(GenericRecord.class));
         doNothing().when(fileStorage).ensureDirectoryExists(any(Path.class));
-        when(genericRecord.getSchema()).thenReturn(schema);
+        when(genericRecord.getSchema()).thenReturn(wireSchema);
 
         IngestedRecord realRecord = createRealRecord(0, 100L);
 
@@ -175,14 +216,16 @@ class NetFlowStorageTest {
     @DisplayName("Constructor should reject null dependencies")
     void constructorShouldRejectNullDependencies() {
         assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(null, parquetFileWriter, fileStorage, fileNameGenerator, hdfsProperties));
+                () -> new NetFlowStorage(null, parquetFileWriter, fileStorage, fileNameGenerator, hdfsProperties, storageSchema));
         assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(batchPolicy, null, fileStorage, fileNameGenerator, hdfsProperties));
+                () -> new NetFlowStorage(batchPolicy, null, fileStorage, fileNameGenerator, hdfsProperties, storageSchema));
         assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, null, fileNameGenerator, hdfsProperties));
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, null, fileNameGenerator, hdfsProperties, storageSchema));
         assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, null, hdfsProperties));
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, null, hdfsProperties, storageSchema));
         assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator, null));
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator, null, storageSchema));
+        assertThrows(NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator, hdfsProperties, null));
     }
 }

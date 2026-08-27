@@ -47,6 +47,7 @@ postgres:
     max-delay-ms: 30000
 
 batch:
-  schedule: "0 */2 * * * ?"  ## should change
+  schedule: "0 */5 * * * ?"  ## should change
   window-duration: "1 hour"
   enabled: true
+  max-files-per-batch: 20

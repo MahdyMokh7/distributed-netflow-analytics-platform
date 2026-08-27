@@ -9,6 +9,7 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -299,6 +300,13 @@ public final class TestDataGenerator {
                         "FTP_COMMAND_RET_CODE",
                         DataTypes.IntegerType,
                         false
+                ),
+
+                // Added PROCESSING_TIME column
+                DataTypes.createStructField(
+                        "PROCESSING_TIME",
+                        DataTypes.TimestampType,
+                        true
                 )
         });
     }
@@ -358,6 +366,9 @@ public final class TestDataGenerator {
 
         int shortestPacket = 64;
         int longestPacket = 1500;
+
+        // Generate a timestamp within the last hour
+        Timestamp processingTime = Timestamp.from(Instant.now());
 
         return RowFactory.create(
 
@@ -438,7 +449,10 @@ public final class TestDataGenerator {
                 protocol == 17 ? 300L : 0L,
 
                 // 43
-                protocol == 6 ? 200 : 0
+                protocol == 6 ? 200 : 0,
+
+                // 44 - PROCESSING_TIME
+                processingTime
         );
     }
 
@@ -465,20 +479,5 @@ public final class TestDataGenerator {
                 .parquet(outputPath);
 
         System.out.println("Created " + totalFiles + " Parquet part-files under: " + outputPath);
-    }
-
-    private static String generateFileName(int partition) {
-
-        String timestamp =
-                DateTimeFormatter.ISO_INSTANT
-                        .format(java.time.Instant.now())
-                        .replace(":", "-");
-
-        return String.format(
-                "netflow-p%d-%s-%s.parquet",
-                partition,
-                timestamp,
-                UUID.randomUUID()
-        );
     }
 }
