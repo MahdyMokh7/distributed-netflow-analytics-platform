@@ -101,14 +101,33 @@ class StorageIT {
     }
 
     private static Schema buildStorageSchema(Schema wireSchema) {
+
+        List<Schema.Field> fields = new ArrayList<>();
+
+        for (Schema.Field field : wireSchema.getFields()) {
+            Schema.Field copiedField = new Schema.Field(
+                    field.name(),
+                    field.schema(),
+                    field.doc(),
+                    field.defaultVal(),
+                    field.order()
+            );
+
+            fields.add(copiedField);
+        }
+
         Schema.Field processingTimeField = new Schema.Field(
                 "PROCESSING_TIME",
-                Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)),
+                Schema.createUnion(
+                        Schema.create(Schema.Type.NULL),
+                        Schema.create(Schema.Type.LONG)
+                ),
                 "Processing time",
                 (Object) null
         );
-        java.util.List<Schema.Field> fields = new java.util.ArrayList<>(wireSchema.getFields());
+
         fields.add(processingTimeField);
+
         return Schema.createRecord(
                 wireSchema.getName(),
                 wireSchema.getDoc(),

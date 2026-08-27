@@ -16,7 +16,7 @@ JAR location: `target/batch-processor-1.0.0-SNAPSHOT.jar`
 ### 2. Transfer JAR to Node3 (Local Machine)
 
 ```bash
-scp target/batch-processor-1.0.0-SNAPSHOT.jar team1@10.10.61.53:~/
+scp target/batch-processor.jar team1@10.10.61.53:~/
 ```
 
 ---

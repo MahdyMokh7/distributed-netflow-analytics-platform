@@ -14,9 +14,9 @@
     </parent>
 
     <artifactId>batch-processor</artifactId>
+    <name>Nimbo Batch Processor</name>
     <packaging>jar</packaging>
 
-    <name>Batch Processor</name>
     <description>Spark batch processing for NetFlow analytics</description>
 
     <dependencyManagement>
@@ -154,19 +154,14 @@
         <dependency>
             <groupId>org.jdbi</groupId>
             <artifactId>jdbi3-core</artifactId>
-            <version>3.47.0</version>
         </dependency>
-
         <dependency>
             <groupId>org.jdbi</groupId>
             <artifactId>jdbi3-sqlobject</artifactId>
-            <version>3.47.0</version>
         </dependency>
-
         <dependency>
             <groupId>org.jdbi</groupId>
             <artifactId>jdbi3-spring5</artifactId>
-            <version>3.47.0</version>
         </dependency>
 
     </dependencies>
@@ -296,7 +291,7 @@
                     </to>
 
                     <container>
-                        <mainClass>com.nimbo.BatchProcessorApplication</mainClass>
+                        <mainClass>com.nimbo.batch.BatchProcessorApplication</mainClass>
                     </container>
                 </configuration>
             </plugin>

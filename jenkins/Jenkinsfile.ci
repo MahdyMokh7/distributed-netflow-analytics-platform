@@ -3,9 +3,12 @@ pipeline {
         docker {
             label 'nimbo-nimbyte'
             image 'maven:3.9-eclipse-temurin-17'
+
             args '''
                 --network host
                 --add-host sonarqube.inside.sahab.ir:192.168.12.53
+                -v /var/run/docker.sock:/var/run/docker.sock
+                --group-add 999
                 -v /home/team1/.m2:/home/team1/.m2
                 -v /opt/jdk-17.0.6/lib/security/cacerts:/certs/cacerts:ro
                 -v /etc/passwd:/etc/passwd:ro
@@ -24,7 +27,7 @@ pipeline {
 
     environment {
         SPRING_PROFILES_ACTIVE = 'prod'
-        MAVEN_OPTS = '-Djavax.net.ssl.trustStore=/certs/cacerts -Djavax.net.ssl.trustStorePassword=changeit'
+        MAVEN_OPTS = '-Djavax.net.ssl.trustStore=/certs/cacerts'
     }
 
     stages {
@@ -42,7 +45,6 @@ pipeline {
                       --batch-mode \
                       --no-transfer-progress \
                       clean verify \
-                      -DskipITs
                 '''
             }
         }
@@ -63,6 +65,7 @@ pipeline {
                           --no-transfer-progress \
                           org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
                           -Dsonar.projectKey=nimbo-nimbyte \
+                          -Dsonar.projectName=nimbo-nimbyte \
                           -Dsonar.host.url="${SONAR_HOST_URL}" \
                           -Dsonar.login="${SONAR_AUTH_TOKEN}" \
                           -Dsonar.userHome=/tmp/sonar-cache \

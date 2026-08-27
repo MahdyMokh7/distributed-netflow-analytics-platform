@@ -26,7 +26,7 @@ hdfs:
   parquet-path: /netflow/parquetFiles-new/
 
 output:
-  mode: database
+  mode: both
 
 postgres:
   host: 10.10.61.70
@@ -47,7 +47,7 @@ postgres:
     max-delay-ms: 30000
 
 batch:
-  schedule: "0 */5 * * * ?"  ## should change
+  schedule: "0 */3 * * * ?"  ## should change
   window-duration: "1 hour"
   enabled: true
   max-files-per-batch: 5

@@ -19,7 +19,7 @@ logging:
 rolling:
   max-record-count: ${ROLLING_MAX_RECORD_COUNT:3100000}
   max-size-bytes: ${ROLLING_MAX_SIZE_BYTES:311673700}
-  max-age: ${ROLLING_MAX_AGE:2m}
+  max-age: ${ROLLING_MAX_AGE:5m}
 
 storage:
   parquet:

@@ -34,6 +34,11 @@ public class HdfsFileSystemFactory {
                         String.join(",", nodes.keySet())
                 );
 
+                conf.setBoolean(
+                        "dfs.client.failover.random.order",
+                        false
+                );
+
                 for (Map.Entry<String,String> entry : nodes.entrySet()) {
 
                     conf.set(
