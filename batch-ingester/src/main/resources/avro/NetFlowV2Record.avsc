@@ -218,6 +218,15 @@
       "name": "FTP_COMMAND_RET_CODE",
       "type": "int",
       "doc": "FTP client command return code."
+    },
+
+   {
+      "name": "PROCESSING_TIME",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-micros"
+      },
+      "doc": "Time when the record was ingested into HDFS (UTC epoch microseconds)."
     }
   ]
 }

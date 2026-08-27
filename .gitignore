@@ -47,6 +47,9 @@ terminal.log
 /batch-processor/code-extracter.py
 /batch-processor/src/test/resources/sample-data/parquet/
 
+/batch-ingester/docs/
+/batch-ingester/code-extracter.py
+
 # Multi-module generated files
 
 # Maven build output for all modules

@@ -47,7 +47,7 @@ public final class ColumnConstants {
     public static final String NETFLOW_OUT_BYTES = "OUT_BYTES";
     public static final String NETFLOW_IN_PKTS = "IN_PKTS";
     public static final String NETFLOW_OUT_PKTS = "OUT_PKTS";
-    public static final String NETFLOW_PROCESSING_TIME = "processing_time";
+    public static final String NETFLOW_PROCESSING_TIME = "PROCESSING_TIME";
 
     // ============ Spark Alias Constants ============
     public static final String SPARK_SRC_IP = "src_ip";

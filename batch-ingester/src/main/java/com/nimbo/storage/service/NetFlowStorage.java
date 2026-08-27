@@ -11,13 +11,13 @@ import com.nimbo.storage.service.naming.FileNameGenerator;
 import com.nimbo.storage.service.parquet.ParquetFileWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -63,7 +63,8 @@ public final class NetFlowStorage {
                 openWriter(ingestedRecord);
             }
 
-            parquetFileWriter.write(currentWriter, ingestedRecord.record());
+            GenericRecord enrichedRecord = enrichWithProcessingTime(ingestedRecord.record());
+            parquetFileWriter.write(currentWriter, enrichedRecord);
 
             batchAccumulator.add(ingestedRecord);
 
@@ -195,5 +196,21 @@ public final class NetFlowStorage {
         currentTempPath = null;
         currentFinalPath = null;
         currentSchema = null;
+    }
+
+    private GenericRecord enrichWithProcessingTime(GenericRecord original) {
+        Schema schema = original.getSchema();
+        GenericRecord enriched = new GenericData.Record(schema);
+        long processingTimeMicros = Instant.now().getEpochSecond() * 1_000_000 + Instant.now().getNano() / 1000;
+
+        for (Schema.Field field : schema.getFields()) {
+            String fieldName = field.name();
+            if ("PROCESSING_TIME".equals(fieldName)) {
+                enriched.put("PROCESSING_TIME", processingTimeMicros);
+            } else {
+                enriched.put(fieldName, original.get(fieldName));
+            }
+        }
+        return enriched;
     }
 }

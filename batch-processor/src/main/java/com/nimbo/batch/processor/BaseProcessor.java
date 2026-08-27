@@ -31,7 +31,7 @@ public abstract class BaseProcessor {
     protected Dataset<Row> readParquetFiles() {
         log.info("Reading Parquet files from: {}", parquetPath);
         Dataset<Row> df = spark.read().parquet(parquetPath);
-        return df.withColumn("processing_time", current_timestamp());
+        return df ;
     }
 
     protected void logSeparator() {
