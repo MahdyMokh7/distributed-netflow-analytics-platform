@@ -29,25 +29,17 @@ public class StarRocksStreamLoadClient {
     private final StarRocksProperties properties;
     private final ObjectMapper objectMapper;
     private final BackendSelector backendSelector;
-
     private final SchemaMapping schemaMapping;
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
+    private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
+            .followRedirects(HttpClient.Redirect.NEVER).build();
 
     private HttpRequest buildRequest(URI uri, String csvBody, String label) {
-        HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(uri)
-                .timeout(Duration.ofSeconds(60))
+        HttpRequest.Builder builder = HttpRequest.newBuilder().uri(uri).timeout(Duration.ofSeconds(60))
                 .header("Authorization", buildAuthorizationHeader())
                 .header("format", "CSV")
                 .header("column_separator", ",")
                 .header("enclose", "\"")
-                .header(
-                        "columns",
-                        schemaMapping.starRocksColumns()
-                )
+                .header("columns", schemaMapping.starRocksColumns())
                 .header("strict_mode", "true")
                 .header("max_filter_ratio", "0")
                 .header("Content-Type", "text/csv")
@@ -61,70 +53,36 @@ public class StarRocksStreamLoadClient {
         } else {
             builder.header("label", label);
         }
-
-        return builder
-                .PUT(HttpRequest.BodyPublishers.ofString(csvBody, StandardCharsets.UTF_8))
-                .build();
+        return builder.PUT(HttpRequest.BodyPublishers.ofString(csvBody, StandardCharsets.UTF_8)).build();
     }
 
     private String buildStreamLoadUrl() {
-
-        String backend = backendSelector.nextBackend().replaceAll("/+$", "");
-        return backend
-                + "/api/"
-                + properties.getDatabase()
-                + "/"
-                + properties.getTable()
-                + "/_stream_load";
+        String backend = backendSelector.nextBackend();
+        if (backend.endsWith("/")) backend = backend.substring(0, backend.length() - 1);
+        return backend + "/api/" + properties.getDatabase() + "/" + properties.getTable() + "/_stream_load";
     }
-    public CompletableFuture<StreamLoadResult> loadAsync(
-            List<StarRocksRow> rows,
-            String label
-    ) {
+
+    public CompletableFuture<StreamLoadResult> loadAsync(List<StarRocksRow> rows, String label) {
         if (rows == null || rows.isEmpty()) {
-            return CompletableFuture.failedFuture(
-                    new IllegalArgumentException("Stream Load batch cannot be empty")
-            );
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Stream Load batch cannot be empty"));
         }
 
         String csvBody = serializeCsv(rows);
-
         URI uri = URI.create(buildStreamLoadUrl());
+        HttpRequest request = buildRequest(uri, csvBody, label);
 
-        HttpRequest request = buildRequest(
-                uri,
-                csvBody,
-                label
-        );
-
-        return httpClient.sendAsync(
-                        request,
-                        HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
-                )
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
                 .thenApply(response -> {
-
-                    if (response.statusCode() < 200 ||
-                            response.statusCode() >= 300) {
-
-                        throw new CompletionException(
-                                new IOException(
-                                        "StarRocks Stream Load HTTP failure. status="
-                                                + response.statusCode()
-                                                + ", body="
-                                                + response.body()
-                                )
-                        );
-                    }
-
-                    try {
-                        return objectMapper.readValue(
-                                response.body(),
-                                StreamLoadResult.class
-                        );
-                    } catch (IOException e) {
-                        throw new CompletionException(e);
-                    }
-                });
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new CompletionException(new IOException("StarRocks Stream Load HTTP failure. status="
+                        + response.statusCode() + ", body=" + response.body()));
+            }
+            try {
+                return objectMapper.readValue(response.body(), StreamLoadResult.class);
+            } catch (IOException e) {
+                throw new CompletionException(e);
+            }
+        });
     }
 
     private String buildAuthorizationHeader() {
@@ -132,79 +90,35 @@ public class StarRocksStreamLoadClient {
         return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
     }
 
-    private void appendCsvString(
-            StringBuilder csv,
-            String value
-    ) {
-
+    private void appendCsvString(StringBuilder csv, String value) {
         csv.append('"');
-
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
-            if (c == '"') {
-                csv.append("\"\"");
-            } else {
-                csv.append(c);
-            }
+            if (c == '"') csv.append("\"\"");
+            else csv.append(c);
         }
-
         csv.append('"');
     }
 
-    private void appendCsvValue(
-            StringBuilder csv,
-            Object value
-    ) {
-
-        if (value == null) {
-            csv.append("\\N");
-            return;
-        }
-
-        if (value instanceof String stringValue) {
-            appendCsvString(
-                    csv,
-                    stringValue
-            );
-            return;
-        }
-
+    private void appendCsvValue(StringBuilder csv, Object value) {
+        if (value == null) { csv.append("\\N"); return; }
+        if (value instanceof String stringValue) { appendCsvString(csv, stringValue); return; }
         csv.append(value);
     }
 
-    private String serializeCsv(
-            List<StarRocksRow> rows
-    ) {
-
-        StringBuilder csv =
-                new StringBuilder(rows.size() * 256);
-
+    private String serializeCsv(List<StarRocksRow> rows) {
+        StringBuilder csv = new StringBuilder(rows.size() * 256);
         for (StarRocksRow row : rows) {
-
-            appendCsvValue(csv, row.kafkaTopic());
-            csv.append(',');
-
-            appendCsvValue(csv, row.kafkaPartition());
-            csv.append(',');
-
-            appendCsvValue(csv, row.kafkaOffset());
-            csv.append(',');
-
+            appendCsvValue(csv, row.kafkaTopic()); csv.append(',');
+            appendCsvValue(csv, row.kafkaPartition()); csv.append(',');
+            appendCsvValue(csv, row.kafkaOffset()); csv.append(',');
             appendCsvValue(csv, row.kafkaTimestamp());
-
             for (Object value : row.netFlowValues()) {
-
                 csv.append(',');
-
-                appendCsvValue(
-                        csv,
-                        value
-                );
+                appendCsvValue(csv, value);
             }
             csv.append('\n');
         }
-
         return csv.toString();
-
     }
 }

@@ -2,6 +2,11 @@ spring:
   application:
     name: nimbo-realtime
 
+  datasource:
+    url: jdbc:mysql://10.10.61.53:9030/nimbo
+    username: ${STARROCKS_USERNAME:root}
+    password: ${STARROCKS_PASSWORD:s@hWater}
+
 server:
   port: 8082
 
@@ -21,14 +26,13 @@ realtime:
     max-poll-interval-ms: ${KAFKA_MAX_POLL_INTERVAL_MS:900000}
 
   starrocks:
-
     stream-load-backends:
       - http://10.10.61.51:8040
       - http://10.10.61.52:8040
       - http://10.10.61.53:8040
       - http://10.10.61.54:8040
     database: ${STARROCKS_DATABASE:nimbo}
-    table: ${STARROCKS_TABLE:netflow_realtime_v2}
+    table: ${STARROCKS_TABLE:netflow_realtime_v3}
     username: ${STARROCKS_USERNAME:root}
     password: ${STARROCKS_PASSWORD:s@hWater}
     merge-commit-enabled: ${STARROCKS_MERGE_COMMIT_ENABLED:true}

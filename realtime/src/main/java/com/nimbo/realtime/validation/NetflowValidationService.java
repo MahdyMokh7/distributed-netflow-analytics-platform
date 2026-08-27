@@ -1,264 +1,152 @@
 package com.nimbo.realtime.validation;
 
-import com.nimbo.realtime.mapper.SchemaMapping;
-import lombok.RequiredArgsConstructor;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class NetflowValidationService {
 
-    private static final String FORMAT = "validationFormat";
-    private static final String MIN = "validationMin";
-    private static final String MAX = "validationMax";
-    private static final String FINITE = "validationFinite";
-    private static final String LTE_FIELD = "validationLteField";
+    private static final String SRC_IP = "IPV4_SRC_ADDR";
+    private static final String DST_IP = "IPV4_DST_ADDR";
+    private static final String FLOW_DURATION_MILLISECONDS = "FLOW_DURATION_MILLISECONDS";
 
-    private final SchemaMapping schemaMapping;
-
-    public ValidationResult validate(GenericRecord record) {
-
-        if (record == null) {
+    public ValidationResult validate(GenericRecord genericRecord) {
+        if (genericRecord == null) {
             return ValidationResult.failure("Record is null");
         }
 
         StringBuilder errors = new StringBuilder();
 
-        for (Schema.Field field : schemaMapping.fields()) {
+        checkIpv4(genericRecord, SRC_IP, errors);
+        checkIpv4(genericRecord, DST_IP, errors);
 
-            Object value = record.get(field.name());
+        checkRange(genericRecord, "L4_SRC_PORT", 0, 65_535, errors);
+        checkRange(genericRecord, "L4_DST_PORT", 0, 65_535, errors);
+        checkRange(genericRecord, "PROTOCOL", 0, 255, errors);
 
-            if (value == null) {
-                addError(
-                        errors,
-                        field.name() + " is null"
-                );
-                continue;
-            }
+        checkRange(genericRecord, "MIN_TTL", 0, 255, errors);
+        checkRange(genericRecord, "MAX_TTL", 0, 255, errors);
 
-            validateFormat(
-                    field,
-                    value,
-                    errors
-            );
+        checkRange(genericRecord, "MIN_IP_PKT_LEN", 0, 65_535, errors);
+        checkRange(genericRecord, "MAX_IP_PKT_LEN", 0, 65_535, errors);
 
-            validateNumber(
-                    field,
-                    value,
-                    errors
-            );
+        checkRange(genericRecord, "ICMP_TYPE", 0, 65_535, errors);
+        checkRange(genericRecord, "ICMP_IPV4_TYPE", 0, 255, errors);
 
-            validateRelation(
-                    field,
-                    value,
-                    record,
-                    errors
-            );
-        }
+        checkRange(genericRecord, "DNS_QUERY_ID", 0, 65_535, errors);
+        checkRange(genericRecord, "DNS_QUERY_TYPE", 0, 65_535, errors);
 
-        if (errors.isEmpty()) {
-            return ValidationResult.success();
-        }
+        checkNonNegative(genericRecord, "IN_BYTES", errors);
+        checkNonNegative(genericRecord, "OUT_BYTES", errors);
+        checkNonNegative(genericRecord, "IN_PKTS", errors);
+        checkNonNegative(genericRecord, "OUT_PKTS", errors);
 
-        return ValidationResult.failure(
-                errors.toString()
-        );
+        checkNonNegative(genericRecord, FLOW_DURATION_MILLISECONDS, errors);
+
+        checkNonNegative(genericRecord, "DURATION_IN", errors);
+        checkNonNegative(genericRecord, "DURATION_OUT", errors);
+
+        checkNonNegative(genericRecord, "LONGEST_FLOW_PKT", errors);
+        checkNonNegative(genericRecord, "SHORTEST_FLOW_PKT", errors);
+
+        checkMinMax(genericRecord, "MIN_TTL", "MAX_TTL", errors);
+        checkMinMax(genericRecord, "SHORTEST_FLOW_PKT", "LONGEST_FLOW_PKT", errors);
+        checkMinMax(genericRecord, "MIN_IP_PKT_LEN", "MAX_IP_PKT_LEN", errors);
+        checkMinMax(genericRecord, "DURATION_OUT", FLOW_DURATION_MILLISECONDS, errors);
+        checkMinMax(genericRecord, "DURATION_IN", FLOW_DURATION_MILLISECONDS, errors);
+
+        checkFiniteNonNegativeDouble(genericRecord, "L7_PROTO", errors);
+
+        return errors.isEmpty() ? ValidationResult.success() : ValidationResult.failure(errors.toString());
     }
 
-    private void validateFormat(
-            Schema.Field field,
-            Object value,
-            StringBuilder errors
-    ) {
-
-        String format =
-                field.getProp(FORMAT);
-
-        if (format == null) {
-            return;
-        }
-
-        if ("ipv4".equalsIgnoreCase(format)
-                && !isValidIpv4(value.toString())) {
-
-            addError(
-                    errors,
-                    field.name()
-                            + " invalid IPv4: "
-                            + value
-            );
+    private void checkNonNegative(GenericRecord genericRecord, String field, StringBuilder errors) {
+        Number value = number(genericRecord, field, errors);
+        if (value != null && value.longValue() < 0) {
+            addError(errors, field + " is negative: " + value);
         }
     }
 
-    private void validateNumber(
-            Schema.Field field,
-            Object value,
-            StringBuilder errors
-    ) {
+    private void checkRange(GenericRecord genericRecord, String field, long min, long max, StringBuilder errors) {
+        Number value = number(genericRecord, field, errors);
+        if (value == null) return;
+
+        long number = value.longValue();
+        if (number < min || number > max) {
+            addError(errors, field + " out of range [" + min + ", " + max + "]: " + number);
+        }
+    }
+
+    private void checkMinMax(GenericRecord genericRecord, String minField, String maxField, StringBuilder errors) {
+        Object minValue = genericRecord.get(minField);
+        Object maxValue = genericRecord.get(maxField);
+
+        if (!(minValue instanceof Number min) || !(maxValue instanceof Number max)) return;
+
+        if (min.longValue() > max.longValue()) {
+            addError(errors, minField + " > " + maxField + " (" + min + " > " + max + ")");
+        }
+    }
+
+    private void checkFiniteNonNegativeDouble(GenericRecord genericRecord, String field, StringBuilder errors) {
+        Number value = number(genericRecord, field, errors);
+        if (value == null) return;
+
+        double number = value.doubleValue();
+        if (!Double.isFinite(number)) {
+            addError(errors, field + " is not finite: " + number);
+        } else if (number < 0) {
+            addError(errors, field + " is negative: " + number);
+        }
+    }
+
+    private Number number(GenericRecord genericRecord, String field, StringBuilder errors) {
+        Object value = genericRecord.get(field);
+        if (value == null) {
+            addError(errors, field + " is null");
+            return null;
+        }
 
         if (!(value instanceof Number number)) {
-            return;
+            addError(errors, field + " is not numeric");
+            return null;
         }
 
-        double numericValue =
-                number.doubleValue();
-
-        String finite =
-                field.getProp(FINITE);
-
-        if (Boolean.parseBoolean(finite)
-                && !Double.isFinite(numericValue)) {
-
-            addError(
-                    errors,
-                    field.name()
-                            + " must be finite: "
-                            + numericValue
-            );
-
-            return;
-        }
-
-        String min =
-                field.getProp(MIN);
-
-        if (min != null) {
-
-            double minValue =
-                    Double.parseDouble(min);
-
-            if (numericValue < minValue) {
-
-                addError(
-                        errors,
-                        field.name()
-                                + " below minimum "
-                                + min
-                                + ": "
-                                + value
-                );
-            }
-        }
-
-        String max =
-                field.getProp(MAX);
-
-        if (max != null) {
-
-            double maxValue =
-                    Double.parseDouble(max);
-
-            if (numericValue > maxValue) {
-
-                addError(
-                        errors,
-                        field.name()
-                                + " above maximum "
-                                + max
-                                + ": "
-                                + value
-                );
-            }
-        }
+        return number;
     }
 
-    private void validateRelation(
-            Schema.Field field,
-            Object value,
-            GenericRecord record,
-            StringBuilder errors
-    ) {
-
-        String otherFieldName =
-                field.getProp(LTE_FIELD);
-
-        if (otherFieldName == null) {
+    private void checkIpv4(GenericRecord genericRecord, String field, StringBuilder errors) {
+        Object value = genericRecord.get(field);
+        if (value == null) {
+            addError(errors, field + " is null");
             return;
         }
 
-        Object otherValue =
-                record.get(otherFieldName);
-
-        if (!(value instanceof Number left)
-                || !(otherValue instanceof Number right)) {
-
-            return;
-        }
-
-        if (Double.compare(
-                left.doubleValue(),
-                right.doubleValue()
-        ) > 0) {
-
-            addError(
-                    errors,
-                    field.name()
-                            + " > "
-                            + otherFieldName
-                            + " ("
-                            + value
-                            + " > "
-                            + otherValue
-                            + ")"
-            );
-        }
-    }
-
-    private boolean isValidIpv4(String ip) {
-
-        String[] parts =
-                ip.split("\\.", -1);
-
+        String ip = value.toString();
+        String[] parts = ip.split("\\.", -1);
         if (parts.length != 4) {
-            return false;
+            addInvalidIpv4(errors, field, ip);
+            return;
         }
 
         for (String part : parts) {
-
-            if (part.isEmpty()
-                    || part.length() > 3) {
-
-                return false;
+            if (part.isEmpty() || part.length() > 3 || !part.chars().allMatch(Character::isDigit)) {
+                addInvalidIpv4(errors, field, ip);
+                return;
             }
-
-            for (int i = 0; i < part.length(); i++) {
-
-                if (!Character.isDigit(
-                        part.charAt(i)
-                )) {
-
-                    return false;
-                }
-            }
-
-            int value;
-
-            try {
-                value =
-                        Integer.parseInt(part);
-            } catch (NumberFormatException e) {
-                return false;
-            }
-
-            if (value > 255) {
-                return false;
+            if (Integer.parseInt(part) > 255) {
+                addInvalidIpv4(errors, field, ip);
+                return;
             }
         }
-
-        return true;
     }
 
-    private void addError(
-            StringBuilder errors,
-            String error
-    ) {
+    private void addInvalidIpv4(StringBuilder errors, String field, String ip) {
+        addError(errors, field + " invalid IPv4: " + ip);
+    }
 
-        if (!errors.isEmpty()) {
-            errors.append(" | ");
-        }
-
+    private void addError(StringBuilder errors, String error) {
+        if (!errors.isEmpty()) errors.append(" | ");
         errors.append(error);
     }
 }
