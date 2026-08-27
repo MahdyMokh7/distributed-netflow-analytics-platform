@@ -20,9 +20,7 @@ public class KafkaConsumerFactory {
         this.properties = properties;
     }
 
-    public KafkaConsumer<byte[], byte[]> create(
-            int consumerNumber
-    ) {
+    public KafkaConsumer<byte[], byte[]> create(int consumerNumber) {
 
         Map<String, Object> config = new HashMap<>();
 

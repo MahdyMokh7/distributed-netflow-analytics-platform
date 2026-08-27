@@ -140,12 +140,7 @@ public class StarRocksConsumerWorker implements Runnable {
                     continue;
                 }
 
-
-                /*
-                 * StarRocks has capacity again.
-                 */
                 if (kafkaPaused) {
-
                     consumer.resume(
                             consumer.assignment()
                     );

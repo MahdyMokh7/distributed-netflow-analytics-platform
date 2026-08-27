@@ -10,63 +10,255 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class NetflowValidationService {
 
+    private static final String FORMAT = "validationFormat";
+    private static final String MIN = "validationMin";
+    private static final String MAX = "validationMax";
+    private static final String FINITE = "validationFinite";
+    private static final String LTE_FIELD = "validationLteField";
+
     private final SchemaMapping schemaMapping;
 
-    public ValidationResult validate(GenericRecord record
-    ) {
+    public ValidationResult validate(GenericRecord record) {
 
         if (record == null) {
-            return ValidationResult.failure(
-                    "Record is null"
-            );
+            return ValidationResult.failure("Record is null");
         }
+
+        StringBuilder errors = new StringBuilder();
 
         for (Schema.Field field : schemaMapping.fields()) {
 
             Object value = record.get(field.name());
 
             if (value == null) {
-                return ValidationResult.failure(
-                        "Missing required field: " + field.name()
+                addError(
+                        errors,
+                        field.name() + " is null"
                 );
+                continue;
             }
 
-            if (!matchesType(value, field.schema())) {
-                return ValidationResult.failure(
-                        "Invalid type for field " + field.name()
-                                + ". expected=" + field.schema().getType()
-                                + ", actual=" + value.getClass().getSimpleName()
+            validateFormat(
+                    field,
+                    value,
+                    errors
+            );
+
+            validateNumber(
+                    field,
+                    value,
+                    errors
+            );
+
+            validateRelation(
+                    field,
+                    value,
+                    record,
+                    errors
+            );
+        }
+
+        if (errors.isEmpty()) {
+            return ValidationResult.success();
+        }
+
+        return ValidationResult.failure(
+                errors.toString()
+        );
+    }
+
+    private void validateFormat(
+            Schema.Field field,
+            Object value,
+            StringBuilder errors
+    ) {
+
+        String format =
+                field.getProp(FORMAT);
+
+        if (format == null) {
+            return;
+        }
+
+        if ("ipv4".equalsIgnoreCase(format)
+                && !isValidIpv4(value.toString())) {
+
+            addError(
+                    errors,
+                    field.name()
+                            + " invalid IPv4: "
+                            + value
+            );
+        }
+    }
+
+    private void validateNumber(
+            Schema.Field field,
+            Object value,
+            StringBuilder errors
+    ) {
+
+        if (!(value instanceof Number number)) {
+            return;
+        }
+
+        double numericValue =
+                number.doubleValue();
+
+        String finite =
+                field.getProp(FINITE);
+
+        if (Boolean.parseBoolean(finite)
+                && !Double.isFinite(numericValue)) {
+
+            addError(
+                    errors,
+                    field.name()
+                            + " must be finite: "
+                            + numericValue
+            );
+
+            return;
+        }
+
+        String min =
+                field.getProp(MIN);
+
+        if (min != null) {
+
+            double minValue =
+                    Double.parseDouble(min);
+
+            if (numericValue < minValue) {
+
+                addError(
+                        errors,
+                        field.name()
+                                + " below minimum "
+                                + min
+                                + ": "
+                                + value
                 );
             }
         }
 
-        return ValidationResult.success();
+        String max =
+                field.getProp(MAX);
+
+        if (max != null) {
+
+            double maxValue =
+                    Double.parseDouble(max);
+
+            if (numericValue > maxValue) {
+
+                addError(
+                        errors,
+                        field.name()
+                                + " above maximum "
+                                + max
+                                + ": "
+                                + value
+                );
+            }
+        }
     }
 
-    private boolean matchesType(
+    private void validateRelation(
+            Schema.Field field,
             Object value,
-            Schema schema
+            GenericRecord record,
+            StringBuilder errors
     ) {
 
-        return switch (schema.getType()) {
+        String otherFieldName =
+                field.getProp(LTE_FIELD);
 
-            case STRING ->
-                    value instanceof CharSequence;
+        if (otherFieldName == null) {
+            return;
+        }
 
-            case INT ->
-                    value instanceof Integer;
+        Object otherValue =
+                record.get(otherFieldName);
 
-            case LONG ->
-                    value instanceof Long;
+        if (!(value instanceof Number left)
+                || !(otherValue instanceof Number right)) {
 
-            case FLOAT ->
-                    value instanceof Float;
+            return;
+        }
 
-            case DOUBLE ->
-                    value instanceof Double;
+        if (Double.compare(
+                left.doubleValue(),
+                right.doubleValue()
+        ) > 0) {
 
-            default ->
-                    true;
-        };
+            addError(
+                    errors,
+                    field.name()
+                            + " > "
+                            + otherFieldName
+                            + " ("
+                            + value
+                            + " > "
+                            + otherValue
+                            + ")"
+            );
+        }
+    }
+
+    private boolean isValidIpv4(String ip) {
+
+        String[] parts =
+                ip.split("\\.", -1);
+
+        if (parts.length != 4) {
+            return false;
+        }
+
+        for (String part : parts) {
+
+            if (part.isEmpty()
+                    || part.length() > 3) {
+
+                return false;
+            }
+
+            for (int i = 0; i < part.length(); i++) {
+
+                if (!Character.isDigit(
+                        part.charAt(i)
+                )) {
+
+                    return false;
+                }
+            }
+
+            int value;
+
+            try {
+                value =
+                        Integer.parseInt(part);
+            } catch (NumberFormatException e) {
+                return false;
+            }
+
+            if (value > 255) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void addError(
+            StringBuilder errors,
+            String error
+    ) {
+
+        if (!errors.isEmpty()) {
+            errors.append(" | ");
+        }
+
+        errors.append(error);
     }
 }
