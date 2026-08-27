@@ -1,7 +1,6 @@
 package com.nimbo.batch.processor;
 
 import com.nimbo.batch.writer.PostgresWriter;
-import com.nimbo.batch.writer.TableMapping;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -43,25 +42,6 @@ public abstract class BaseProcessor {
         logSeparator();
         log.info(title, args);
         logSeparator();
-    }
-
-    protected long writeToDatabase(Dataset<Row> dataset, TableMapping mapping, UUID batchId) {
-        long startTime = System.currentTimeMillis();
-        long recordCount = dataset.count();
-
-        log.info("Writing {} records to table: {} with batch_id: {}", recordCount, mapping.getTableName(), batchId);
-
-        try {
-            long written = postgresWriter.write(dataset, mapping, batchId);
-            long duration = System.currentTimeMillis() - startTime;
-
-            log.info("Successfully wrote {} records to table: {} in {} ms", written, mapping.getTableName(), duration);
-
-            return written;
-        } catch (Exception e) {
-            log.error("Failed to write to table: {} with batch_id: {}", mapping.getTableName(), batchId, e);
-            throw new RuntimeException("Database write failed for table: " + mapping.getTableName(), e);
-        }
     }
 
     public abstract void process(UUID batchId);

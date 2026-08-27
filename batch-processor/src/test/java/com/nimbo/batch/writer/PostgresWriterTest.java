@@ -1,6 +1,10 @@
 package com.nimbo.batch.writer;
 
 import com.nimbo.batch.config.PostgresConfig;
+import com.nimbo.batch.dao.ConnectionAggregateDao;
+import com.nimbo.batch.dao.IpBandwidthAggregateDao;
+import com.nimbo.batch.dao.ProtocolAggregateDao;
+import com.nimbo.batch.dao.TrafficAggregateDao;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
@@ -13,10 +17,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.List;
@@ -24,18 +24,19 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 class PostgresWriterTest {
 
     private static SparkSession spark;
-    private DataSource dataSource;
-    private Connection connection;
-    private PreparedStatement preparedStatement;
+    private TrafficAggregateDao trafficDao;
+    private ConnectionAggregateDao connectionDao;
+    private ProtocolAggregateDao protocolDao;
+    private IpBandwidthAggregateDao ipBandwidthDao;
+    private TableRowMapper rowMapper;
+    private BatchExecutor batchExecutor;
     private PostgresConfig postgresConfig;
-    private TableMapper tableMapper;
     private PostgresWriter postgresWriter;
 
     @BeforeAll
@@ -54,14 +55,13 @@ class PostgresWriterTest {
     }
 
     @BeforeEach
-    void setUp() throws SQLException {
-        dataSource = mock(DataSource.class);
-        connection = mock(Connection.class);
-        preparedStatement = mock(PreparedStatement.class);
-        tableMapper = mock(TableMapper.class);
-
-        when(dataSource.getConnection()).thenReturn(connection);
-        when(connection.prepareStatement(anyString())).thenReturn(preparedStatement);
+    void setUp() {
+        trafficDao = mock(TrafficAggregateDao.class);
+        connectionDao = mock(ConnectionAggregateDao.class);
+        protocolDao = mock(ProtocolAggregateDao.class);
+        ipBandwidthDao = mock(IpBandwidthAggregateDao.class);
+        rowMapper = new TableRowMapper();
+        batchExecutor = new BatchExecutor();
 
         postgresConfig = new PostgresConfig();
         postgresConfig.setBatchSize(2);
@@ -71,134 +71,129 @@ class PostgresWriterTest {
         retry.setInitialDelayMs(100);
         postgresConfig.setRetry(retry);
 
-        postgresWriter = new PostgresWriter(dataSource, postgresConfig, tableMapper);
+        postgresWriter = new PostgresWriter(
+                trafficDao, connectionDao, protocolDao, ipBandwidthDao,
+                rowMapper, batchExecutor, postgresConfig
+        );
     }
 
     @Test
-    void shouldWriteRecordsToDatabase() throws Exception {
+    void shouldWriteTrafficAggregates() {
         UUID batchId = UUID.randomUUID();
+        Dataset<Row> dataset = createTrafficDataset();
 
-        List<Row> rows = Arrays.asList(
-                RowFactory.create("192.168.1.100", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L, 5L),
-                RowFactory.create("192.168.1.101", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 3000L, 4000L, 30L, 40L, 10L)
-        );
+        when(trafficDao.upsertBatch(anyList())).thenReturn(new int[]{1, 1});
 
-        Dataset<Row> dataset = createDataset(rows);
-        TableMapping mapping = TableMapping.forTrafficAggregates();
-
-        when(preparedStatement.executeBatch()).thenReturn(new int[]{1, 1});
-
-        long written = postgresWriter.write(dataset, mapping, batchId);
-
-        verify(connection).setAutoCommit(false);
-        verify(preparedStatement, atLeastOnce()).addBatch();
-        verify(preparedStatement, atLeastOnce()).executeBatch();
-        verify(connection, atLeastOnce()).commit();
+        long written = postgresWriter.writeTrafficAggregates(dataset, batchId);
 
         assertThat(written).isEqualTo(2);
+        verify(trafficDao).upsertBatch(anyList());
     }
 
     @Test
-    void shouldReturnZeroWhenDatasetIsEmpty() throws SQLException {
+    void shouldWriteConnectionAggregates() {
         UUID batchId = UUID.randomUUID();
-        Dataset<Row> emptyDataset = createDataset(List.of());
+        Dataset<Row> dataset = createConnectionDataset();
 
-        TableMapping mapping = TableMapping.forTrafficAggregates();
+        when(connectionDao.upsertBatch(anyList())).thenReturn(new int[]{1, 1});
 
-        long written = postgresWriter.write(emptyDataset, mapping, batchId);
+        long written = postgresWriter.writeConnectionAggregates(dataset, batchId);
+
+        assertThat(written).isEqualTo(2);
+        verify(connectionDao).upsertBatch(anyList());
+    }
+
+    @Test
+    void shouldWriteProtocolAggregates() {
+        UUID batchId = UUID.randomUUID();
+        Dataset<Row> dataset = createProtocolDataset();
+
+        when(protocolDao.upsertBatch(anyList())).thenReturn(new int[]{1, 1});
+
+        long written = postgresWriter.writeProtocolAggregates(dataset, batchId);
+
+        assertThat(written).isEqualTo(2);
+        verify(protocolDao).upsertBatch(anyList());
+    }
+
+    @Test
+    void shouldWriteIpBandwidthAggregates() {
+        UUID batchId = UUID.randomUUID();
+        Dataset<Row> dataset = createIpBandwidthDataset();
+
+        when(ipBandwidthDao.upsertBatch(anyList())).thenReturn(new int[]{1, 1});
+
+        long written = postgresWriter.writeIpBandwidthAggregates(dataset, batchId);
+
+        assertThat(written).isEqualTo(2);
+        verify(ipBandwidthDao).upsertBatch(anyList());
+    }
+
+    @Test
+    void shouldReturnZeroWhenDatasetIsEmpty() {
+        UUID batchId = UUID.randomUUID();
+        Dataset<Row> emptyDataset = spark.emptyDataFrame();
+
+        long written = postgresWriter.writeTrafficAggregates(emptyDataset, batchId);
 
         assertThat(written).isZero();
-        verify(dataSource, never()).getConnection();
+        verify(trafficDao, never()).upsertBatch(anyList());
     }
 
     @Test
-    void shouldRetryOnBatchFailure() throws Exception {
+    void shouldRetryOnBatchFailure() {
         UUID batchId = UUID.randomUUID();
+        Dataset<Row> dataset = createTrafficDataset();
 
-        List<Row> rows = Arrays.asList(
-                RowFactory.create("192.168.1.100", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L, 5L)
-        );
+        when(trafficDao.upsertBatch(anyList()))
+                .thenThrow(new RuntimeException("Batch failed"))
+                .thenReturn(new int[]{1, 1});
 
-        Dataset<Row> dataset = createDataset(rows);
-        TableMapping mapping = TableMapping.forTrafficAggregates();
+        long written = postgresWriter.writeTrafficAggregates(dataset, batchId);
 
-        when(preparedStatement.executeBatch())
-                .thenThrow(new SQLException("Batch failed"))
-                .thenReturn(new int[]{1});
-
-        long written = postgresWriter.write(dataset, mapping, batchId);
-
-        verify(preparedStatement, times(2)).executeBatch();
-        verify(connection, times(1)).rollback();
-        assertThat(written).isEqualTo(1);
+        assertThat(written).isEqualTo(2);
+        verify(trafficDao, times(2)).upsertBatch(anyList());
     }
 
     @Test
-    void shouldFailAfterMaxRetries() throws Exception {
+    void shouldFailAfterMaxRetries() {
         UUID batchId = UUID.randomUUID();
+        Dataset<Row> dataset = createTrafficDataset();
 
-        List<Row> rows = Arrays.asList(
-                RowFactory.create("192.168.1.100", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L, 5L)
-        );
+        when(trafficDao.upsertBatch(anyList()))
+                .thenThrow(new RuntimeException("Batch failed"));
 
-        Dataset<Row> dataset = createDataset(rows);
-        TableMapping mapping = TableMapping.forTrafficAggregates();
-
-        when(preparedStatement.executeBatch())
-                .thenThrow(new SQLException("Batch failed"));
-
-        assertThatThrownBy(() -> postgresWriter.write(dataset, mapping, batchId))
+        assertThatThrownBy(() -> postgresWriter.writeTrafficAggregates(dataset, batchId))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Database write failed");
-
-        verify(preparedStatement, times(3)).executeBatch();
-        verify(connection, times(3)).rollback();
+                .hasMessageContaining("Database write failed for table: traffic_aggregates")
+                .hasCauseInstanceOf(RuntimeException.class)
+                .cause()
+                .hasMessageContaining("failed after 3 attempts");
     }
 
     @Test
-    void shouldHandleNullBatchId() throws Exception {
-        List<Row> rows = Arrays.asList(
-                RowFactory.create("192.168.1.100", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L, 5L)
-        );
-
-        Dataset<Row> dataset = createDataset(rows);
-        TableMapping mapping = TableMapping.forTrafficAggregates();
-
-        when(preparedStatement.executeBatch()).thenReturn(new int[]{1});
-
-        long written = postgresWriter.write(dataset, mapping, null);
-
-        assertThat(written).isEqualTo(1);
-        verify(preparedStatement, atLeastOnce()).addBatch();
-    }
-
-    @Test
-    void shouldHandleEmptyBatchAfterPartialWrite() throws Exception {
+    void shouldVerifyAllRowsAffected() {
         UUID batchId = UUID.randomUUID();
+        Dataset<Row> dataset = createTrafficDataset();
 
-        List<Row> rows = Arrays.asList(
-                RowFactory.create("192.168.1.100", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L, 5L),
-                RowFactory.create("192.168.1.101", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 3000L, 4000L, 30L, 40L, 10L),
-                RowFactory.create("192.168.1.102", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 5000L, 6000L, 50L, 60L, 15L)
-        );
+        when(trafficDao.upsertBatch(anyList())).thenReturn(new int[]{1, 1, 1});
 
-        Dataset<Row> dataset = createDataset(rows);
-        TableMapping mapping = TableMapping.forTrafficAggregates();
+        long written = postgresWriter.writeTrafficAggregates(dataset, batchId);
 
-        when(preparedStatement.executeBatch()).thenReturn(new int[]{1, 1});
-
-        long written = postgresWriter.write(dataset, mapping, batchId);
-
-        verify(preparedStatement, times(2)).executeBatch();
         assertThat(written).isEqualTo(3);
+        verify(trafficDao).upsertBatch(anyList());
+    }
+
+    @Test
+    void shouldHandleInterruptedExceptionDuringRetry() {
+        UUID batchId = UUID.randomUUID();
+        Dataset<Row> dataset = createTrafficDataset();
+
+        when(trafficDao.upsertBatch(anyList()))
+                .thenThrow(new RuntimeException("Batch failed"));
+
+        assertThatThrownBy(() -> postgresWriter.writeTrafficAggregates(dataset, batchId))
+                .isInstanceOf(RuntimeException.class);
     }
 
     @Test
@@ -211,70 +206,29 @@ class PostgresWriterTest {
         retry.setInitialDelayMs(2000);
         config.setRetry(retry);
 
-        PostgresWriter writer = new PostgresWriter(dataSource, config, tableMapper);
+        PostgresWriter writer = new PostgresWriter(
+                trafficDao, connectionDao, protocolDao, ipBandwidthDao,
+                rowMapper, batchExecutor, config
+        );
 
         assertThat(writer).isNotNull();
     }
 
     @Test
-    void shouldBuildUpsertSqlCorrectly() throws Exception {
-        TableMapping mapping = TableMapping.forTrafficAggregates();
-
-        UUID batchId = UUID.randomUUID();
-        List<Row> rows = Arrays.asList(
-                RowFactory.create("192.168.1.100", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L, 5L)
-        );
-
-        Dataset<Row> dataset = createDataset(rows);
-
-        when(preparedStatement.executeBatch()).thenReturn(new int[]{1});
-
-        long written = postgresWriter.write(dataset, mapping, batchId);
-
-        assertThat(written).isEqualTo(1);
-    }
-
-    @Test
-    void shouldHandleBatchSizeZero() throws Exception {
+    void shouldHandleBatchSizeZero() {
         postgresConfig.setBatchSize(0);
-        postgresWriter = new PostgresWriter(dataSource, postgresConfig, tableMapper);
-
         UUID batchId = UUID.randomUUID();
-        List<Row> rows = Arrays.asList(
-                RowFactory.create("192.168.1.100", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L, 5L)
-        );
+        Dataset<Row> dataset = createTrafficDataset();
 
-        Dataset<Row> dataset = createDataset(rows);
-        TableMapping mapping = TableMapping.forTrafficAggregates();
+        when(trafficDao.upsertBatch(anyList())).thenReturn(new int[]{1, 1});
 
-        when(preparedStatement.executeBatch()).thenReturn(new int[]{1});
+        long written = postgresWriter.writeTrafficAggregates(dataset, batchId);
 
-        long written = postgresWriter.write(dataset, mapping, batchId);
-
-        assertThat(written).isEqualTo(1);
+        assertThat(written).isEqualTo(2);
+        verify(trafficDao).upsertBatch(anyList());
     }
 
-    @Test
-    void shouldHandleInterruptedExceptionDuringRetry() throws Exception {
-        UUID batchId = UUID.randomUUID();
-        List<Row> rows = Arrays.asList(
-                RowFactory.create("192.168.1.100", Timestamp.valueOf("2024-01-01 10:00:00"),
-                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L, 5L)
-        );
-
-        Dataset<Row> dataset = createDataset(rows);
-        TableMapping mapping = TableMapping.forTrafficAggregates();
-
-        when(preparedStatement.executeBatch())
-                .thenThrow(new SQLException("Batch failed"));
-
-        assertThatThrownBy(() -> postgresWriter.write(dataset, mapping, batchId))
-                .isInstanceOf(RuntimeException.class);
-    }
-
-    private Dataset<Row> createDataset(List<Row> rows) {
+    private Dataset<Row> createTrafficDataset() {
         StructType schema = DataTypes.createStructType(new StructField[]{
                 DataTypes.createStructField("src_ip", DataTypes.StringType, false),
                 DataTypes.createStructField("window_start", DataTypes.TimestampType, false),
@@ -285,6 +239,104 @@ class PostgresWriterTest {
                 DataTypes.createStructField("out_packets", DataTypes.LongType, false),
                 DataTypes.createStructField("record_count", DataTypes.LongType, false)
         });
+
+        List<Row> rows = Arrays.asList(
+                RowFactory.create("192.168.1.100", Timestamp.valueOf("2024-01-01 10:00:00"),
+                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L, 5L),
+                RowFactory.create("192.168.1.101", Timestamp.valueOf("2024-01-01 10:00:00"),
+                        Timestamp.valueOf("2024-01-01 11:00:00"), 3000L, 4000L, 30L, 40L, 10L)
+        );
+
+        return spark.createDataFrame(rows, schema);
+    }
+
+    private Dataset<Row> createConnectionDataset() {
+        StructType schema = DataTypes.createStructType(new StructField[]{
+                DataTypes.createStructField("id", DataTypes.StringType, false),
+                DataTypes.createStructField("src_ip", DataTypes.StringType, false),
+                DataTypes.createStructField("dst_ip", DataTypes.StringType, false),
+                DataTypes.createStructField("src_port", DataTypes.IntegerType, false),
+                DataTypes.createStructField("dst_port", DataTypes.IntegerType, false),
+                DataTypes.createStructField("l4_protocol", DataTypes.IntegerType, false),  // ← FIXED
+                DataTypes.createStructField("window_start", DataTypes.TimestampType, false),
+                DataTypes.createStructField("window_end", DataTypes.TimestampType, false),
+                DataTypes.createStructField("in_bytes", DataTypes.LongType, false),
+                DataTypes.createStructField("out_bytes", DataTypes.LongType, false),
+                DataTypes.createStructField("in_packets", DataTypes.LongType, false),
+                DataTypes.createStructField("out_packets", DataTypes.LongType, false)
+        });
+
+        List<Row> rows = Arrays.asList(
+                RowFactory.create("id1", "192.168.1.100", "10.0.0.1", 8080, 443, 6,
+                        Timestamp.valueOf("2024-01-01 10:00:00"), Timestamp.valueOf("2024-01-01 11:00:00"),
+                        1000L, 2000L, 10L, 20L),
+                RowFactory.create("id2", "192.168.1.101", "10.0.0.2", 8081, 444, 17,
+                        Timestamp.valueOf("2024-01-01 10:00:00"), Timestamp.valueOf("2024-01-01 11:00:00"),
+                        3000L, 4000L, 30L, 40L)
+        );
+
+        return spark.createDataFrame(rows, schema);
+    }
+
+    private Dataset<Row> createProtocolDataset() {
+        StructType schema = DataTypes.createStructType(new StructField[]{
+                DataTypes.createStructField("l7_protocol", DataTypes.DoubleType, false),  // ← FIXED
+                DataTypes.createStructField("window_start", DataTypes.TimestampType, false),
+                DataTypes.createStructField("window_end", DataTypes.TimestampType, false),
+                DataTypes.createStructField("in_bytes", DataTypes.LongType, false),
+                DataTypes.createStructField("out_bytes", DataTypes.LongType, false),
+                DataTypes.createStructField("in_packets", DataTypes.LongType, false),
+                DataTypes.createStructField("out_packets", DataTypes.LongType, false),
+                DataTypes.createStructField("connection_count", DataTypes.LongType, false)
+        });
+
+        List<Row> rows = Arrays.asList(
+                RowFactory.create(6.0, Timestamp.valueOf("2024-01-01 10:00:00"),
+                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L, 100L),
+                RowFactory.create(17.0, Timestamp.valueOf("2024-01-01 10:00:00"),
+                        Timestamp.valueOf("2024-01-01 11:00:00"), 3000L, 4000L, 30L, 40L, 200L)
+        );
+
+        return spark.createDataFrame(rows, schema);
+    }
+
+    @Test
+    void shouldThrowWhenBatchResultIsNotOne() {
+        UUID batchId = UUID.randomUUID();
+        Dataset<Row> dataset = createTrafficDataset();
+
+        when(trafficDao.upsertBatch(anyList())).thenReturn(new int[]{0, 1});
+
+        assertThatThrownBy(() -> postgresWriter.writeTrafficAggregates(dataset, batchId))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Database write failed for table: traffic_aggregates")
+                .hasCauseInstanceOf(RuntimeException.class)
+                .extracting(Throwable::getCause)
+                .satisfies(cause -> {
+                    assertThat(cause.getMessage()).contains("Batch execution failed after 3 attempts for table: traffic_aggregates");
+                    assertThat(cause.getCause())
+                            .isInstanceOf(RuntimeException.class)
+                            .hasMessageContaining("expected 1 row affected, got 0");
+                });
+    }
+
+    private Dataset<Row> createIpBandwidthDataset() {
+        StructType schema = DataTypes.createStructType(new StructField[]{
+                DataTypes.createStructField("ip", DataTypes.StringType, false),
+                DataTypes.createStructField("window_start", DataTypes.TimestampType, false),
+                DataTypes.createStructField("window_end", DataTypes.TimestampType, false),
+                DataTypes.createStructField("inbound_bytes", DataTypes.LongType, false),
+                DataTypes.createStructField("outbound_bytes", DataTypes.LongType, false),
+                DataTypes.createStructField("inbound_packets", DataTypes.LongType, false),
+                DataTypes.createStructField("outbound_packets", DataTypes.LongType, false)
+        });
+
+        List<Row> rows = Arrays.asList(
+                RowFactory.create("192.168.1.100", Timestamp.valueOf("2024-01-01 10:00:00"),
+                        Timestamp.valueOf("2024-01-01 11:00:00"), 1000L, 2000L, 10L, 20L),
+                RowFactory.create("192.168.1.101", Timestamp.valueOf("2024-01-01 10:00:00"),
+                        Timestamp.valueOf("2024-01-01 11:00:00"), 3000L, 4000L, 30L, 40L)
+        );
 
         return spark.createDataFrame(rows, schema);
     }

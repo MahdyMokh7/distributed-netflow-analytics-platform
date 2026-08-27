@@ -4,7 +4,7 @@ import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.writer.PostgresWriter;
-import com.nimbo.batch.writer.TableMapping;
+import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -75,23 +75,23 @@ public class TrafficAggregationProcessor extends BaseProcessor {
 
         return parquetDf
                 .groupBy(
-                        col("IPV4_SRC_ADDR").alias("src_ip"),
-                        window(col("processing_time"), windowDuration)
+                        col(NETFLOW_SRC_IP).alias(SPARK_SRC_IP),
+                        window(col(NETFLOW_PROCESSING_TIME), windowDuration)
                 )
                 .agg(
-                        sum(col("IN_BYTES")).alias("in_bytes"),
-                        sum(col("OUT_BYTES")).alias("out_bytes"),
-                        sum(col("IN_PKTS")).alias("in_packets"),
-                        sum(col("OUT_PKTS")).alias("out_packets"),
-                        count("*").alias("record_count")
+                        sum(col(NETFLOW_IN_BYTES)).alias(SPARK_IN_BYTES),
+                        sum(col(NETFLOW_OUT_BYTES)).alias(SPARK_OUT_BYTES),
+                        sum(col(NETFLOW_IN_PKTS)).alias(SPARK_IN_PACKETS),
+                        sum(col(NETFLOW_OUT_PKTS)).alias(SPARK_OUT_PACKETS),
+                        count("*").alias(SPARK_RECORD_COUNT)
                 )
-                .withColumn("window_start", col("window.start"))
-                .withColumn("window_end", col("window.end"))
+                .withColumn(SPARK_WINDOW_START, col("window.start"))
+                .withColumn(SPARK_WINDOW_END, col("window.end"))
                 .drop("window")
                 .orderBy(
-                        col("window_start").desc(),
-                        col("in_bytes")
-                                .plus(col("out_bytes"))
+                        col(SPARK_WINDOW_START).desc(),
+                        col(SPARK_IN_BYTES)
+                                .plus(col(SPARK_OUT_BYTES))
                                 .desc()
                 );
     }
@@ -115,10 +115,7 @@ public class TrafficAggregationProcessor extends BaseProcessor {
     }
 
     private void writeToDatabase(Dataset<Row> aggregated, UUID batchId) {
-        TableMapping mapping = TableMapping.forTrafficAggregates();
-
-        long written = writeToDatabase(aggregated, mapping, batchId);
-
+        long written = postgresWriter.writeTrafficAggregates(aggregated, batchId);
         log.info("Written {} records to traffic_aggregates with batch_id: {}", written, batchId);
     }
 

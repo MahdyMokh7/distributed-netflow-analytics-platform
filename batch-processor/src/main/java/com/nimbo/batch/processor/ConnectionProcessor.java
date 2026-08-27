@@ -4,7 +4,7 @@ import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.writer.PostgresWriter;
-import com.nimbo.batch.writer.TableMapping;
+import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -68,31 +68,31 @@ public class ConnectionProcessor extends BaseProcessor {
 
         return parquetDf
                 .groupBy(
-                        col("IPV4_SRC_ADDR").alias("src_ip"),
-                        col("IPV4_DST_ADDR").alias("dst_ip"),
-                        col("L4_SRC_PORT").alias("src_port"),
-                        col("L4_DST_PORT").alias("dst_port"),
-                        col("PROTOCOL").alias("protocol"),
-                        window(col("processing_time"), windowDuration)
+                        col(NETFLOW_SRC_IP).alias(SPARK_SRC_IP),
+                        col(NETFLOW_DST_IP).alias(SPARK_DST_IP),
+                        col(NETFLOW_SRC_PORT).alias(SPARK_SRC_PORT),
+                        col(NETFLOW_DST_PORT).alias(SPARK_DST_PORT),
+                        col(NETFLOW_PROTOCOL).alias(SPARK_L4_PROTOCOL),
+                        window(col(NETFLOW_PROCESSING_TIME), windowDuration)
                 )
                 .agg(
-                        sum(col("IN_BYTES")).alias("in_bytes"),
-                        sum(col("OUT_BYTES")).alias("out_bytes"),
-                        sum(col("IN_PKTS")).alias("in_packets"),
-                        sum(col("OUT_PKTS")).alias("out_packets")
+                        sum(col(NETFLOW_IN_BYTES)).alias(SPARK_IN_BYTES),
+                        sum(col(NETFLOW_OUT_BYTES)).alias(SPARK_OUT_BYTES),
+                        sum(col(NETFLOW_IN_PKTS)).alias(SPARK_IN_PACKETS),
+                        sum(col(NETFLOW_OUT_PKTS)).alias(SPARK_OUT_PACKETS)
                 )
-                .withColumn("window_start", col("window.start"))
-                .withColumn("window_end", col("window.end"))
+                .withColumn(SPARK_WINDOW_START, col("window.start"))
+                .withColumn(SPARK_WINDOW_END, col("window.end"))
                 .drop("window")
-                .withColumn("id", sha2(concat_ws("|",
-                        col("src_ip"),
-                        col("dst_ip"),
-                        col("src_port"),
-                        col("dst_port"),
-                        col("protocol"),
-                        col("window_start")
+                .withColumn(SPARK_ID, sha2(concat_ws("|",
+                        col(SPARK_SRC_IP),
+                        col(SPARK_DST_IP),
+                        col(SPARK_SRC_PORT),
+                        col(SPARK_DST_PORT),
+                        col(SPARK_L4_PROTOCOL),
+                        col(SPARK_WINDOW_START)
                 ), 256))
-                .orderBy(col("in_bytes").plus(col("out_bytes")).desc());
+                .orderBy(col(SPARK_IN_BYTES).plus(col(SPARK_OUT_BYTES)).desc());
     }
 
     private void writeOutput(Dataset<Row> aggregated, UUID batchId) {
@@ -115,10 +115,7 @@ public class ConnectionProcessor extends BaseProcessor {
     }
 
     private void writeToDatabase(Dataset<Row> aggregated, UUID batchId) {
-        TableMapping mapping = TableMapping.forConnectionAggregates();
-
-        long written = writeToDatabase(aggregated, mapping, batchId);
-
+        long written = postgresWriter.writeConnectionAggregates(aggregated, batchId);
         log.info("Written {} records to connection_aggregates with batch_id: {}", written, batchId);
     }
 }
