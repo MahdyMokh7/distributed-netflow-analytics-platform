@@ -78,13 +78,13 @@ public class ConnectionProcessor extends BaseProcessor {
                         col(NETFLOW_SRC_PORT).alias(SPARK_SRC_PORT),
                         col(NETFLOW_DST_PORT).alias(SPARK_DST_PORT),
                         col(NETFLOW_PROTOCOL).alias(SPARK_L4_PROTOCOL),
-                        window(col(NETFLOW_PROCESSING_TIME), windowDuration)
+                        window(col(NETFLOW_PROCESSING_TIME).cast("timestamp"), windowDuration)
                 )
                 .agg(
-                        sum(col(NETFLOW_IN_BYTES)).alias(SPARK_IN_BYTES),
-                        sum(col(NETFLOW_OUT_BYTES)).alias(SPARK_OUT_BYTES),
-                        sum(col(NETFLOW_IN_PKTS)).alias(SPARK_IN_PACKETS),
-                        sum(col(NETFLOW_OUT_PKTS)).alias(SPARK_OUT_PACKETS)
+                        sum(col(NETFLOW_IN_BYTES).cast("decimal(38,0)")).alias(SPARK_IN_BYTES),
+                        sum(col(NETFLOW_OUT_BYTES).cast("decimal(38,0)")).alias(SPARK_OUT_BYTES),
+                        sum(col(NETFLOW_IN_PKTS).cast("decimal(38,0)")).alias(SPARK_IN_PACKETS),
+                        sum(col(NETFLOW_OUT_PKTS).cast("decimal(38,0)")).alias(SPARK_OUT_PACKETS)
                 )
                 .withColumn(SPARK_WINDOW_START, col("window.start"))
                 .withColumn(SPARK_WINDOW_END, col("window.end"))
@@ -96,8 +96,7 @@ public class ConnectionProcessor extends BaseProcessor {
                         col(SPARK_DST_PORT),
                         col(SPARK_L4_PROTOCOL),
                         col(SPARK_WINDOW_START)
-                ), 256))
-                .orderBy(col(SPARK_IN_BYTES).plus(col(SPARK_OUT_BYTES)).desc());
+                ), 256));
     }
 
     private void writeOutput(Dataset<Row> aggregated, UUID batchId) {

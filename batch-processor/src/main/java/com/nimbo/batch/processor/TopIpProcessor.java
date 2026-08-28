@@ -94,21 +94,17 @@ public class TopIpProcessor extends BaseProcessor {
         return unified
                 .groupBy(
                         col(SPARK_IP),
-                        window(col(NETFLOW_PROCESSING_TIME), windowDuration)
+                        window(col(NETFLOW_PROCESSING_TIME).cast("timestamp"), windowDuration)
                 )
                 .agg(
-                        sum(col(SPARK_OUTBOUND_BYTES)).alias(SPARK_OUTBOUND_BYTES),
-                        sum(col(SPARK_INBOUND_BYTES)).alias(SPARK_INBOUND_BYTES),
-                        sum(col(SPARK_OUTBOUND_PACKETS)).alias(SPARK_OUTBOUND_PACKETS),
-                        sum(col(SPARK_INBOUND_PACKETS)).alias(SPARK_INBOUND_PACKETS)
+                        sum(col(SPARK_OUTBOUND_BYTES).cast("decimal(38,0)")).alias(SPARK_OUTBOUND_BYTES),
+                        sum(col(SPARK_INBOUND_BYTES).cast("decimal(38,0)")).alias(SPARK_INBOUND_BYTES),
+                        sum(col(SPARK_OUTBOUND_PACKETS).cast("decimal(38,0)")).alias(SPARK_OUTBOUND_PACKETS),
+                        sum(col(SPARK_INBOUND_PACKETS).cast("decimal(38,0)")).alias(SPARK_INBOUND_PACKETS)
                 )
                 .withColumn(SPARK_WINDOW_START, col("window.start"))
                 .withColumn(SPARK_WINDOW_END, col("window.end"))
-                .drop("window")
-                .orderBy(
-                        col(SPARK_WINDOW_START).desc(),
-                        col(SPARK_OUTBOUND_BYTES).plus(col(SPARK_INBOUND_BYTES)).desc()
-                );
+                .drop("window");
     }
 
     private void writeOutput(Dataset<Row> aggregated, UUID batchId) {
