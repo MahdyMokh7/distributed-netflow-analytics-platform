@@ -3,6 +3,7 @@ package com.nimbo.batch.processor;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.OutputConfig;
+import com.nimbo.batch.exception.BatchProcessingException;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +55,7 @@ public class TrafficAggregationProcessor extends BaseProcessor {
 
         try {
             if (files == null || files.isEmpty()) {
-                log.warn("No files provided, skipping connection aggregation");
+                log.warn("No files provided, skipping traffic aggregation");
                 return;
             }
 
@@ -72,8 +73,7 @@ public class TrafficAggregationProcessor extends BaseProcessor {
 
         } catch (Exception e) {
             log.error("Error processing traffic aggregation", e);
-            throw new RuntimeException("Traffic aggregation failed", e);
-        }
+            throw new BatchProcessingException(batchId, "Traffic aggregation failed", e);        }
     }
 
     private Dataset<Row> aggregateTraffic(List<Path> files) {

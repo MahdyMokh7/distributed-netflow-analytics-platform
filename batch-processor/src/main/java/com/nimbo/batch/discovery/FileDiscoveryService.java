@@ -38,6 +38,9 @@ public class FileDiscoveryService {
     @Getter
     private boolean usingFallback = false;
 
+    @Getter
+    private UUID failedBatchId = null;
+
     private static final Pattern FILE_NAME_PATTERN =
             Pattern.compile("netflow-p\\d{2}-(\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z)-.*\\.parquet");
 
@@ -213,6 +216,18 @@ public class FileDiscoveryService {
         FileInfo(Path path, Instant timestamp) {
             this.path = path;
             this.timestamp = timestamp;
+        }
+    }
+
+    public void storeFailedBatch(UUID batchId) {
+        this.failedBatchId = batchId;
+        log.info("Stored failed batch ID: {} for retry", batchId);
+    }
+
+    public void clearFailedBatch() {
+        if (failedBatchId != null) {
+            log.info("Clearing failed batch: {}", failedBatchId);
+            failedBatchId = null;
         }
     }
 }

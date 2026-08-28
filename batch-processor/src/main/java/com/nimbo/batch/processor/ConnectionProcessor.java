@@ -3,6 +3,7 @@ package com.nimbo.batch.processor;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.OutputConfig;
+import com.nimbo.batch.exception.BatchProcessingException;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
@@ -65,7 +66,7 @@ public class ConnectionProcessor extends BaseProcessor {
 
         } catch (Exception e) {
             log.error("Error processing connection aggregation", e);
-            throw new RuntimeException("Connection aggregation failed", e);
+            throw new BatchProcessingException(batchId, "Connection aggregation failed", e);
         }
     }
 

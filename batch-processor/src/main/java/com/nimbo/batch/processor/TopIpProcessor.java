@@ -3,6 +3,7 @@ package com.nimbo.batch.processor;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.OutputConfig;
+import com.nimbo.batch.exception.BatchProcessingException;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +46,7 @@ public class TopIpProcessor extends BaseProcessor {
 
         try {
             if (files == null || files.isEmpty()) {
-                log.warn("No files provided, skipping connection aggregation");
+                log.warn("No files provided, skipping IP aggregation");
                 return;
             }
 
@@ -63,7 +64,7 @@ public class TopIpProcessor extends BaseProcessor {
 
         } catch (Exception e) {
             log.error("Error processing top IP aggregation", e);
-            throw new RuntimeException("Top IP aggregation failed", e);
+            throw new BatchProcessingException(batchId, "Traffic aggregation failed", e);
         }
     }
 

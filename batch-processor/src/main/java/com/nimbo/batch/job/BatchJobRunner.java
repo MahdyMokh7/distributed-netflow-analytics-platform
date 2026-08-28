@@ -3,6 +3,7 @@ package com.nimbo.batch.job;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.discovery.FileDiscoveryService;
+import com.nimbo.batch.exception.BatchProcessingException;
 import com.nimbo.batch.processor.BaseProcessor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -38,7 +39,14 @@ public class BatchJobRunner {
             return;
         }
 
-        UUID batchId = UUID.randomUUID();
+        UUID batchId = fileDiscoveryService.getFailedBatchId();
+        if (batchId != null) {
+            log.info("Found failed batch: {}, reusing for retry", batchId);
+        } else {
+            batchId = UUID.randomUUID();
+            log.info("Starting new batch with ID: {}", batchId);
+        }
+
         log.info("=== BATCH JOB STARTED ===");
         log.info("Batch ID: {}", batchId);
         log.info("Output mode: {}", outputConfig.getMode());
@@ -72,6 +80,7 @@ public class BatchJobRunner {
 
             // only when all processors succeed we commit
             fileDiscoveryService.markFilesAsProcessed(files, batchId);
+            fileDiscoveryService.clearFailedBatch();
 
             long duration = System.currentTimeMillis() - startTime;
             log.info("=== BATCH JOB COMPLETED SUCCESSFULLY ===");
@@ -79,10 +88,21 @@ public class BatchJobRunner {
             log.info("Processed {} files", files.size());
             log.info("Total duration: {} ms ({} seconds)", duration, duration / 1000);
 
-        } catch (Exception e) {
+        } catch (BatchProcessingException e) {
             long duration = System.currentTimeMillis() - startTime;
-            log.error("Batch job failed - Batch ID: {}, Duration: {} ms", batchId, duration, e);
-            // DO NOT mark files as processed → At-least-once: reprocess next run
+
+            UUID failedId = e.getBatchId();
+            log.error("Batch job failed for batch: {}, Duration: {} ms", failedId, duration, e);
+
+            // store failed batch ID for retry
+            fileDiscoveryService.storeFailedBatch(failedId);
+
+            // not mark files processed after exception
+            throw new RuntimeException("Batch job execution failed - Batch ID: " + failedId, e);
+
+        }  catch (Exception e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.error("Batch job failed with unexpected error - Batch ID: {}, Duration: {} ms", batchId, duration, e);
             throw new RuntimeException("Batch job execution failed - Batch ID: " + batchId, e);
         }
     }
