@@ -12,7 +12,7 @@ public final class SqlConstants {
                     ":inPackets, :outPackets, :recordCount, :batchId, :ingestedAt)";
 
     public static final String TRAFFIC_AGGREGATES_CONFLICT =
-            "ON CONFLICT (src_ip, window_start) DO UPDATE SET " +
+            "ON CONFLICT (src_ip, window_start, batch_id) DO UPDATE SET " +
                     "window_end = EXCLUDED.window_end, " +
                     "in_bytes = EXCLUDED.in_bytes, " +
                     "out_bytes = EXCLUDED.out_bytes, " +
@@ -36,7 +36,7 @@ public final class SqlConstants {
                     ":inPackets, :outPackets, :batchId, :ingestedAt)";
 
     public static final String CONNECTION_AGGREGATES_CONFLICT =
-            "ON CONFLICT (id) DO UPDATE SET " +
+            "ON CONFLICT (id, window_start, batch_id) DO UPDATE SET " +
                     "src_ip = EXCLUDED.src_ip, " +
                     "dst_ip = EXCLUDED.dst_ip, " +
                     "src_port = EXCLUDED.src_port, " +
@@ -63,7 +63,7 @@ public final class SqlConstants {
                     ":inPackets, :outPackets, :connectionCount, :batchId, :ingestedAt)";
 
     public static final String PROTOCOL_USAGE_AGGREGATES_CONFLICT =
-            "ON CONFLICT (l7_protocol, window_start) DO UPDATE SET " +
+            "ON CONFLICT (l7_protocol, window_start, batch_id) DO UPDATE SET " +
                     "window_end = EXCLUDED.window_end, " +
                     "in_bytes = EXCLUDED.in_bytes, " +
                     "out_bytes = EXCLUDED.out_bytes, " +
@@ -85,7 +85,7 @@ public final class SqlConstants {
                     ":inboundPackets, :outboundPackets, :batchId, :ingestedAt)";
 
     public static final String IP_BANDWIDTH_AGGREGATES_CONFLICT =
-            "ON CONFLICT (ip, window_start) DO UPDATE SET " +
+            "ON CONFLICT (ip, window_start, batch_id) DO UPDATE SET " +
                     "window_end = EXCLUDED.window_end, " +
                     "inbound_bytes = EXCLUDED.inbound_bytes, " +
                     "outbound_bytes = EXCLUDED.outbound_bytes, " +

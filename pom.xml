@@ -25,6 +25,7 @@
         <module>batch-ingester</module>
         <module>batch-processor</module>
         <module>realtime</module>
+        <module>rest-api</module>
     </modules>
 
     <properties>

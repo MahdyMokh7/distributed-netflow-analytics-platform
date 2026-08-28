@@ -10,8 +10,6 @@ import java.util.List;
 
 import java.util.UUID;
 
-import static org.apache.spark.sql.functions.current_timestamp;
-
 @Slf4j
 public abstract class BaseProcessor {
 

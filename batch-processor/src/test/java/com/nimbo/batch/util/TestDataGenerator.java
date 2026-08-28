@@ -8,14 +8,9 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
-import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 public final class TestDataGenerator {
 
@@ -302,11 +297,11 @@ public final class TestDataGenerator {
                         false
                 ),
 
-                // Added PROCESSING_TIME column
+                // CHANGED: PROCESSING_TIME as LongType (epoch microseconds)
                 DataTypes.createStructField(
                         "PROCESSING_TIME",
-                        DataTypes.TimestampType,
-                        true
+                        DataTypes.LongType,  // ✅ Changed from TimestampType to LongType
+                        false
                 )
         });
     }
@@ -367,8 +362,9 @@ public final class TestDataGenerator {
         int shortestPacket = 64;
         int longestPacket = 1500;
 
-        // Generate a timestamp within the last hour
-        Timestamp processingTime = Timestamp.from(Instant.now());
+        // CHANGED: Generate PROCESSING_TIME as epoch microseconds (Long)
+        // This matches the real data format from the ingester
+        long processingTimeMicros = Instant.now().toEpochMilli() * 1000L;
 
         return RowFactory.create(
 
@@ -451,8 +447,8 @@ public final class TestDataGenerator {
                 // 43
                 protocol == 6 ? 200 : 0,
 
-                // 44 - PROCESSING_TIME
-                processingTime
+                // 44 - PROCESSING_TIME (now Long - epoch microseconds)
+                processingTimeMicros
         );
     }
 

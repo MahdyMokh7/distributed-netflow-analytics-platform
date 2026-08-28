@@ -19,6 +19,7 @@ import java.util.UUID;
 import static org.apache.spark.sql.functions.col;
 import static org.apache.spark.sql.functions.window;
 import static org.apache.spark.sql.functions.sum;
+import static org.apache.spark.sql.functions.timestamp_micros;
 
 @Component
 @Slf4j
@@ -76,7 +77,7 @@ public class TopIpProcessor extends BaseProcessor {
                         col(NETFLOW_IN_BYTES).alias(SPARK_INBOUND_BYTES),
                         col(NETFLOW_OUT_PKTS).alias(SPARK_OUTBOUND_PACKETS),
                         col(NETFLOW_IN_PKTS).alias(SPARK_INBOUND_PACKETS),
-                        col(NETFLOW_PROCESSING_TIME)
+                        timestamp_micros(col(NETFLOW_PROCESSING_TIME)).alias(NETFLOW_PROCESSING_TIME)
                 );
 
         Dataset<Row> dstPerspective = parquetDf
@@ -86,7 +87,7 @@ public class TopIpProcessor extends BaseProcessor {
                         col(NETFLOW_OUT_BYTES).alias(SPARK_INBOUND_BYTES),
                         col(NETFLOW_IN_PKTS).alias(SPARK_OUTBOUND_PACKETS),
                         col(NETFLOW_OUT_PKTS).alias(SPARK_INBOUND_PACKETS),
-                        col(NETFLOW_PROCESSING_TIME)
+                        timestamp_micros(col(NETFLOW_PROCESSING_TIME)).alias(NETFLOW_PROCESSING_TIME)
                 );
 
         Dataset<Row> unified = srcPerspective.unionByName(dstPerspective);
@@ -94,13 +95,13 @@ public class TopIpProcessor extends BaseProcessor {
         return unified
                 .groupBy(
                         col(SPARK_IP),
-                        window(col(NETFLOW_PROCESSING_TIME).cast("timestamp"), windowDuration)
+                            window(col(NETFLOW_PROCESSING_TIME), windowDuration)
                 )
                 .agg(
-                        sum(col(SPARK_OUTBOUND_BYTES).cast("decimal(38,0)")).alias(SPARK_OUTBOUND_BYTES),
-                        sum(col(SPARK_INBOUND_BYTES).cast("decimal(38,0)")).alias(SPARK_INBOUND_BYTES),
-                        sum(col(SPARK_OUTBOUND_PACKETS).cast("decimal(38,0)")).alias(SPARK_OUTBOUND_PACKETS),
-                        sum(col(SPARK_INBOUND_PACKETS).cast("decimal(38,0)")).alias(SPARK_INBOUND_PACKETS)
+                        sum(col(SPARK_OUTBOUND_BYTES)).alias(SPARK_OUTBOUND_BYTES),
+                        sum(col(SPARK_INBOUND_BYTES)).alias(SPARK_INBOUND_BYTES),
+                        sum(col(SPARK_OUTBOUND_PACKETS)).alias(SPARK_OUTBOUND_PACKETS),
+                        sum(col(SPARK_INBOUND_PACKETS)).alias(SPARK_INBOUND_PACKETS)
                 )
                 .withColumn(SPARK_WINDOW_START, col("window.start"))
                 .withColumn(SPARK_WINDOW_END, col("window.end"))

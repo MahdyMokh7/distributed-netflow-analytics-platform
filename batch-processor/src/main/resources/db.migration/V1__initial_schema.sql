@@ -26,8 +26,7 @@ CREATE TABLE IF NOT EXISTS traffic_aggregates (
     record_count BIGINT NOT NULL CHECK (record_count >= 0),
     batch_id UUID NOT NULL,
     ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(src_ip, window_start),
-    PRIMARY KEY (id, window_start)
+    PRIMARY KEY (src_ip, window_start, batch_id)
     ) PARTITION BY RANGE (window_start);
 
 COMMENT ON TABLE traffic_aggregates IS 'IP bandwidth consumption by source IP per time window';
@@ -59,7 +58,7 @@ CREATE TABLE IF NOT EXISTS connection_aggregates (
     out_packets BIGINT NOT NULL CHECK (out_packets >= 0),
     batch_id UUID NOT NULL,
     ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id, window_start)
+    PRIMARY KEY (id, window_start, batch_id)
     ) PARTITION BY RANGE (window_start);
 
 COMMENT ON TABLE connection_aggregates IS 'IP connection details (5-tuple) per time window';
@@ -86,8 +85,7 @@ CREATE TABLE IF NOT EXISTS protocol_usage_aggregates (
     connection_count BIGINT NOT NULL CHECK (connection_count >= 0),
     batch_id UUID NOT NULL,
     ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(l7_protocol, window_start),
-    PRIMARY KEY (id, window_start)
+    PRIMARY KEY (l7_protocol, window_start, batch_id)
     ) PARTITION BY RANGE (window_start);
 
 COMMENT ON TABLE protocol_usage_aggregates IS 'Protocol usage statistics (L7 application layer) per time window';
@@ -113,7 +111,7 @@ CREATE TABLE IF NOT EXISTS ip_bandwidth_aggregates (
     batch_id UUID NOT NULL,
     ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(ip, window_start),
-    PRIMARY KEY (id, window_start)
+    PRIMARY KEY (ip, window_start, batch_id)
     ) PARTITION BY RANGE (window_start);
 
 COMMENT ON TABLE ip_bandwidth_aggregates IS 'Top IPs by bandwidth consumption (unified source+dst perspective)';

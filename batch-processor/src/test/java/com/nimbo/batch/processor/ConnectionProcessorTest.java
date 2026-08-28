@@ -43,7 +43,6 @@ class ConnectionProcessorTest extends BaseProcessorTest {
                 spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
         );
 
-        // Create test file paths
         testFiles = List.of(new Path(testParquetConfig.getLocalPath()));
     }
 
