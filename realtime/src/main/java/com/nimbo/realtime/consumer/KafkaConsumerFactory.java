@@ -12,13 +12,7 @@ import java.util.Map;
 @Component
 public class KafkaConsumerFactory {
 
-    private final KafkaProperties properties;
-
-    public KafkaConsumerFactory(KafkaProperties properties) {
-        this.properties = properties;
-    }
-
-    public KafkaConsumer<byte[], byte[]> create(int consumerNumber) {
+    public KafkaConsumer<byte[], byte[]> create(int consumerNumber, KafkaProperties properties) {
         Map<String, Object> config = new HashMap<>();
 
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, properties.getBootstrapServers());

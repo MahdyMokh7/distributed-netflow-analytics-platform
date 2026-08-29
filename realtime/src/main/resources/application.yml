@@ -44,7 +44,7 @@ realtime:
     max-batch-size-rows: ${STARROCKS_MAX_BATCH_SIZE_ROWS:100000}
     max-batch-time-ms: ${STARROCKS_MAX_BATCH_TIME_MS:1500}
 
-#08.10:20
+#08.39:40
 ##  ALTER TABLE nimbo.netflow_realtime_v2 RENAME netflow_realtime_v2_4;/
 ##  SELECT COUNT(*)  FROM nimbo.netflow_realtime_v2;
 ##  CREATE TABLE nimbo.netflow_realtime_v2 LIKE nimbo.netflow_realtime_v2_1;

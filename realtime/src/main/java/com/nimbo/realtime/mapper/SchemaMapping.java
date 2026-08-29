@@ -46,7 +46,7 @@ public class SchemaMapping {
         return fields;
     }
 
-    public List<Object> extractValues(GenericRecord record) {
+    public List<Object> extractValues(GenericRecord genericRecord) {
 
         List<Object> values =
                 new ArrayList<>(fields.size());
@@ -54,7 +54,7 @@ public class SchemaMapping {
         for (Schema.Field field : fields) {
 
             Object value =
-                    record.get(field.name());
+                    genericRecord.get(field.name());
 
             values.add(
                     normalizeValue(

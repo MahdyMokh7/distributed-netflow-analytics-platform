@@ -29,21 +29,18 @@ public class StarRocksSchemaInitializer
     ) throws IOException {
 
         String sql =
-                loadSql(CREATE_TABLE_SCRIPT);
-
+                loadSql();
         jdbcTemplate.execute(sql);
-
         log.info(
                 "StarRocks realtime table verified"
         );
     }
 
     private String loadSql(
-            String path
-    ) throws IOException {
+            ) throws IOException {
 
         ClassPathResource resource =
-                new ClassPathResource(path);
+                new ClassPathResource(StarRocksSchemaInitializer.CREATE_TABLE_SCRIPT);
 
         return StreamUtils.copyToString(
                 resource.getInputStream(),

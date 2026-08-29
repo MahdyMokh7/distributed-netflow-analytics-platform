@@ -1,5 +1,6 @@
 package com.nimbo.realtime.avro;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -40,7 +41,7 @@ public class AvroDeserializer {
         try {
             return reader.read(null, decoder);
 
-        } catch (IOException e) {
+        } catch (IOException | AvroRuntimeException e) {
             throw new AvroDeserializationException(
                     "Failed to deserialize NetFlow Avro record",
                     e
