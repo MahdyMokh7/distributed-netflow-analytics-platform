@@ -1,14 +1,14 @@
 package com.nimbo.restapi.dto.request;
 
-import com.nimbo.restapi.dto.validation.ValidIpAddress;
+import com.nimbo.restapi.validation.ValidIpAddress;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-
+import lombok.experimental.SuperBuilder;
+import lombok.Builder;
 @Data
-@Builder
+@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)

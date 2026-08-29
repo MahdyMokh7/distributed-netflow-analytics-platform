@@ -75,13 +75,9 @@ CREATE TABLE IF NOT EXISTS nimbo.netflow_realtime_v3
                  )
 
     PARTITION BY date_trunc(
-                               'hour',
+                               'day',
                                from_unixtime_ms(kafka_timestamp)
     )
 
     DISTRIBUTED BY HASH(ipv4_src_addr)
-    BUCKETS 16
-
-    PROPERTIES (
-                   "replication_num" = "3"
-               );
+    BUCKETS 8

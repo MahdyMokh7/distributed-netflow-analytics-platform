@@ -1,12 +1,41 @@
-package com.nimbo.restapi.service;
+package com.nimbo.restapi.util;
 
-import com.nimbo.restapi.dto.request.TrafficQueryRequestDto;
-import com.nimbo.restapi.dto.response.TrafficResponseDto;
-import org.springframework.data.domain.Page;
+import io.micrometer.core.instrument.MeterRegistry;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
-public interface TrafficQueryService {
+import java.util.concurrent.TimeUnit;
 
-    Page<TrafficResponseDto> queryTraffic(TrafficQueryRequestDto request);
+@Component
+@RequiredArgsConstructor
+public class QueryMetrics {
 
-    Page<TrafficResponseDto> queryTrafficBySrcIp(String srcIp, TrafficQueryRequestDto request);
+    private final MeterRegistry meterRegistry;
+
+    public void recordQuery(String queryName, long durationMs) {
+        meterRegistry
+                .timer(
+                        "nimbo.query.duration",
+                        "query", queryName,
+                        "status", "success"
+                )
+                .record(durationMs, TimeUnit.MILLISECONDS);
+    }
+
+    public void recordError(String queryName, long durationMs) {
+        meterRegistry
+                .counter(
+                        "nimbo.query.errors",
+                        "query", queryName
+                )
+                .increment();
+
+        meterRegistry
+                .timer(
+                        "nimbo.query.duration",
+                        "query", queryName,
+                        "status", "error"
+                )
+                .record(durationMs, TimeUnit.MILLISECONDS);
+    }
 }

@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/v1/connections")
 @RequiredArgsConstructor
@@ -35,7 +37,7 @@ public class ConnectionController {
             summary = "Get connections for an IP",
             description = "Retrieves connection aggregates for a given IP (as source or destination)"
     )
-    public ResponseEntity<ApiResponseDto<Page<ConnectionResponseDto>>> getConnectionsByIp(
+    public ResponseEntity<ApiResponseDto<List<ConnectionResponseDto>>> getConnectionsByIp(
             @Parameter(description = "IP address (source or destination)", required = true)
             @PathVariable @ValidIpAddress String ip,
 
@@ -73,7 +75,7 @@ public class ConnectionController {
             summary = "List connections with filters",
             description = "Retrieves connection aggregates with optional filters and pagination"
     )
-    public ResponseEntity<ApiResponseDto<Page<ConnectionResponseDto>>> queryConnections(
+    public ResponseEntity<ApiResponseDto<List<ConnectionResponseDto>>> queryConnections(
             @Parameter(description = "Source IP filter")
             @ValidIpAddress String srcIp,
 

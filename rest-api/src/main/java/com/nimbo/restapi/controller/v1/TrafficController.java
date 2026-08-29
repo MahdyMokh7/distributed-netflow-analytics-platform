@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/v1/traffic")
 @RequiredArgsConstructor
@@ -35,7 +37,7 @@ public class TrafficController {
             summary = "Get traffic for specific source IP",
             description = "Retrieves traffic aggregates for a given source IP within a time range"
     )
-    public ResponseEntity<ApiResponseDto<Page<TrafficResponseDto>>> getTrafficByIp(
+    public ResponseEntity<ApiResponseDto<List<TrafficResponseDto>>> getTrafficByIp(
             @Parameter(description = "Source IP address", required = true)
             @PathVariable @ValidIpAddress String srcIp,
 
@@ -72,7 +74,7 @@ public class TrafficController {
             summary = "List traffic with filters",
             description = "Retrieves traffic aggregates with optional filters and pagination"
     )
-    public ResponseEntity<ApiResponseDto<Page<TrafficResponseDto>>> queryTraffic(
+    public ResponseEntity<ApiResponseDto<List<TrafficResponseDto>>> queryTraffic(
             @Parameter(description = "Source IP filter")
             @ValidIpAddress String srcIp,
 

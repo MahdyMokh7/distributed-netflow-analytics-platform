@@ -132,3 +132,15 @@ resilience4j:
         retry-exceptions:
           - org.springframework.dao.DataAccessException
           - org.hibernate.exception.JDBCConnectionException
+
+nimbo:
+  starrocks-query:
+    jdbc-url: ${STARROCKS_QUERY_JDBC_URL:jdbc:mysql://10.10.61.53:9030/nimbo}
+    username: ${STARROCKS_QUERY_USERNAME:root}
+    password: ${STARROCKS_QUERY_PASSWORD:s@hWater}
+    database: ${STARROCKS_QUERY_DATABASE:nimbo}
+    table: ${STARROCKS_QUERY_TABLE:netflow_realtime_v3}
+
+    maximum-pool-size: ${STARROCKS_QUERY_POOL_SIZE:10}
+    query-timeout-seconds: ${STARROCKS_QUERY_TIMEOUT_SECONDS:30}
+    max-rows: ${STARROCKS_QUERY_MAX_ROWS:1000}
