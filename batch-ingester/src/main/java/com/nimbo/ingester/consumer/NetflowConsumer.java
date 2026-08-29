@@ -9,6 +9,7 @@ import com.nimbo.ingester.model.ValidationResult;
 import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
 import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.storage.exception.StorageException;
 import com.nimbo.storage.model.TopicPartitionKey;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -175,7 +176,7 @@ public class NetflowConsumer {
             dlqService.publish(consumerRecord, "DESERIALIZATION_ERROR", e.getMessage());
             return dataProcessingService.recordSkippedOffset(
                     consumerRecord.topic(), consumerRecord.partition(), nextOffset);
-        } catch (Exception e) {
+        } catch (StorageException e) {
             log.error("Instance #{}: Error processing record: topic={}, partition={}, offset={}",
                     instanceId, consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(), e);
             return Optional.empty();

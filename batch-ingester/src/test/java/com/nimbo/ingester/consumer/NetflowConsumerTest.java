@@ -5,6 +5,7 @@ import com.nimbo.ingester.deserializer.AvroDeserializer;
 import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
 import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.storage.exception.StorageException;
 import com.nimbo.storage.model.TopicPartitionKey;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -135,7 +136,7 @@ class NetflowConsumerTest {
     @Test
     @DisplayName("Should handle flush failure during shutdown gracefully")
     void shouldHandleFlushFailureDuringShutdown() {
-        doThrow(new RuntimeException("Flush failed"))
+        doThrow(new StorageException("Flush failed"))
                 .when(dataProcessingService).flush();
 
         netflowConsumer.start();

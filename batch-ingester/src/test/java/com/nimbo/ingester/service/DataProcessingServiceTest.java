@@ -1,6 +1,7 @@
 package com.nimbo.ingester.service;
 
 import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.storage.exception.StorageException;
 import com.nimbo.storage.model.TopicPartitionKey;
 import com.nimbo.storage.service.NetFlowStorage;
 import org.apache.avro.Schema;
@@ -78,10 +79,10 @@ class DataProcessingServiceTest {
     void shouldPropagateExceptionWhenStorageFails() {
         IngestedRecord record = createTestRecord();
         when(netFlowStorage.accept(any(IngestedRecord.class)))
-                .thenThrow(new RuntimeException("Storage failed"));
+                .thenThrow(new StorageException("Storage failed"));
 
         assertThatThrownBy(() -> service.processRecord(record))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(StorageException.class)
                 .hasMessage("Storage failed");
     }
 
@@ -115,10 +116,10 @@ class DataProcessingServiceTest {
     @DisplayName("Should propagate exception when flush fails")
     void shouldPropagateExceptionWhenFlushFails() {
         when(netFlowStorage.flush())
-                .thenThrow(new RuntimeException("Flush failed"));
+                .thenThrow(new StorageException("Flush failed"));
 
         assertThatThrownBy(() -> service.flush())
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(StorageException.class)
                 .hasMessage("Flush failed");
 
         verify(netFlowStorage).flush();

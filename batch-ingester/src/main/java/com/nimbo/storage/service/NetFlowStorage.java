@@ -2,6 +2,7 @@ package com.nimbo.storage.service;
 
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.config.HdfsProperties;
+import com.nimbo.storage.exception.ParquetWriteException;
 import com.nimbo.storage.exception.StorageException;
 import com.nimbo.storage.model.TopicPartitionKey;
 import com.nimbo.storage.service.batching.BatchAccumulator;
@@ -16,7 +17,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetWriter;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
@@ -58,7 +58,7 @@ public final class NetFlowStorage {
     }
 
     public Optional<Map<TopicPartitionKey, Long>> accept(IngestedRecord ingestedRecord) {
-        Objects.requireNonNull(ingestedRecord);
+        Objects.requireNonNull(ingestedRecord, "ingestedRecord must not be null");
 
         try {
             if (!writerOpen) {
@@ -77,7 +77,7 @@ public final class NetFlowStorage {
 
             return Optional.empty();
 
-        } catch (Exception e) {
+        } catch (StorageException e) {
             handleWriteFailure();
 
             log.error(
@@ -88,10 +88,7 @@ public final class NetFlowStorage {
                     e
             );
 
-            throw new StorageException(
-                    "Failed to process record in streaming Parquet writer",
-                    e
-            );
+            throw e;
         }
     }
 
@@ -105,9 +102,9 @@ public final class NetFlowStorage {
 
         try {
             return commitCurrentBatch();
-        } catch (Exception e) {
+        } catch (StorageException e) {
             handleWriteFailure();
-            throw new StorageException("Failed to flush Parquet batch to HDFS", e);
+            throw e;
         }
     }
 
@@ -128,9 +125,9 @@ public final class NetFlowStorage {
 
         try {
             return commitCurrentBatch();
-        } catch (Exception e) {
+        } catch (StorageException e) {
             handleWriteFailure();
-            throw new StorageException("Failed to flush remainings to HDFS", e);
+            throw e;
         }
     }
 
@@ -138,7 +135,7 @@ public final class NetFlowStorage {
         return batchAccumulator.recordSkippedOffset(topic, partition, nextOffset);
     }
 
-    private void openWriter(IngestedRecord firstRecord) throws IOException {
+    private void openWriter(IngestedRecord firstRecord)  {
         int primaryPartition = firstRecord.partition();
 
         String finalFileName = fileNameGenerator.generateFileName(primaryPartition);
@@ -155,7 +152,7 @@ public final class NetFlowStorage {
         log.debug("Opened streaming writer for partition {} at {}", primaryPartition, currentTempPath);
     }
 
-    private Map<TopicPartitionKey, Long> commitCurrentBatch() throws IOException {
+    private Map<TopicPartitionKey, Long> commitCurrentBatch() {
         if (!writerOpen) {
             return Map.of();
         }
@@ -180,7 +177,7 @@ public final class NetFlowStorage {
         if (writerOpen) {
             try {
                 parquetFileWriter.closeWriter(currentWriter);
-            } catch (Exception closeException) {
+            } catch (ParquetWriteException closeException) {
                 log.warn("Failed closing writer during error handling", closeException);
             }
             writerOpen = false;

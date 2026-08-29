@@ -2,6 +2,7 @@ package com.nimbo.storage.service;
 
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.config.HdfsProperties;
+import com.nimbo.storage.exception.ParquetWriteException;
 import com.nimbo.storage.exception.StorageException;
 import com.nimbo.storage.model.TopicPartitionKey;
 import com.nimbo.storage.service.batching.BatchPolicy;
@@ -191,7 +192,7 @@ class NetFlowStorageTest {
     void shouldCleanupTempFileWhenWriteFails() throws Exception {
         Path tempPath = new Path("/netflow/parquet", ".test.parquet.tmp");
         when(parquetFileWriter.createWriter(tempPath, storageSchema)).thenReturn(writer);
-        doThrow(new RuntimeException("write failed"))
+        doThrow(new ParquetWriteException("write failed"))
                 .when(parquetFileWriter)
                 .write(eq(writer), any(GenericRecord.class));
         doNothing().when(fileStorage).ensureDirectoryExists(any(Path.class));
