@@ -3,6 +3,7 @@ package com.nimbo.batch.processor;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.OutputConfig;
+import com.nimbo.batch.exception.BatchProcessingException;
 import com.nimbo.batch.writer.PostgresWriter;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,7 +67,7 @@ class ConnectionProcessorTest extends BaseProcessorTest {
                 new Path(testParquetConfig.getEmptyPath() + "/empty.parquet")
         );
         assertThatThrownBy(() -> emptyProcessor.process(emptyFiles, batchId))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(BatchProcessingException.class)  // ✅ Changed
                 .hasMessageContaining("Connection aggregation failed");
     }
 
@@ -84,7 +85,7 @@ class ConnectionProcessorTest extends BaseProcessorTest {
                 new Path(testParquetConfig.getInvalidPath() + "/invalid.parquet")
         );
         assertThatThrownBy(() -> invalidProcessor.process(invalidFiles, batchId))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(BatchProcessingException.class)  // ✅ Changed
                 .hasMessageContaining("Connection aggregation failed");
     }
 

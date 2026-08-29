@@ -26,11 +26,6 @@ public class KafkaOffsetCommitter {
             commitMap.put(partition, new OffsetAndMetadata(offset));
         });
 
-        // kafkaConsumer.commitSync(commitMap);
-        kafkaConsumer.commitAsync(commitMap, (committedOffsets, exception) -> {
-            if (exception != null) {
-                log.error("Async commit failed for offsets: {}", committedOffsets, exception);
-            }
-        });
+         kafkaConsumer.commitSync(commitMap);
     }
 }

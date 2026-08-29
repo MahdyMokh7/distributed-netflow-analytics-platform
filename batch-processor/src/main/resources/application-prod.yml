@@ -34,7 +34,7 @@ postgres:
   database: nimbo_db
   username: ${DB_USERNAME:nimbo_user}
   password: ${DB_PASSWORD:123456}
-  batch-size: 1000
+  batch-size: 500
 
   pool:
     size: 20
@@ -50,4 +50,4 @@ batch:
   schedule: "0 */5 * * * ?"  ## should change
   window-duration: "1 hour"
   enabled: true
-  max-files-per-batch: 20
+  max-files-per-batch: 5

@@ -73,7 +73,8 @@ public class TrafficAggregationProcessor extends BaseProcessor {
 
         } catch (Exception e) {
             log.error("Error processing traffic aggregation", e);
-            throw new BatchProcessingException(batchId, "Traffic aggregation failed", e);        }
+            throw new BatchProcessingException(batchId, "Traffic aggregation failed", e);
+        }
     }
 
     private Dataset<Row> aggregateTraffic(List<Path> files) {

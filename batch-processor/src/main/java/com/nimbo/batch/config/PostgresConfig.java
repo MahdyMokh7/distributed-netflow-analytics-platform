@@ -16,7 +16,7 @@ public class PostgresConfig {
     private String database;
     private String username;
     private String password;
-    private int batchSize = 1000;
+    private int batchSize;
 
     private Pool pool = new Pool();
     private Retry retry = new Retry();

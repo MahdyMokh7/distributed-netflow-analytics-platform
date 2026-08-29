@@ -17,13 +17,6 @@ class PostgresConfigTest {
     }
 
     @Test
-    void shouldDefaultBatchSizeTo1000() {
-        PostgresConfig config = new PostgresConfig();
-
-        assertThat(config.getBatchSize()).isEqualTo(1000);
-    }
-
-    @Test
     void shouldOverrideDefaultBatchSizeWhenSet() {
         PostgresConfig config = new PostgresConfig();
         config.setBatchSize(500);

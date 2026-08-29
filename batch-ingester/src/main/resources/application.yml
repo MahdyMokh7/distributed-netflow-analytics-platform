@@ -17,8 +17,8 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
 rolling:
-  max-record-count: ${ROLLING_MAX_RECORD_COUNT:3400000}
-  max-size-bytes: ${ROLLING_MAX_SIZE_BYTES:341835776}
+  max-record-count: ${ROLLING_MAX_RECORD_COUNT:3100000}
+  max-size-bytes: ${ROLLING_MAX_SIZE_BYTES:311673700}
   max-age: ${ROLLING_MAX_AGE:2m}
 
 storage:

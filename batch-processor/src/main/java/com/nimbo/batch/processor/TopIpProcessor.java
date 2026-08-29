@@ -64,7 +64,7 @@ public class TopIpProcessor extends BaseProcessor {
 
         } catch (Exception e) {
             log.error("Error processing top IP aggregation", e);
-            throw new BatchProcessingException(batchId, "Traffic aggregation failed", e);
+            throw new BatchProcessingException(batchId, "Top IP aggregation failed", e);
         }
     }
 

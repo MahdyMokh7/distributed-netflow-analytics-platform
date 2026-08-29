@@ -56,6 +56,11 @@ docker run -it --rm \
   
   
 mvn clean spring-boot:run -Dspring-boot.run.profiles=dev
+
+
+docker run -d   --name nimbo-postgres   -e POSTGRES_USER=nimbo_user   -e POSTGRES_PASSWORD=123456   -e POSTGRES_DB=nimbo_db   -p 5432:5432   postgres:16.2
+docker exec -it nimbo-postgres psql -U nimbo_user -d nimbo_db
+
 ```
 
 ## Monitor
