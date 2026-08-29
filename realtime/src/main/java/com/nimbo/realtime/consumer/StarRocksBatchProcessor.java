@@ -88,7 +88,6 @@ public class StarRocksBatchProcessor {
         pendingOffsets.put(topicPartition, new OffsetAndMetadata(kafkaRecord.offset() + 1));
     }
 
-//
     public void flushIfNeeded() {
         if (!shouldFlush() || rowBatch.isEmpty()) return;
 
@@ -97,15 +96,15 @@ public class StarRocksBatchProcessor {
         pendingOffsets.clear();
         lastFlushTime = System.currentTimeMillis();
     }
-//
+
     private boolean shouldFlush() {
         return reachedSizeThreshold() || reachedTimeThreshold();
     }
-//
+
     private boolean reachedSizeThreshold() {
         return rowBatch.size() >= starRocksProperties.getMaxBatchSizeRows();
     }
-//
+
     private boolean reachedTimeThreshold() {
         if (rowBatch.isEmpty()) return false;
         long elapsed = System.currentTimeMillis() - lastFlushTime;
@@ -154,7 +153,7 @@ public class StarRocksBatchProcessor {
     public boolean isBackpressured() {
         return inFlightLoads.size() >= starRocksProperties.getMaxInFlightRequests();
     }
-//
+
     public void markKafkaPaused() {
         kafkaPaused = true;
     }
@@ -162,19 +161,19 @@ public class StarRocksBatchProcessor {
     public void markKafkaResumed() {
         kafkaPaused = false;
     }
-//
+
     public void shutdown(KafkaConsumer<byte[], byte[]> consumer) {
         flushRemainingBatch();
         drainInFlightLoadsOnShutdown(consumer);
     }
-//
+
     private void flushRemainingBatch() {
         if (rowBatch.isEmpty()) return;
         submitAsync();
         rowBatch.clear();
         pendingOffsets.clear();
     }
-//
+
     private void drainInFlightLoadsOnShutdown(KafkaConsumer<byte[], byte[]> consumer) {
         while (!inFlightLoads.isEmpty()) {
             PendingLoad pending = inFlightLoads.peekFirst();

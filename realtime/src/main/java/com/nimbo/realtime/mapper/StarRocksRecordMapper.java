@@ -12,7 +12,7 @@ public class StarRocksRecordMapper {
     private final SchemaMapping schemaMapping;
 
     public StarRocksRow map(
-            GenericRecord record,
+            GenericRecord genericRecord,
             String topic,
             int partition,
             long offset,
@@ -24,7 +24,7 @@ public class StarRocksRecordMapper {
                 partition,
                 offset,
                 kafkaTimestamp,
-                schemaMapping.extractValues(record)
+                schemaMapping.extractValues(genericRecord)
         );
     }
 }

@@ -6,8 +6,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class NetflowValidationService {
 
-    private static final String SRC_IP = "IPV4_SRC_ADDR";
-    private static final String DST_IP = "IPV4_DST_ADDR";
     private static final String FLOW_DURATION_MILLISECONDS = "FLOW_DURATION_MILLISECONDS";
 
     public ValidationResult validate(GenericRecord genericRecord) {
@@ -17,8 +15,8 @@ public class NetflowValidationService {
 
         StringBuilder errors = new StringBuilder();
 
-        checkIpv4(genericRecord, SRC_IP, errors);
-        checkIpv4(genericRecord, DST_IP, errors);
+        checkIpv4(genericRecord, "IPV4_SRC_ADDR", errors);
+        checkIpv4(genericRecord, "IPV4_DST_ADDR", errors);
 
         checkRange(genericRecord, "L4_SRC_PORT", 0, 65_535, errors);
         checkRange(genericRecord, "L4_DST_PORT", 0, 65_535, errors);

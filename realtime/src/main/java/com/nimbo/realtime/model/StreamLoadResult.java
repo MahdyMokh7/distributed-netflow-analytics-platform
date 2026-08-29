@@ -49,7 +49,6 @@ public record StreamLoadResult(
         Long loadTimeMs
 ) {
     public boolean isSuccessful() {
-        return status != null
-                && "Success".equalsIgnoreCase(status);
+        return "Success".equalsIgnoreCase(status);
     }
 }

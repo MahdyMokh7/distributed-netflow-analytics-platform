@@ -24,10 +24,7 @@ public class SchemaMapping {
     public SchemaMapping(Schema schema) {
         this.fields = List.copyOf(schema.getFields());
 
-        List<String> columns = new ArrayList<>(
-                KAFKA_COLUMNS.size() + fields.size()
-        );
-
+        List<String> columns = new ArrayList<>(KAFKA_COLUMNS.size() + fields.size());
         columns.addAll(KAFKA_COLUMNS);
 
         fields.stream()
@@ -42,59 +39,25 @@ public class SchemaMapping {
         return starRocksColumns;
     }
 
-    public List<Schema.Field> fields() {
-        return fields;
-    }
-
     public List<Object> extractValues(GenericRecord genericRecord) {
-
-        List<Object> values =
-                new ArrayList<>(fields.size());
-
+        List<Object> values = new ArrayList<>(fields.size());
         for (Schema.Field field : fields) {
-
-            Object value =
-                    genericRecord.get(field.name());
-
-            values.add(
-                    normalizeValue(
-                            value,
-                            field.schema()
-                    )
-            );
+            Object value = genericRecord.get(field.name());
+            values.add(normalizeValue(value, field.schema()));
         }
-
         return values;
     }
 
-    private Object normalizeValue(
-            Object value,
-            Schema fieldSchema
-    ) {
-
-        if (value == null) {
-            return null;
-        }
+    private Object normalizeValue(Object value, Schema fieldSchema) {
+        if (value == null) return null;
 
         return switch (fieldSchema.getType()) {
-
-            case STRING ->
-                    value.toString();
-
-            case INT ->
-                    ((Number) value).intValue();
-
-            case LONG ->
-                    ((Number) value).longValue();
-
-            case DOUBLE ->
-                    ((Number) value).doubleValue();
-
-            case FLOAT ->
-                    ((Number) value).floatValue();
-
-            default ->
-                    value;
+            case STRING -> value.toString();
+            case INT -> ((Number) value).intValue();
+            case LONG -> ((Number) value).longValue();
+            case DOUBLE -> ((Number) value).doubleValue();
+            case FLOAT -> ((Number) value).floatValue();
+            default -> value;
         };
     }
 }
