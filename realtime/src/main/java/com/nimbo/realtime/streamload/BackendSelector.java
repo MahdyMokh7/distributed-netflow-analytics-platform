@@ -1,4 +1,4 @@
-package com.nimbo.realtime.client;
+package com.nimbo.realtime.streamload;
 
 import com.nimbo.realtime.config.StarRocksProperties;
 import org.springframework.stereotype.Component;

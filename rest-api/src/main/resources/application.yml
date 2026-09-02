@@ -112,7 +112,7 @@ springdoc:
     tags-sorter: alpha
   show-actuator: true
   packages-to-scan: com.nimbo.restapi.controller
-  paths-to-match: /v1/**
+  paths-to-match: /**
 
 # Resilience4j Configuration
 resilience4j:

@@ -1,7 +1,7 @@
-package com.nimbo.realtime.consumer;
+package com.nimbo.realtime.ingestion;
 
 import com.nimbo.realtime.config.KafkaProperties;
-import com.nimbo.realtime.config.StarRocksProperties;
+import com.nimbo.realtime.processing.BatchProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -13,12 +13,12 @@ import java.util.List;
 
 @Slf4j
 @RequiredArgsConstructor
-public class StarRocksConsumerWorker implements Runnable {
+public class ConsumerWorker implements Runnable {
 
     private final int workerNumber;
     private final KafkaConsumer<byte[], byte[]> consumer;
     private final KafkaProperties kafkaProperties;
-    private final StarRocksBatchProcessor batchProcessor;
+    private final BatchProcessor batchProcessor;
     private volatile boolean running = true;
 
     @Override
@@ -44,15 +44,17 @@ public class StarRocksConsumerWorker implements Runnable {
     private void processIteration() {
         batchProcessor.drainCompletedLoads(consumer);
 
-        if (batchProcessor.isBackpressured()) {
+        if (batchProcessor.hasTooManyInFlightLoads()) {
             pauseKafka();
             consumer.poll(Duration.ofMillis(100));
             return;
         }
+        if (batchProcessor.isKafkaPaused()) {
+            resumeKafka();
+        }
 
-        resumeKafka();
         ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(kafkaProperties.getPollTimeoutMs()));
-        batchProcessor.process(records);
+        batchProcessor.processRecords(records);
         batchProcessor.flushIfNeeded();
     }
 
@@ -64,7 +66,6 @@ public class StarRocksConsumerWorker implements Runnable {
     }
 
     private void resumeKafka() {
-        if (!batchProcessor.isKafkaPaused()) return;
         consumer.resume(consumer.assignment());
         batchProcessor.markKafkaResumed();
         log.debug("Worker {} resumed Kafka", workerNumber);
@@ -79,7 +80,7 @@ public class StarRocksConsumerWorker implements Runnable {
         }
     }
 
-    public void stop() {
+    public void stopWorker() {
         running = false;
         consumer.wakeup();
     }

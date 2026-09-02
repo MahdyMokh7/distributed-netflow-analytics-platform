@@ -14,7 +14,7 @@ realtime:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092}
     topic: ${KAFKA_TOPIC:netflow}
-    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-starrocks-writer}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-starrocks-writer5}
     client-id: ${KAFKA_CLIENT_ID:starrocks-writer}
     auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
     max-poll-records: ${KAFKA_MAX_POLL_RECORDS:20000}

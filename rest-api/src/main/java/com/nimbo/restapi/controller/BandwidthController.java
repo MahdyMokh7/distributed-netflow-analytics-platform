@@ -1,4 +1,4 @@
-package com.nimbo.restapi.controller.v1;
+package com.nimbo.restapi.controller;
 
 import com.nimbo.restapi.dto.request.BandwidthQueryRequestDto;
 import com.nimbo.restapi.dto.request.TimeRangeRequestDto;
@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/v1/bandwidth")
+@RequestMapping("/bandwidth")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Bandwidth", description = "IP bandwidth statistics API")

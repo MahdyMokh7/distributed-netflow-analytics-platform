@@ -1,12 +1,12 @@
-package com.nimbo.restapi.controller.v1;
+package com.nimbo.restapi.controller;
 
-import com.nimbo.restapi.dto.request.ConnectionQueryRequestDto;
 import com.nimbo.restapi.dto.request.PaginationRequestDto;
 import com.nimbo.restapi.dto.request.TimeRangeRequestDto;
+import com.nimbo.restapi.dto.request.TrafficQueryRequestDto;
 import com.nimbo.restapi.dto.response.ApiResponseDto;
-import com.nimbo.restapi.dto.response.ConnectionResponseDto;
 import com.nimbo.restapi.dto.response.PaginationMetadataDto;
-import com.nimbo.restapi.service.ConnectionQueryService;
+import com.nimbo.restapi.dto.response.TrafficResponseDto;
+import com.nimbo.restapi.service.TrafficQueryService;
 import com.nimbo.restapi.validation.ValidIpAddress;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,22 +24,22 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/v1/connections")
+@RequestMapping("/traffic")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Connections", description = "Network connection statistics API")
-public class ConnectionController {
+@Tag(name = "Traffic", description = "Network traffic statistics API")
+public class TrafficController {
 
-    private final ConnectionQueryService connectionService;
+    private final TrafficQueryService trafficService;
 
-    @GetMapping("/{ip}")
+    @GetMapping("/{srcIp}")
     @Operation(
-            summary = "Get connections for an IP",
-            description = "Retrieves connection aggregates for a given IP (as source or destination)"
+            summary = "Get traffic for specific source IP",
+            description = "Retrieves traffic aggregates for a given source IP within a time range"
     )
-    public ResponseEntity<ApiResponseDto<List<ConnectionResponseDto>>> getConnectionsByIp(
-            @Parameter(description = "IP address (source or destination)", required = true)
-            @PathVariable @ValidIpAddress String ip,
+    public ResponseEntity<ApiResponseDto<List<TrafficResponseDto>>> getTrafficByIp(
+            @Parameter(description = "Source IP address", required = true)
+            @PathVariable @ValidIpAddress String srcIp,
 
             @Parameter(description = "Time range parameters")
             @Valid TimeRangeRequestDto timeRange,
@@ -47,19 +47,18 @@ public class ConnectionController {
             @Parameter(description = "Pagination parameters")
             @Valid PaginationRequestDto pagination
     ) {
-        log.debug("Connection query for IP: {}, time range: {} to {}, page: {}, size: {}",
-                ip, timeRange.getStartTime(), timeRange.getEndTime(),
+        log.debug("Traffic query for IP: {}, time range: {} to {}, page: {}, size: {}",
+                srcIp, timeRange.getStartTime(), timeRange.getEndTime(),
                 pagination.getPage(), pagination.getSize());
 
-        ConnectionQueryRequestDto request = ConnectionQueryRequestDto.builder()
-                .srcIp(ip)
-                .dstIp(ip)
+        TrafficQueryRequestDto request = TrafficQueryRequestDto.builder()
+                .srcIp(srcIp)
                 .startTime(timeRange.getStartTime())
                 .endTime(timeRange.getEndTime())
                 .pagination(pagination)
                 .build();
 
-        Page<ConnectionResponseDto> result = connectionService.queryConnectionsByIp(ip, request);
+        Page<TrafficResponseDto> result = trafficService.queryTrafficBySrcIp(srcIp, request);
 
         return ResponseEntity.ok(
                 ApiResponseDto.success(result.getContent(), PaginationMetadataDto.of(
@@ -72,24 +71,15 @@ public class ConnectionController {
 
     @GetMapping
     @Operation(
-            summary = "List connections with filters",
-            description = "Retrieves connection aggregates with optional filters and pagination"
+            summary = "List traffic with filters",
+            description = "Retrieves traffic aggregates with optional filters and pagination"
     )
-    public ResponseEntity<ApiResponseDto<List<ConnectionResponseDto>>> queryConnections(
+    public ResponseEntity<ApiResponseDto<List<TrafficResponseDto>>> queryTraffic(
             @Parameter(description = "Source IP filter")
             @ValidIpAddress String srcIp,
 
             @Parameter(description = "Destination IP filter")
             @ValidIpAddress String dstIp,
-
-            @Parameter(description = "Source port filter")
-            Integer srcPort,
-
-            @Parameter(description = "Destination port filter")
-            Integer dstPort,
-
-            @Parameter(description = "Layer 4 protocol filter")
-            Integer l4Protocol,
 
             @Parameter(description = "Time range parameters")
             @Valid TimeRangeRequestDto timeRange,
@@ -97,21 +87,18 @@ public class ConnectionController {
             @Parameter(description = "Pagination parameters")
             @Valid PaginationRequestDto pagination
     ) {
-        log.debug("Connection query with filters - srcIp: {}, dstIp: {}, srcPort: {}, dstPort: {}, l4Protocol: {}",
-                srcIp, dstIp, srcPort, dstPort, l4Protocol);
+        log.debug("Traffic query with filters - srcIp: {}, dstIp: {}, page: {}, size: {}",
+                srcIp, dstIp, pagination.getPage(), pagination.getSize());
 
-        ConnectionQueryRequestDto request = ConnectionQueryRequestDto.builder()
+        TrafficQueryRequestDto request = TrafficQueryRequestDto.builder()
                 .srcIp(srcIp)
                 .dstIp(dstIp)
-                .srcPort(srcPort)
-                .dstPort(dstPort)
-                .l4Protocol(l4Protocol)
                 .startTime(timeRange.getStartTime())
                 .endTime(timeRange.getEndTime())
                 .pagination(pagination)
                 .build();
 
-        Page<ConnectionResponseDto> result = connectionService.queryConnections(request);
+        Page<TrafficResponseDto> result = trafficService.queryTraffic(request);
 
         return ResponseEntity.ok(
                 ApiResponseDto.success(result.getContent(), PaginationMetadataDto.of(

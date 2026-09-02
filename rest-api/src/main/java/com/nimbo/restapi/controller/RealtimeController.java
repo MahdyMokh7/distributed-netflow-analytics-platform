@@ -1,4 +1,4 @@
-package com.nimbo.restapi.controller.v1;
+package com.nimbo.restapi.controller;
 
 import com.nimbo.restapi.dto.request.TimeRangeRequestDto;
 import com.nimbo.restapi.dto.response.ApiResponseDto;
@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/v1/realtime")
+@RequestMapping("/realtime")
 @RequiredArgsConstructor
 @Validated
 @Tag(

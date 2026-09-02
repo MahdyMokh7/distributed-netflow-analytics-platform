@@ -1,5 +1,6 @@
 package com.nimbo.realtime.model;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public record StarRocksRow(
@@ -10,6 +11,20 @@ public record StarRocksRow(
         List<Object> netFlowValues
 ) {
     public StarRocksRow {
-        netFlowValues = List.copyOf(netFlowValues);
+        netFlowValues = new ArrayList<>(netFlowValues);
+    }
+
+    public List<Object> values() {
+
+        List<Object> values = new ArrayList<>();
+
+        values.add(kafkaTopic);
+        values.add(kafkaPartition);
+        values.add(kafkaOffset);
+        values.add(kafkaTimestamp);
+
+        values.addAll(netFlowValues);
+
+        return values;
     }
 }

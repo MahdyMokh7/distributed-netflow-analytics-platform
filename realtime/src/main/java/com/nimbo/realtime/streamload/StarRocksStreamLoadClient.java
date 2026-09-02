@@ -1,7 +1,8 @@
-package com.nimbo.realtime.client;
+package com.nimbo.realtime.streamload;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbo.realtime.config.StarRocksProperties;
+import com.nimbo.realtime.mapper.CsvFormatter;
 import com.nimbo.realtime.mapper.SchemaMapping;
 import com.nimbo.realtime.model.StarRocksRow;
 import com.nimbo.realtime.model.StreamLoadResult;
@@ -25,8 +26,8 @@ import java.util.concurrent.CompletionException;
 @Component
 @RequiredArgsConstructor
 public class StarRocksStreamLoadClient {
-
-    private final StarRocksProperties properties;
+    private final CsvFormatter csvFormatter;
+    private final StarRocksProperties starRocksProperties;
     private final ObjectMapper objectMapper;
     private final BackendSelector backendSelector;
     private final SchemaMapping schemaMapping;
@@ -45,11 +46,11 @@ public class StarRocksStreamLoadClient {
                 .header("Content-Type", "text/csv")
                 .expectContinue(true);
 
-        if (properties.isMergeCommitEnabled()) {
+        if (starRocksProperties.isMergeCommitEnabled()) {
             builder.header("enable_merge_commit", "true");
-            builder.header("merge_commit_async", Boolean.toString(properties.isMergeCommitAsync()));
-            builder.header("merge_commit_interval_ms", Long.toString(properties.getMergeCommitIntervalMs()));
-            builder.header("merge_commit_parallel", Integer.toString(properties.getMergeCommitParallel()));
+            builder.header("merge_commit_async", Boolean.toString(starRocksProperties.isMergeCommitAsync()));
+            builder.header("merge_commit_interval_ms", Long.toString(starRocksProperties.getMergeCommitIntervalMs()));
+            builder.header("merge_commit_parallel", Integer.toString(starRocksProperties.getMergeCommitParallel()));
         } else {
             builder.header("label", label);
         }
@@ -59,18 +60,16 @@ public class StarRocksStreamLoadClient {
     private String buildStreamLoadUrl() {
         String backend = backendSelector.nextBackend();
         if (backend.endsWith("/")) backend = backend.substring(0, backend.length() - 1);
-        return backend + "/api/" + properties.getDatabase() + "/" + properties.getTable() + "/_stream_load";
+        return backend + "/api/" + starRocksProperties.getDatabase() + "/" + starRocksProperties.getTable() + "/_stream_load";
     }
 
-    public CompletableFuture<StreamLoadResult> loadAsync(List<StarRocksRow> rows, String label) {
+    public CompletableFuture<StreamLoadResult> sendAsync(List<StarRocksRow> rows, String label) {
         if (rows == null || rows.isEmpty()) {
             return CompletableFuture.failedFuture(new IllegalArgumentException("Stream Load batch cannot be empty"));
         }
 
-        String csvBody = serializeCsv(rows);
         URI uri = URI.create(buildStreamLoadUrl());
-        HttpRequest request = buildRequest(uri, csvBody, label);
-
+        HttpRequest request = buildRequest(uri, csvFormatter.format(rows), label);
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
                 .thenApply(response -> {
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -86,39 +85,7 @@ public class StarRocksStreamLoadClient {
     }
 
     private String buildAuthorizationHeader() {
-        String credentials = properties.getUsername() + ":" + properties.getPassword();
+        String credentials = starRocksProperties.getUsername() + ":" + starRocksProperties.getPassword();
         return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private void appendCsvString(StringBuilder csv, String value) {
-        csv.append('"');
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (c == '"') csv.append("\"\"");
-            else csv.append(c);
-        }
-        csv.append('"');
-    }
-
-    private void appendCsvValue(StringBuilder csv, Object value) {
-        if (value == null) { csv.append("\\N"); return; }
-        if (value instanceof String stringValue) { appendCsvString(csv, stringValue); return; }
-        csv.append(value);
-    }
-
-    private String serializeCsv(List<StarRocksRow> rows) {
-        StringBuilder csv = new StringBuilder(rows.size() * 256);
-        for (StarRocksRow row : rows) {
-            appendCsvValue(csv, row.kafkaTopic()); csv.append(',');
-            appendCsvValue(csv, row.kafkaPartition()); csv.append(',');
-            appendCsvValue(csv, row.kafkaOffset()); csv.append(',');
-            appendCsvValue(csv, row.kafkaTimestamp());
-            for (Object value : row.netFlowValues()) {
-                csv.append(',');
-                appendCsvValue(csv, value);
-            }
-            csv.append('\n');
-        }
-        return csv.toString();
     }
 }

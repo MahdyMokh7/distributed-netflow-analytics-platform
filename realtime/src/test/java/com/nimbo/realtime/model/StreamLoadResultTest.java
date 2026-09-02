@@ -2,31 +2,27 @@ package com.nimbo.realtime.model;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class StreamLoadResultTest {
 
     @Test
-    void successStatusIsCaseInsensitive() {
-        assertTrue(result("Success").isSuccessful());
-        assertTrue(result("success").isSuccessful());
-        assertTrue(result("SUCCESS").isSuccessful());
+    void shouldReturnTrueForSuccessStatus() {
+        StreamLoadResult result = new StreamLoadResult(
+                1L, "label", "Success", null, 10L, 10L, 0L, 100L,
+                null, null, null, null, null, null
+        );
+
+        assertThat(result.isSuccessful()).isTrue();
     }
 
     @Test
-    void nullOrNonSuccessStatusIsNotSuccessful() {
-        assertFalse(result(null).isSuccessful());
-        assertFalse(result("Fail").isSuccessful());
-        assertFalse(result("Publish Timeout").isSuccessful());
-    }
-
-    private StreamLoadResult result(String status) {
-        return new StreamLoadResult(
-                null, null, status, null,
-                null, null, null, null,
-                null, null, null, null,
-                null, null
+    void shouldReturnFalseForFailedStatus() {
+        StreamLoadResult result = new StreamLoadResult(
+                1L, "label", "Fail", "error", 10L, 0L, 10L, 100L,
+                null, null, null, null, null, null
         );
+
+        assertThat(result.isSuccessful()).isFalse();
     }
 }

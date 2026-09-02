@@ -1,4 +1,4 @@
-package com.nimbo.restapi.controller.v1;
+package com.nimbo.restapi.controller;
 
 import com.nimbo.restapi.dto.request.ProtocolQueryRequestDto;
 import com.nimbo.restapi.dto.request.TimeRangeRequestDto;
@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/v1/protocols")
+@RequestMapping("/protocols")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Protocols", description = "Network protocol usage statistics API")
