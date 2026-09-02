@@ -8,18 +8,21 @@ spring:
 spark:
   master: spark://10.10.61.71:7077
   app-name: nimbo-batch-processor
-  executor-memory: 2g
+  executor-memory: 1g
   executor-cores: 2
-  num-executors: 2
-  driver-memory: 1g
+  num-executors: 1
+  driver-memory: 2g
   shuffle-partitions: 12
   adaptive-enabled: true
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer
   ui-enabled: true
   io-mode-default: NIO
-  driver-host: ${DRIVER_HOST:10.10.61.53}
+  driver-host: ${DRIVER_HOST:10.10.61.52}
   driver-bind-address: 0.0.0.0
+  speculation: false
+  jars-path: ${SPARK_JARS_PATH:/home/team1/batch-processor-spark.jar}
+  executor-extra-java-options: "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED --add-opens=java.base/sun.net.util=ALL-UNNAMED"
 
 hdfs:
   uri: hdfs://10.10.61.53:8020
@@ -29,17 +32,25 @@ output:
   mode: both
 
 postgres:
+  driver-class-name: org.postgresql.Driver
   host: 10.10.61.70
   port: 5432
   database: nimbo_db
   username: ${DB_USERNAME:nimbo_user}
   password: ${DB_PASSWORD:123456}
-  batch-size: 500
+  batch-size: 5000
 
-  pool:
-    size: 20
+  driver-pool:
+    size: 4
     connection-timeout: 10000
     pool-name: nimbo-batch-pg-pool
+
+  executor-pool:
+    max-pool-size: ${EXECUTOR_POOL_SIZE:2}
+    connection-timeout-ms: ${EXECUTOR_CONNECTION_TIMEOUT:5000}
+    idle-timeout-ms: ${EXECUTOR_IDLE_TIMEOUT:60000}
+    max-lifetime-ms: ${EXECUTOR_MAX_LIFETIME:180000}
+    pool-name: ${EXECUTOR_POOL_NAME:JdbiExecutorPool}
 
   retry:
     max-attempts: 5

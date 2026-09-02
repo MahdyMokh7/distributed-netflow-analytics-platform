@@ -29,6 +29,10 @@ public class SparkConfig {
     private String driverHost;
     private String driverBindAddress;
 
+    private Boolean speculation;
+    private String jarsPath;
+    private String executorExtraJavaOptions;
+
     @Bean
     public SparkSession sparkSession() {
         SparkSession.Builder builder = SparkSession.builder()
@@ -40,11 +44,7 @@ public class SparkConfig {
         setIfPositive(builder, "spark.sql.shuffle.partitions", shufflePartitions);
 
         setIfPresent(builder, "spark.sql.adaptive.enabled", adaptiveEnabled);
-        setIfPresent(
-                builder,
-                "spark.sql.adaptive.coalescePartitions.enabled",
-                adaptiveCoalescePartitionsEnabled
-        );
+        setIfPresent(builder, "spark.sql.adaptive.coalescePartitions.enabled", adaptiveCoalescePartitionsEnabled);
 
         setIfPresent(builder, "spark.serializer", serializer);
         setIfPresent(builder, "spark.ui.enabled", uiEnabled);
@@ -52,7 +52,15 @@ public class SparkConfig {
         setIfPresent(builder, "spark.driver.host", driverHost);
         setIfPresent(builder, "spark.driver.bindAddress", driverBindAddress);
 
-        return builder.getOrCreate();
+        setIfPresent(builder, "spark.speculation", speculation);
+        setIfPresent(builder, "spark.jars", jarsPath);
+        setIfPresent(builder, "spark.executor.extraJavaOptions", executorExtraJavaOptions);
+
+        SparkSession spark = builder.getOrCreate();
+        System.out.println("EFFECTIVE spark.jars = " + spark.sparkContext().getConf().getOption("spark.jars"));
+        System.out.println("EFFECTIVE spark.executor.extraJavaOptions = " + spark.sparkContext().getConf().getOption("spark.executor.extraJavaOptions"));
+
+        return spark;
     }
 
     private void setIfPresent(

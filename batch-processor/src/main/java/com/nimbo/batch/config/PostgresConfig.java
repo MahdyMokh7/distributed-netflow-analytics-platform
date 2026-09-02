@@ -4,13 +4,21 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
+
+import java.io.Serial;
+import java.io.Serializable;  // ← ADD THIS IMPORT
 
 @Getter
 @Setter
-@Configuration
+@Component
 @ConfigurationProperties(prefix = "postgres")
-public class PostgresConfig {
+public class PostgresConfig implements Serializable {
 
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    private String driverClassName;
     private String host;
     private int port;
     private String database;
@@ -18,7 +26,7 @@ public class PostgresConfig {
     private String password;
     private int batchSize;
 
-    private Pool pool = new Pool();
+    private DriverPool driverPool = new DriverPool();
     private Retry retry = new Retry();
 
     public String getJdbcUrl() {
@@ -27,7 +35,9 @@ public class PostgresConfig {
 
     @Getter
     @Setter
-    public static class Pool {
+    public static class DriverPool implements Serializable {
+        @Serial
+        private static final long serialVersionUID = 1L;
         private int size;
         private long connectionTimeout;
         private String poolName;
@@ -35,7 +45,9 @@ public class PostgresConfig {
 
     @Getter
     @Setter
-    public static class Retry {
+    public static class Retry implements Serializable {
+        @Serial
+        private static final long serialVersionUID = 1L;
         private int maxAttempts;
         private long initialDelayMs;
         private long maxDelayMs;

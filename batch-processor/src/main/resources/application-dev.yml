@@ -11,13 +11,14 @@ spark:
   executor-memory: 2g
   executor-cores: 2
   num-executors: 2
-  driver-memory: 1g
+  driver-memory: 2g
   shuffle-partitions: 20
   adaptive-enabled: true
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer
   ui-enabled: true
   io-mode-default: NIO
+  speculation: false
 
 hdfs:
   uri: hdfs://10.10.61.53:8020
@@ -32,12 +33,19 @@ postgres:
   database: nimbo_db
   username: nimbo_user
   password: 123456
-  batch-size: 500
+  batch-size: 2000
 
-  pool:
-    size: 20
+  driver-pool:
+    size: 4
     connection-timeout: 10000
     pool-name: nimbo-batch-pg-pool
+
+  executor-pool:
+    max-pool-size: ${EXECUTOR_POOL_SIZE:2}
+    connection-timeout-ms: ${EXECUTOR_CONNECTION_TIMEOUT:5000}
+    idle-timeout-ms: ${EXECUTOR_IDLE_TIMEOUT:60000}
+    max-lifetime-ms: ${EXECUTOR_MAX_LIFETIME:180000}
+    pool-name: ${EXECUTOR_POOL_NAME:JdbiExecutorPool}
 
   retry:
     max-attempts: 3
@@ -45,7 +53,7 @@ postgres:
     max-delay-ms: 10000
 
 batch:
-  schedule: "0 */2 * * * ?"
+  schedule: "0 */3 * * * ?"
   window-duration: "1 hour"
   enabled: true
   max-files-per-batch: 5

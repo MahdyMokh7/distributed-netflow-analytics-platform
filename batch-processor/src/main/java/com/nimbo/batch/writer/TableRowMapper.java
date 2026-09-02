@@ -7,13 +7,18 @@ import com.nimbo.batch.model.TrafficAggregate;
 import org.apache.spark.sql.Row;
 import org.springframework.stereotype.Component;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.sql.Timestamp;
 import java.util.UUID;
 
 import static com.nimbo.batch.constants.ColumnConstants.*;
 
 @Component
-public class TableRowMapper {
+public class TableRowMapper implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public TrafficAggregate toTrafficAggregate(Row row, UUID batchId, Timestamp ingestedAt) {
         return TrafficAggregate.builder()

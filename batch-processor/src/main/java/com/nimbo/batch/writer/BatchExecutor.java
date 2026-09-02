@@ -3,13 +3,17 @@ package com.nimbo.batch.writer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.io.Serializable;
 import java.util.function.Supplier;
 
 @Component
 @Slf4j
-public class BatchExecutor {
+public class BatchExecutor  implements Serializable {
 
-    public int[] executeWithRetry(Supplier<int[]> operation, String tableName, int maxRetries, long initialDelayMs) {
+    private static final long serialVersionUID = 1L;
+
+    public int[] executeWithRetry(Supplier<int[]> operation, String tableName,
+                                  int maxRetries, long initialDelayMs, long maxDelayMs) {
         int attempts = 0;
         Exception lastException = null;
 
@@ -24,7 +28,7 @@ public class BatchExecutor {
                 attempts++;
 
                 if (shouldRetry(attempts, maxRetries)) {
-                    long delay = calculateRetryDelay(attempts, initialDelayMs);
+                    long delay = calculateRetryDelay(attempts, initialDelayMs, maxDelayMs);
                     log.warn(
                             "Batch execution failed for table: {} (attempt {}/{}), retrying in {}ms",
                             tableName,
@@ -56,8 +60,11 @@ public class BatchExecutor {
         return attempts < maxRetries;
     }
 
-    private long calculateRetryDelay(int attempt, long initialDelayMs) {
-        return initialDelayMs * (long) Math.pow(2.0, (double) attempt - 1);
+    private long calculateRetryDelay(int attempt, long initialDelayMs, long maxDelayMs) {
+        return Math.min(
+                initialDelayMs * (long) Math.pow(2.0, (double) attempt - 1),
+                maxDelayMs
+        );
     }
 
     private void sleep(long millis) {

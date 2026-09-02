@@ -28,20 +28,22 @@ class PostgresConfigTest {
     void shouldInitializePoolAndRetryWithNonNullDefaults() {
         PostgresConfig config = new PostgresConfig();
 
-        assertThat(config.getPool()).isNotNull();
+        // ✅ CHANGE: getPool() → getDriverPool()
+        assertThat(config.getDriverPool()).isNotNull();
         assertThat(config.getRetry()).isNotNull();
     }
 
     @Test
     void poolNestedPropertiesShouldBeSettable() {
-        PostgresConfig.Pool pool = new PostgresConfig.Pool();
-        pool.setSize(20);
-        pool.setConnectionTimeout(10_000L);
-        pool.setPoolName("nimbo-pool");
+        // ✅ CHANGE: Pool → DriverPool
+        PostgresConfig.DriverPool driverPool = new PostgresConfig.DriverPool();
+        driverPool.setSize(20);
+        driverPool.setConnectionTimeout(10_000L);
+        driverPool.setPoolName("nimbo-pool");
 
-        assertThat(pool.getSize()).isEqualTo(20);
-        assertThat(pool.getConnectionTimeout()).isEqualTo(10_000L);
-        assertThat(pool.getPoolName()).isEqualTo("nimbo-pool");
+        assertThat(driverPool.getSize()).isEqualTo(20);
+        assertThat(driverPool.getConnectionTimeout()).isEqualTo(10_000L);
+        assertThat(driverPool.getPoolName()).isEqualTo("nimbo-pool");
     }
 
     @Test

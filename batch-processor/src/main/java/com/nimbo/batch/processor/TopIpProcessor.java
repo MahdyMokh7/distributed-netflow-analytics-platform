@@ -51,6 +51,8 @@ public class TopIpProcessor extends BaseProcessor {
             }
 
             Dataset<Row> aggregated = aggregateTopIps(files);
+            log.info("AGGREGATION COMPLETED.????????????????????????????????????????/");
+
 
             long recordCount = aggregated.count();
             log.info("Total unique IPs (src+dst): {}", recordCount);
@@ -70,6 +72,8 @@ public class TopIpProcessor extends BaseProcessor {
 
     private Dataset<Row> aggregateTopIps(List<Path> files) {
         Dataset<Row> parquetDf = readParquetFiles(files);
+
+        log.info("READ PARQUET FILES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 
         Dataset<Row> srcPerspective = parquetDf
                 .select(
@@ -120,7 +124,7 @@ public class TopIpProcessor extends BaseProcessor {
     }
 
     private void writeToConsole(Dataset<Row> aggregated) {
-        log.info("Top {} IPs by Bandwidth Consumption (per {} windows):", TOP_N, windowDuration);
+        log.info("Top {} IPs by Bandwidth Consumption in Console (per {} windows):", TOP_N, windowDuration);
         log.info("IP | Window Start | Window End | Outbound Bytes | " +
                 "Inbound Bytes | Outbound Packets | Inbound Packets");
         log.info("-".repeat(140));

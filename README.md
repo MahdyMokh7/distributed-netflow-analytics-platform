@@ -1,48 +1,217 @@
-## Run Batch-Processor  [Complete Flow: Build → Transfer → Run on Node3]
+Here's the updated README with the batch-processor run instructions replaced:
 
-### 1. Build JAR (Local Machine)
+---
+
+# Nimbo NetFlow Platform
+
+**A production-grade, end-to-end data processing pipeline for network telemetry analytics**
+
+![Platform: Kubernetes](https://img.shields.io/badge/Platform-Kubernetes-blue)
+![Java: 17](https://img.shields.io/badge/Java-17-blue)
+![Spark: 4.1.1](https://img.shields.io/badge/Spark-4.1.1-orange)
+![PostgreSQL: 16.2](https://img.shields.io/badge/PostgreSQL-16%2B-blue)
+![StarRocks: 4.0.12](https://img.shields.io/badge/StarRocks-4.0.12-purple)
+![REST API: Spring Boot](https://img.shields.io/badge/REST%20API-Spring%20Boot-brightgreen)
+![Spring Boot: 3.4.3](https://img.shields.io/badge/Spring%20Boot-3.4.3-brightgreen)
+![Kafka: 3.7.2](https://img.shields.io/badge/Kafka-3.7.2-red)
+![HDFS: Hadoop 3.3.6](https://img.shields.io/badge/HDFS-Hadoop%203.3.6-yellow)
+![Ansible: Automation](https://img.shields.io/badge/Ansible-Automation-orange)
+![Prometheus: Monitoring](https://img.shields.io/badge/Prometheus-Monitoring-red)
+![Grafana: Dashboards](https://img.shields.io/badge/Grafana-Dashboards-blue)
+
+---
+
+## 📖 Project Overview
+
+Nimbo is a Lambda Architecture-based platform for ingesting, processing, and querying NetFlow data at scale. The system ingests Avro-encoded network flow records from Kafka, persists them as columnar Parquet files, and provides both **batch** and **real-time** query capabilities through independent analytical paths.
+
+### The Problem We Solve
+
+Network operations and security teams need two fundamentally different types of queries:
+
+- **Operational queries:** "What is this IP doing right now?" — answered in seconds
+- **Analytical queries:** "How does this behavior compare to last month?" — requires pre-aggregated data
+
+Nimbo's dual-path architecture serves both use cases without compromising on data integrity or performance.
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              NIMBO DATA PIPELINE                                   │
+│                                                                                     │
+│  ┌──────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐         │
+│  │  Kafka   │───▶│   Ingester   │───▶│    HDFS     │───▶│   Spark     │         │
+│  │ (Avro)   │    │ (Consumer)   │    │  (Parquet)  │    │  Processor  │         │
+│  └──────────┘    └──────────────┘    └──────────────┘    └──────┬───────┘         │
+│         │               │                       │                 │                 │
+│         │               │                       │                 ▼                 │
+│         │               │                  PROCESSING_TIME    ┌──────────────┐      │
+│         │               │                  column added      │ PostgreSQL   │      │
+│         │               │                  at ingestion      │ 4 Aggregate  │      │
+│         │               │                                    │ Tables       │      │
+│         │               ▼                                    └──────────────┘      │
+│         │         ┌──────────────┐                                  │              │
+│         └────────▶│  StarRocks   │──────────┐                      │              │
+│                   │  Writer      │          │                      │              │
+│                   └──────────────┘          │                      │              │
+│                                              ▼                      ▼              │
+│                                     ┌──────────────────────────────────────┐      │
+│                                     │           REST API Layer            │      │
+│                                     │  ┌──────────┐  ┌──────────┐        │      │
+│                                     │  │ Batch    │  │Realtime │        │      │
+│                                     │  │ Queries  │  │ Queries │        │      │
+│                                     │  └──────────┘  └──────────┘        │      │
+│                                     └──────────────────────────────────────┘      │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Design Principles
+
+- **Zero Data Loss:** Manual offset commits only after successful persistence
+- **Horizontal Scalability:** Multi-consumer architecture with parallel writers
+- **Exactly-Once Semantics:** Atomic file operations + UPSERT with `batch_id` tracking
+- **Fault Tolerance:** Graceful shutdown with flush on termination, retry with backoff
+- **Auditability:** Every row tagged with `batch_id` for complete traceability
+
+---
+
+## 📦 Modules
+
+| Module | Description | Status |
+|--------|-------------|--------|
+| **batch-ingester** | Kafka → HDFS Parquet consumer with zero data loss | ✅ Complete |
+| **batch-processor** | Spark aggregations → PostgreSQL (Cube Maker) | ✅ Complete |
+| **realtime** | Kafka → StarRocks low-latency writer | ✅ Complete |
+| **rest-api** | Unified REST API for both batch and real-time queries | ✅ Complete |
+
+---
+
+## 🎯 Core Aggregations
+
+The platform supports four key network analytics queries:
+
+1. **Traffic Aggregation** — Bandwidth consumption per source IP per time window
+2. **Connection Aggregation** — 5-tuple connection details per time window
+3. **Protocol Usage** — L7 protocol usage statistics per time window
+4. **Top IP Bandwidth** — IPs with highest bandwidth consumption (bidirectional)
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Data Ingestion** | Kafka, Avro, Spring Boot |
+| **Storage (Batch)** | HDFS, Parquet |
+| **Storage (Realtime)** | StarRocks |
+| **Batch Processing** | Apache Spark 4.1.1, Scala 2.13 |
+| **Analytical DB** | PostgreSQL 15+ with range partitioning |
+| **API Layer** | Spring Boot, JDBI, JPA, Resilience4j |
+| **Containerization** | Docker, Jib |
+| **Orchestration** | Kubernetes |
+| **CI/CD** | Jenkins, Gerrit, SonarQube |
+
+---
+
+## 👥 Team
+
+| Role | Name | Responsibility |
+|------|------|----------------|
+| **Batch Path Lead** | **Mehdy Mokhtari** | Batch Ingester (Consumer), Batch Processor (Spark + PostgreSQL), REST API (Batch Queries) |
+| **Realtime Path Lead** | Sobhan Arshadi | Realtime Module (StarRocks Writer), REST API (Realtime Queries), DLQ Handling |
+| **Infrastructure Lead** | Amin Jangi | Batch Ingester (Storage Layer), CI/CD Pipeline, DevOps, Containerization |
+
+---
+
+## 📁 Project Structure
+
+```
+nimbo/
+├── batch-ingester/          # Kafka → HDFS consumer
+│   ├── consumer/            # Multi-instance Kafka consumer
+│   ├── deserializer/        # Avro deserialization
+│   ├── storage/             # HDFS + Parquet writing
+│   └── service/             # Validation, DLQ
+│
+├── batch-processor/         # Spark → PostgreSQL aggregations
+│   ├── processor/           # 4 aggregation processors
+│   ├── writer/              # JDBI-based PostgreSQL writer
+│   ├── discovery/           # Incremental file discovery
+│   └── model/               # Domain models
+│
+├── realtime/                # Kafka → StarRocks writer
+│   ├── consumer/            # StarRocks batch processor
+│   ├── mapper/              # Avro → StarRocks mapping
+│   └── client/              # StarRocks Stream Load client
+│
+├── rest-api/                # Unified REST API
+│   ├── controller/          # Versioned REST endpoints
+│   ├── service/             # Query services with caching
+│   ├── repository/          # JPA + StarRocks repositories
+│   └── dto/                 # Request/Response DTOs
+│
+└── docs/                    # Technical documentation
+    ├── architecture/        # Design decisions
+    ├── dev-guide/           # Development guides
+    ├── technical-report/    # Weekly reports
+    └── servers/             # Infrastructure documentation
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Java 17+
+- Docker & Docker Compose
+- Access to Kafka cluster (`10.10.61.51:9092`, `10.10.61.53:9092`, `10.10.61.54:9092`)
+- Access to HDFS (`hdfs://10.10.61.53:8020`)
+- PostgreSQL (`10.10.61.70:5432`)
+
+### Build
 
 ```bash
-cd ~/Desktop/nimbo/Nimbyte/batch-processor
-
-# Clean and package with tests skipped
+# Build all modules
 mvn clean package -DskipTests
+
+# Build specific module
+cd batch-processor && mvn clean package -DskipTests
 ```
 
-JAR location: `target/batch-processor-1.0.0-SNAPSHOT.jar`
+### Run Batch Processor
 
----
-
-### 2. Transfer JAR to Node3 (Local Machine)
+**Option 1: Run with Spring Boot (Development)**
 
 ```bash
+cd batch-processor
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+**Option 2: Run with Spark Submit (Production)**
+
+```bash
+# Transfer JAR to Node3
 scp target/batch-processor.jar team1@10.10.61.53:~/
-```
 
----
-
-### 3. Run on Node3 (Server)
-
-```bash
+# SSH into Node3 and run
 ssh team1@10.10.61.53
 
 # Run with prod profile
 java -jar batch-processor.jar --spring.profiles.active=prod
 
-java -jar batch-processor-1.0.0-SNAPSHOT.jar \
+# Or with custom schedule
+java -jar batch-processor.jar \
   --spring.profiles.active=prod \
   --batch.schedule="0 */1 * * * ?"
-  
-  
-kubectl exec -it -n team1 spark-spark-master-7b9bb87b78-ntjn4 -- \
-  spark-submit \
-  --master spark://spark-master:7077 \
-  --deploy-mode client \
-  --class com.nimbo.batch.BatchProcessorApplication \
-  /tmp/batch-processor.jar \
-  --spring.profiles.active=dev
-  
-  
+```
+
+**Option 3: Run in Docker with Spark**
+
+```bash
 docker run -it --rm \
   --network host \
   -v /home/team1/batch-processor-1.0.0-SNAPSHOT.jar:/app/batch-processor.jar \
@@ -53,469 +222,120 @@ docker run -it --rm \
   --class com.nimbo.batch.BatchProcessorApplication \
   /app/batch-processor.jar \
   --spring.profiles.active=prod
-  
-  
-mvn clean spring-boot:run -Dspring-boot.run.profiles=dev
-
-
-docker run -d   --name nimbo-postgres   -e POSTGRES_USER=nimbo_user   -e POSTGRES_PASSWORD=123456   -e POSTGRES_DB=nimbo_db   -p 5432:5432   postgres:16.2
-docker exec -it nimbo-postgres psql -U nimbo_user -d nimbo_db
-
 ```
 
-## Monitor
+### Connect to PostgreSQL
 
-- **Spark UI:** `http://10.10.61.71/`
-- **Spark History UI:** `http://10.10.61.72/`
-- **Logs:** `tail -f batch-processor.log`
-
-spark-ui ip : http://10.10.61.71/
-spark-ui history ip : http://10.10.61.72/
-
-
-
-## How to Edit on PostgreSQL DB
-
-### Clean path from your local system to `nimbo_db` as `nimbo_batch`
-
-Use **Node1** because your `kubectl` access works there:
+**Option 1: Via Kubernetes (Production)**
 
 ```bash
-# 1. From your local system
+# SSH to Node1
 ssh team1@10.10.61.51
 
-# 2. Switch to the Kubernetes user
+# Switch to Kubernetes user
 sudo su kubernetes
 
-# 3. Go to the kubernetes user's home (optional)
-cd /home/kubernetes
-
-# 4. Enter the PostgreSQL master pod
+# Enter PostgreSQL master pod
 kubectl exec -it -n team1 postgresql-postgresql-0 -- \
   psql -U postgres -d nimbo_db
 ```
 
-You should then see:
-
-```text
-nimbo_db=>
-```
-
-Then, inside `psql`, you can create tables:
-
-```sql
-CREATE TABLE example (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL
-);
-
-\dt
-```
-
-Also, **`psql -h ...` is a Linux command**, so don't type it inside the `nimbo_db=#` prompt. Inside `psql`, use SQL commands such as `CREATE TABLE`, or `\dt`, `\q`, etc.
-
-## PostgreSQL / `psql` Quick Guide
-
-### Connect
+**Option 2: Via Docker (Local Development)**
 
 ```bash
-psql -h HOST -p 5432 -U USER -d DATABASE
+# Run PostgreSQL container
+docker run -d \
+  --name nimbo-postgres \
+  -e POSTGRES_USER=nimbo_user \
+  -e POSTGRES_PASSWORD=123456 \
+  -e POSTGRES_DB=nimbo_db \
+  -p 5432:5432 \
+  postgres:16.2
+
+# Connect to PostgreSQL
+docker exec -it nimbo-postgres psql -U nimbo_user -d nimbo_db
 ```
 
-Example:
+### Run REST API
 
 ```bash
-psql -h 10.10.61.70 -p 5432 -U nimbo_user -d nimbo_db
+cd rest-api
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-### Tables
+### Deploy with Docker
 
-```sql
-\dt                         -- list tables
-\d table_name               -- describe table
-\d+ table_name              -- detailed description
+```bash
+# Build and push images
+mvn compile jib:build
+
+# Run with Docker Compose (local dev)
+docker-compose --profile full up -d
 ```
 
-### Create table
+---
 
-```sql
-CREATE TABLE users (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+## 📊 Database Schema
 
-### Insert
+The analytical store consists of five tables:
 
-```sql
-INSERT INTO users (name)
-VALUES ('Mahdi');
-```
+| Table | Purpose | Partition Key |
+|-------|---------|---------------|
+| `traffic_aggregates` | Source IP bandwidth per window | `window_start` |
+| `connection_aggregates` | 5-tuple connection details | `window_start` |
+| `protocol_usage_aggregates` | L7 protocol usage statistics | `window_start` |
+| `ip_bandwidth_aggregates` | IP bandwidth (bidirectional) | `window_start` |
+| `batch_processor_state` | Tracks processed Parquet files | — |
 
-### Select
+All aggregate tables use `batch_id` (UUID) in their primary keys for idempotency and auditability.
 
-```sql
-SELECT * FROM users;
-SELECT id, name FROM users;
-SELECT * FROM users WHERE id = 1;
-```
+---
 
-### Update
+## 🔄 CI/CD Pipeline
 
-```sql
-UPDATE users
-SET name = 'Ali'
-WHERE id = 1;
-```
+- **Build:** Maven with Jib for containerization
+- **Quality Gates:** SonarQube (minimum 80% coverage)
+- **Code Review:** Gerrit (mandatory for all changes)
+- **Deployment:** Jenkins → Kubernetes
 
-**Always use `WHERE` unless you intentionally want to update every row.**
+---
 
-### Delete
+## 📈 Monitoring & Observability
 
-```sql
-DELETE FROM users
-WHERE id = 1;
-```
+| Component | Endpoint |
+|-----------|----------|
+| **Spark UI** | `http://10.10.61.71/` |
+| **Spark History UI** | `http://10.10.61.72/` |
+| **PostgreSQL** | `10.10.61.70:5432` |
+| **REST API Actuator** | `/api/actuator/health` |
+| **StarRocks** | `10.10.61.51:8040` (stream load) |
 
-### Alter table
+---
 
-```sql
-ALTER TABLE users ADD COLUMN email VARCHAR(255);
+## 📚 Key Technical Decisions
 
-ALTER TABLE users DROP COLUMN email;
+| Decision | Rationale |
+|----------|-----------|
+| **Two Avro schemas** (wire + storage) | Prevent `EOFException` on Kafka deserialization |
+| **JDBI over manual JDBC** | Type-safe, 90% less code, maintainable |
+| **PROCESSING_TIME in ingester** | Consistent across reprocessing, correct for windowing |
+| **Fixed-width filename format** | Simple timestamp extraction, no parsing ambiguity |
+| **Sort-before-cap in file discovery** | Prevents file starvation with backlog |
+| **Decimal(38,0) for aggregations** | No overflow, keeps ANSI enabled |
+| **batch_id in PRIMARY KEY** | Idempotency + auditability + exactly-once semantics |
 
-ALTER TABLE users RENAME COLUMN name TO full_name;
+---
 
-ALTER TABLE users RENAME TO customers;
-```
+## 📝 License
 
-### Drop table
+This project is proprietary and confidential to the Nimbo team.
 
-```sql
-DROP TABLE users;
-```
+---
 
-Safer:
+## 🙏 Acknowledgments
 
-```sql
-DROP TABLE IF EXISTS users;
-```
+Built with guidance from senior engineers at the company bootcamp. Special thanks to the TPMs for their challenging questions during weekly reviews.
 
-### Databases
+---
 
-```sql
-\l                          -- list databases
-\c database_name            -- connect to another database
-```
-
-### Users / roles
-
-```sql
-\du                         -- list users/roles
-```
-
-Create:
-
-```sql
-CREATE USER myuser WITH PASSWORD 'password';
-```
-
-Change password:
-
-```sql
-ALTER USER myuser WITH PASSWORD 'new_password';
-```
-
-### Useful information
-
-```sql
-SELECT current_user;        -- current user
-SELECT current_database();  -- current database
-SELECT version();           -- PostgreSQL version
-```
-
-### Quit PostgreSQL
-
-```sql
-\q
-```
-
-### Clear terminal
-
-```sql
-\! clear
-```
-
-### Transactions — very useful
-
-```sql
-BEGIN;
-
-UPDATE users SET name = 'Test' WHERE id = 1;
-
-ROLLBACK;       -- undo changes
-```
-
-Or:
-
-```sql
-BEGIN;
-
-UPDATE users SET name = 'Test' WHERE id = 1;
-
-COMMIT;         -- permanently apply
-```
-
-### Important distinction
-
-Commands starting with `\` are **psql commands**:
-
-```text
-\dt
-\du
-\l
-\q
-```
-
-SQL commands are things like:
-
-```sql
-SELECT ...
-CREATE TABLE ...
-INSERT ...
-UPDATE ...
-DELETE ...
-ALTER TABLE ...
-```
-
-And **don't type `psql ...` while already inside `psql`**. `psql` is the Linux command used to enter PostgreSQL in the first place.
-
-
-
-
-## V_MIGRATION
-
--- 1. Protocol Dimension Table (Static Reference Data)
--- =====================================================================
-CREATE TABLE IF NOT EXISTS protocol_dim (
-id INTEGER PRIMARY KEY,
-name VARCHAR(50) NOT NULL,
-description VARCHAR(200),
-created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-COMMENT ON TABLE protocol_dim IS 'Static reference table for network protocols (L4 and L7)';
-COMMENT ON COLUMN protocol_dim.id IS 'Protocol code (e.g., 6=TCP, 17=UDP)';
-COMMENT ON COLUMN protocol_dim.name IS 'Protocol name (e.g., TCP, UDP)';
-COMMENT ON COLUMN protocol_dim.description IS 'Full protocol description';
-
--- 2. Traffic Aggregates Table
--- =====================================================================
-CREATE TABLE IF NOT EXISTS traffic_aggregates (
-id BIGSERIAL,
-src_ip VARCHAR(45) NOT NULL,
-window_start TIMESTAMP NOT NULL,
-window_end TIMESTAMP NOT NULL,
-in_bytes BIGINT NOT NULL CHECK (in_bytes >= 0),
-out_bytes BIGINT NOT NULL CHECK (out_bytes >= 0),
-in_packets BIGINT NOT NULL CHECK (in_packets >= 0),
-out_packets BIGINT NOT NULL CHECK (out_packets >= 0),
-record_count BIGINT NOT NULL CHECK (record_count >= 0),
-batch_id UUID NOT NULL,
-ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-PRIMARY KEY (src_ip, window_start, batch_id)
-) PARTITION BY RANGE (window_start);
-
-COMMENT ON TABLE traffic_aggregates IS 'IP bandwidth consumption by source IP per time window';
-COMMENT ON COLUMN traffic_aggregates.src_ip IS 'Source IP address (IPv4 or IPv6)';
-COMMENT ON COLUMN traffic_aggregates.window_start IS 'Start of the aggregation window';
-COMMENT ON COLUMN traffic_aggregates.window_end IS 'End of the aggregation window';
-COMMENT ON COLUMN traffic_aggregates.in_bytes IS 'Inbound bytes from this source IP';
-COMMENT ON COLUMN traffic_aggregates.out_bytes IS 'Outbound bytes from this source IP';
-COMMENT ON COLUMN traffic_aggregates.batch_id IS 'UUID identifying the batch run that produced this row';
-
-CREATE INDEX idx_traffic_src_ip_window ON traffic_aggregates(src_ip, window_start);
-CREATE INDEX idx_traffic_window_start ON traffic_aggregates(window_start);
-CREATE INDEX idx_traffic_batch_id ON traffic_aggregates(batch_id);
-
--- 3. Connection Aggregates Table
--- =====================================================================
-CREATE TABLE IF NOT EXISTS connection_aggregates (
-id VARCHAR(64),
-src_ip VARCHAR(45) NOT NULL,
-dst_ip VARCHAR(45) NOT NULL,
-src_port INTEGER NOT NULL,
-dst_port INTEGER NOT NULL,
-l4_protocol INTEGER NOT NULL REFERENCES protocol_dim(id),
-window_start TIMESTAMP NOT NULL,
-window_end TIMESTAMP NOT NULL,
-in_bytes BIGINT NOT NULL CHECK (in_bytes >= 0),
-out_bytes BIGINT NOT NULL CHECK (out_bytes >= 0),
-in_packets BIGINT NOT NULL CHECK (in_packets >= 0),
-out_packets BIGINT NOT NULL CHECK (out_packets >= 0),
-batch_id UUID NOT NULL,
-ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-PRIMARY KEY (id, window_start, batch_id)
-) PARTITION BY RANGE (window_start);
-
-COMMENT ON TABLE connection_aggregates IS 'IP connection details (5-tuple) per time window';
-COMMENT ON COLUMN connection_aggregates.id IS 'SHA-256 hash of (src_ip|dst_ip|src_port|dst_port|l4_protocol|window_start)';
-COMMENT ON COLUMN connection_aggregates.l4_protocol IS 'Layer 4 protocol code (references protocol_dim)';
-COMMENT ON COLUMN connection_aggregates.batch_id IS 'UUID identifying the batch run that produced this row';
-
-CREATE INDEX idx_connections_src_ip_window ON connection_aggregates(src_ip, window_start);
-CREATE INDEX idx_connections_dst_ip_window ON connection_aggregates(dst_ip, window_start);
-CREATE INDEX idx_connections_window_start ON connection_aggregates(window_start);
-CREATE INDEX idx_connections_batch_id ON connection_aggregates(batch_id);
-
--- 4. Protocol Usage Aggregates Table
--- =====================================================================
-CREATE TABLE IF NOT EXISTS protocol_usage_aggregates (
-id BIGSERIAL,
-l7_protocol DOUBLE PRECISION NOT NULL,
-window_start TIMESTAMP NOT NULL,
-window_end TIMESTAMP NOT NULL,
-in_bytes BIGINT NOT NULL CHECK (in_bytes >= 0),
-out_bytes BIGINT NOT NULL CHECK (out_bytes >= 0),
-in_packets BIGINT NOT NULL CHECK (in_packets >= 0),
-out_packets BIGINT NOT NULL CHECK (out_packets >= 0),
-connection_count BIGINT NOT NULL CHECK (connection_count >= 0),
-batch_id UUID NOT NULL,
-ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-PRIMARY KEY (l7_protocol, window_start, batch_id)
-) PARTITION BY RANGE (window_start);
-
-COMMENT ON TABLE protocol_usage_aggregates IS 'Protocol usage statistics (L7 application layer) per time window';
-COMMENT ON COLUMN protocol_usage_aggregates.l7_protocol IS 'Layer 7 protocol identifier (e.g., 6.0=TCP, 17.0=UDP, 53.0=DNS)';
-COMMENT ON COLUMN protocol_usage_aggregates.connection_count IS 'Number of connections using this protocol';
-COMMENT ON COLUMN protocol_usage_aggregates.batch_id IS 'UUID identifying the batch run that produced this row';
-
-CREATE INDEX idx_protocol_l7_window ON protocol_usage_aggregates(l7_protocol, window_start);
-CREATE INDEX idx_protocol_window_start ON protocol_usage_aggregates(window_start);
-CREATE INDEX idx_protocol_batch_id ON protocol_usage_aggregates(batch_id);
-
--- 5. IP Bandwidth Aggregates Table
--- =====================================================================
-CREATE TABLE IF NOT EXISTS ip_bandwidth_aggregates (
-id BIGSERIAL,
-ip VARCHAR(45) NOT NULL,
-window_start TIMESTAMP NOT NULL,
-window_end TIMESTAMP NOT NULL,
-inbound_bytes BIGINT NOT NULL CHECK (inbound_bytes >= 0),
-outbound_bytes BIGINT NOT NULL CHECK (outbound_bytes >= 0),
-inbound_packets BIGINT NOT NULL CHECK (inbound_packets >= 0),
-outbound_packets BIGINT NOT NULL CHECK (outbound_packets >= 0),
-batch_id UUID NOT NULL,
-ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-UNIQUE(ip, window_start),
-PRIMARY KEY (ip, window_start, batch_id)
-) PARTITION BY RANGE (window_start);
-
-COMMENT ON TABLE ip_bandwidth_aggregates IS 'Top IPs by bandwidth consumption (unified source+dst perspective)';
-COMMENT ON COLUMN ip_bandwidth_aggregates.ip IS 'IP address (appears as either source or destination)';
-COMMENT ON COLUMN ip_bandwidth_aggregates.inbound_bytes IS 'Bytes received by this IP';
-COMMENT ON COLUMN ip_bandwidth_aggregates.outbound_bytes IS 'Bytes sent by this IP';
-COMMENT ON COLUMN ip_bandwidth_aggregates.batch_id IS 'UUID identifying the batch run that produced this row';
-
-CREATE INDEX idx_bandwidth_ip_window ON ip_bandwidth_aggregates(ip, window_start);
-CREATE INDEX idx_bandwidth_window_start ON ip_bandwidth_aggregates(window_start);
-CREATE INDEX idx_bandwidth_batch_id ON ip_bandwidth_aggregates(batch_id);
-
--- =====================================================================
--- Nimbo Batch Processor - Seed Protocol Dimension Data (V2)
--- =====================================================================
-
-INSERT INTO protocol_dim (id, name, description) VALUES
-(1, 'ICMP', 'Internet Control Message Protocol'),
-(2, 'IGMP', 'Internet Group Management Protocol'),
-(6, 'TCP', 'Transmission Control Protocol'),
-(17, 'UDP', 'User Datagram Protocol'),
-(50, 'ESP', 'Encapsulating Security Payload'),
-(51, 'AH', 'Authentication Header'),
-(89, 'OSPF', 'Open Shortest Path First'),
-(132, 'SCTP', 'Stream Control Transmission Protocol')
-ON CONFLICT (id) DO NOTHING;
-
-COMMENT ON TABLE protocol_dim IS 'Static reference table for network protocols (L4 and L7)';
-
-DO $$
-DECLARE
-start_date DATE := date_trunc('month', CURRENT_DATE);
-end_date DATE := date_trunc('month', CURRENT_DATE + INTERVAL '1 month');
-month_label TEXT;
-BEGIN
-month_label := to_char(start_date, 'YYYY_MM');
-
-    -- Traffic Aggregates
-EXECUTE format('
-CREATE TABLE IF NOT EXISTS traffic_aggregates_%s
-PARTITION OF traffic_aggregates
-FOR VALUES FROM (%L) TO (%L)',
-month_label, start_date, end_date
-);
-
--- Connection Aggregates
-EXECUTE format('
-CREATE TABLE IF NOT EXISTS connection_aggregates_%s
-PARTITION OF connection_aggregates
-FOR VALUES FROM (%L) TO (%L)',
-month_label, start_date, end_date
-);
-
--- Protocol Usage Aggregates
-EXECUTE format('
-CREATE TABLE IF NOT EXISTS protocol_usage_aggregates_%s
-PARTITION OF protocol_usage_aggregates
-FOR VALUES FROM (%L) TO (%L)',
-month_label, start_date, end_date
-);
-
--- IP Bandwidth Aggregates
-EXECUTE format('
-CREATE TABLE IF NOT EXISTS ip_bandwidth_aggregates_%s
-PARTITION OF ip_bandwidth_aggregates
-FOR VALUES FROM (%L) TO (%L)',
-month_label, start_date, end_date
-);
-
-RAISE NOTICE 'Created partitions for month: %', month_label;
-END;
-$$;
-
--- Verify partitions exist
-SELECT
-c.relname AS partition_name,
-pg_get_expr(c.relpartbound, c.oid) AS partition_range,
-c.reltuples::bigint AS estimated_rows
-FROM
-pg_class c
-JOIN pg_inherits i ON c.oid = i.inhrelid
-JOIN pg_class p ON p.oid = i.inhparent
-WHERE
-p.relname = 'traffic_aggregates'
-OR p.relname = 'connection_aggregates'
-OR p.relname = 'protocol_usage_aggregates'
-OR p.relname = 'ip_bandwidth_aggregates'
-ORDER BY
-p.relname, c.relname;
-
--- Batch Processor State Table
--- Tracks which Parquet files have been successfully processed for incremental reading
-CREATE TABLE IF NOT EXISTS batch_processor_state (
-id BIGSERIAL PRIMARY KEY,
-file_name VARCHAR(255) NOT NULL UNIQUE,
-file_timestamp TIMESTAMP NOT NULL,
-batch_id UUID NOT NULL,
-processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-COMMENT ON TABLE batch_processor_state IS 'Tracks processed Parquet files for incremental reading (Topic 4)';
-COMMENT ON COLUMN batch_processor_state.file_name IS 'Name of the Parquet file processed (e.g., netflow-p0-2026-08-27T10-30-00Z-abc.parquet)';
-COMMENT ON COLUMN batch_processor_state.file_timestamp IS 'Timestamp extracted from filename (UTC)';
-COMMENT ON COLUMN batch_processor_state.batch_id IS 'UUID of the batch run that processed this file';
-COMMENT ON COLUMN batch_processor_state.processed_at IS 'When this file was marked as processed';
-
-CREATE INDEX idx_file_timestamp ON batch_processor_state(file_timestamp);
-CREATE INDEX idx_batch_id ON batch_processor_state(batch_id);
-CREATE INDEX idx_file_name ON batch_processor_state(file_name);
+*Last Updated: September 2026*

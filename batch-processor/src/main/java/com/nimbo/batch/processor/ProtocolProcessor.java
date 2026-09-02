@@ -52,6 +52,8 @@ public class ProtocolProcessor extends BaseProcessor {
             }
 
             Dataset<Row> aggregated = aggregateProtocols(files);
+            log.info("AGGREGATION COMPLETED.????????????????????????????????????????/");
+
 
             long recordCount = aggregated.count();
             log.info("Total protocol aggregation records: {}", recordCount);
@@ -71,6 +73,9 @@ public class ProtocolProcessor extends BaseProcessor {
 
     private Dataset<Row> aggregateProtocols(List<Path> files) {
         Dataset<Row> parquetDf = readParquetFiles(files);
+
+        log.info("READ PARQUET FILES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
 
         return parquetDf
                 .groupBy(
@@ -100,7 +105,7 @@ public class ProtocolProcessor extends BaseProcessor {
     }
 
     private void writeToConsole(Dataset<Row> aggregated) {
-        log.info("Top 20 Protocol Statistics (by usage):");
+        log.info("Top 20 Protocol Statistics in Console (by usage):");
         log.info("L7 Proto | Window Start | Window End | In Bytes | " +
                 "Out Bytes | In Packets | Out Packets | Connection Count");
         log.info("-".repeat(140));

@@ -3,6 +3,13 @@ package com.nimbo.batch.constants;
 public final class ColumnConstants {
     private ColumnConstants() {}
 
+    // ============ Table Names ============
+    public static final String TABLE_TRAFFIC_AGGREGATES = "traffic_aggregates";
+    public static final String TABLE_CONNECTION_AGGREGATES = "connection_aggregates";
+    public static final String TABLE_PROTOCOL_USAGE_AGGREGATES = "protocol_usage_aggregates";
+    public static final String TABLE_IP_BANDWIDTH_AGGREGATES = "ip_bandwidth_aggregates";
+    public static final String TABLE_BATCH_PROCESSOR_STATE = "batch_processor_state";
+
     // ============ Database Column Names ============
     // Common
     public static final String COL_WINDOW_START = "window_start";

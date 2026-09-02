@@ -26,23 +26,5 @@ public class JdbiConfig {
         return jdbi.onDemand(BatchStateDao.class);
     }
 
-    @Bean
-    public TrafficAggregateDao trafficAggregateDao(Jdbi jdbi) {
-        return jdbi.onDemand(TrafficAggregateDao.class);
-    }
-
-    @Bean
-    public ConnectionAggregateDao connectionAggregateDao(Jdbi jdbi) {
-        return jdbi.onDemand(ConnectionAggregateDao.class);
-    }
-
-    @Bean
-    public ProtocolAggregateDao protocolAggregateDao(Jdbi jdbi) {
-        return jdbi.onDemand(ProtocolAggregateDao.class);
-    }
-
-    @Bean
-    public IpBandwidthAggregateDao ipBandwidthAggregateDao(Jdbi jdbi) {
-        return jdbi.onDemand(IpBandwidthAggregateDao.class);
-    }
+    // I removed the other 4 DAO beans because now they are all created in each executor (not in driver)
 }

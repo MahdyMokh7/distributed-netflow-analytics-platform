@@ -60,6 +60,7 @@ public class TrafficAggregationProcessor extends BaseProcessor {
             }
 
             Dataset<Row> aggregated = aggregateTraffic(files);
+            log.info("AGGREGATION COMPLETED.????????????????????????????????????????");
 
             long recordCount = aggregated.count();
             log.info("Total aggregation records: {}", recordCount);
@@ -79,6 +80,8 @@ public class TrafficAggregationProcessor extends BaseProcessor {
 
     private Dataset<Row> aggregateTraffic(List<Path> files) {
         Dataset<Row> parquetDf = readParquetFiles(files);
+
+        log.info("READ PARQUET FILES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 
         return parquetDf
                 .groupBy(
@@ -108,7 +111,7 @@ public class TrafficAggregationProcessor extends BaseProcessor {
     }
 
     private void writeToConsole(Dataset<Row> aggregated) {
-        log.info("Top 20 Traffic Aggregations (Source IP):");
+        log.info("Top 20 Traffic Aggregations in Console (Source IP):");
         log.info("Src IP | Window Start | Window End | In Bytes | Out Bytes | In Packets | Out Packets | Record Count");
         log.info("-".repeat(140));
 

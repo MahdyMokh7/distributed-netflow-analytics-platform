@@ -53,6 +53,7 @@ public class ConnectionProcessor extends BaseProcessor {
             }
 
             Dataset<Row> aggregated = aggregateConnections(files);
+            log.info("AGGREGATION COMPLETED.????????????????????????????????????????/");
 
             long recordCount = aggregated.count();
             log.info("Total connection aggregation records: {}", recordCount);
@@ -72,6 +73,8 @@ public class ConnectionProcessor extends BaseProcessor {
 
     private Dataset<Row> aggregateConnections(List<Path> files) {
         Dataset<Row> parquetDf = readParquetFiles(files);
+
+        log.info("READ PARQUET FILES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 
         return parquetDf
                 .groupBy(
@@ -112,7 +115,7 @@ public class ConnectionProcessor extends BaseProcessor {
     }
 
     private void writeToConsole(Dataset<Row> aggregated) {
-        log.info("Top 20 Connection Aggregations ({} windows):", windowDuration);
+        log.info("Top 20 Connection Aggregations in Console ({} windows):", windowDuration);
         log.info("Id | Src IP | Dst IP | Src Port | Dst Port | Protocol | Window Start " +
                 "| Window End | In Bytes | Out Bytes | In Packets | Out Packets");
         log.info("-".repeat(140));

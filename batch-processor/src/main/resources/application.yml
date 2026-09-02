@@ -2,7 +2,7 @@ spring:
   application:
     name: batch-processor
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:prod}
 
   flyway:
     enabled: true
@@ -15,6 +15,7 @@ logging:
     com.nimbo.batch: INFO
     org.apache.spark: WARN
     org.apache.hadoop: WARN
+    org.apache.parquet: WARN
 
 management:
   endpoints:
@@ -24,8 +25,10 @@ management:
   endpoint:
     health:
       show-details: always
-
   metrics:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+test:
+  property: "hello-world"

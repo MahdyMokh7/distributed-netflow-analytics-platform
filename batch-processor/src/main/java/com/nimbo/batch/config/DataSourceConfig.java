@@ -24,9 +24,9 @@ public class DataSourceConfig {
         config.setUsername(postgresConfig.getUsername());
         config.setPassword(postgresConfig.getPassword());
 
-        config.setMaximumPoolSize(postgresConfig.getPool().getSize());
-        config.setConnectionTimeout(postgresConfig.getPool().getConnectionTimeout());
-        config.setPoolName(postgresConfig.getPool().getPoolName());
+        config.setMaximumPoolSize(postgresConfig.getDriverPool().getSize());  // 2 for BatchStateDao + 1 for Flyway
+        config.setConnectionTimeout(postgresConfig.getDriverPool().getConnectionTimeout());
+        config.setPoolName(postgresConfig.getDriverPool().getPoolName());
 
         return new HikariDataSource(config);
     }
