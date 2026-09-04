@@ -5,6 +5,7 @@ import com.nimbo.ingester.deserializer.AvroDeserializer;
 import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
 import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.metrics.BatchIngesterMetrics;
 import com.nimbo.storage.exception.StorageException;
 import com.nimbo.storage.model.TopicPartitionKey;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -51,6 +52,9 @@ class NetflowConsumerTest {
 
     private NetflowConsumer netflowConsumer;
 
+    @Mock
+    private BatchIngesterMetrics metrics;
+
     @BeforeEach
     void setUp() {
         lenient().when(kafkaProperties.getTopic()).thenReturn("test-topic");
@@ -73,7 +77,8 @@ class NetflowConsumerTest {
                 validationService,
                 dlqService,
                 kafkaOffsetCommitter,
-                1
+                1,
+                metrics
         );
     }
 
@@ -88,7 +93,8 @@ class NetflowConsumerTest {
                 validationService,
                 dlqService,
                 kafkaOffsetCommitter,
-                1
+                1,
+                metrics
         );
 
         NetflowConsumer consumer2 = new NetflowConsumer(
@@ -99,7 +105,8 @@ class NetflowConsumerTest {
                 validationService,
                 dlqService,
                 kafkaOffsetCommitter,
-                2
+                2,
+                metrics
         );
 
         assertThat(consumer1).isNotNull();

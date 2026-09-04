@@ -4,6 +4,7 @@ import com.nimbo.ingester.config.KafkaProperties;
 import com.nimbo.ingester.deserializer.AvroDeserializer;
 import com.nimbo.ingester.service.DlqService;
 import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.metrics.BatchIngesterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.service.batching.BatchPolicy;
@@ -73,6 +74,9 @@ class ConsumerManagerTest {
     @Mock
     private Schema storageSchema;
 
+    @Mock
+    private BatchIngesterMetrics metrics;
+
     private ConsumerManager consumerManager;
 
     @BeforeEach
@@ -112,7 +116,8 @@ class ConsumerManagerTest {
                 kafkaConsumerFactory,
                 hdfsFileSystemFactory,
                 kafkaOffsetCommitter,
-                storageSchema
+                storageSchema,
+                metrics
         );
     }
 
@@ -145,7 +150,8 @@ class ConsumerManagerTest {
                 kafkaConsumerFactory,
                 hdfsFileSystemFactory,
                 kafkaOffsetCommitter,
-                storageSchema
+                storageSchema,
+                metrics
         );
 
         assertThatCode(() -> consumerManager.start()).doesNotThrowAnyException();
@@ -168,7 +174,8 @@ class ConsumerManagerTest {
                 kafkaConsumerFactory,
                 hdfsFileSystemFactory,
                 kafkaOffsetCommitter,
-                storageSchema
+                storageSchema,
+                metrics
         );
 
         assertThatCode(() -> consumerManager.start()).doesNotThrowAnyException();

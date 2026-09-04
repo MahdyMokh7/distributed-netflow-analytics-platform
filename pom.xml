@@ -41,6 +41,7 @@
         <lombok.version>1.18.36</lombok.version>
         <confluent.version>7.8.0</confluent.version>
         <testcontainers.version>1.21.4</testcontainers.version>
+        <awaitility.version>4.2.2</awaitility.version>
 
         <spark.version>4.1.1</spark.version>
         <scala.version>2.13</scala.version>
@@ -186,6 +187,13 @@
                 <groupId>org.testcontainers</groupId>
                 <artifactId>junit-jupiter</artifactId>
                 <version>${testcontainers.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.awaitility</groupId>
+                <artifactId>awaitility</artifactId>
+                <version>${awaitility.version}</version>
+                <scope>test</scope>
             </dependency>
 
         </dependencies>

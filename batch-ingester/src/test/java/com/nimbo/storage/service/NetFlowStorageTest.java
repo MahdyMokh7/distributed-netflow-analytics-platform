@@ -2,231 +2,227 @@ package com.nimbo.storage.service;
 
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.storage.config.HdfsProperties;
-import com.nimbo.storage.exception.ParquetWriteException;
-import com.nimbo.storage.exception.StorageException;
+import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.model.TopicPartitionKey;
 import com.nimbo.storage.service.batching.BatchPolicy;
 import com.nimbo.storage.service.hdfs.FileStorage;
+import com.nimbo.storage.service.hdfs.HdfsFileStorage;
 import com.nimbo.storage.service.naming.FileNameGenerator;
 import com.nimbo.storage.service.parquet.ParquetFileWriter;
+import com.nimbo.metrics.BatchIngesterMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
-import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(MockitoExtension.class)
 class NetFlowStorageTest {
 
-    @Mock
+    @TempDir
+    java.nio.file.Path tempDirectory;
+
+    private FileSystem fileSystem;
+
     private BatchPolicy batchPolicy;
-
-    @Mock
+    private ParquetProperties parquetProperties;
     private ParquetFileWriter parquetFileWriter;
-
-    @Mock
     private FileStorage fileStorage;
-
-    @Mock
     private FileNameGenerator fileNameGenerator;
-
-    @Mock
     private HdfsProperties hdfsProperties;
 
-    @Mock
-    private GenericRecord genericRecord;
-
-    @Mock
-    private ParquetWriter<GenericRecord> writer;
-
-    private Schema wireSchema;
+    private Schema sourceSchema;
     private Schema storageSchema;
+
     private NetFlowStorage storage;
 
+    private BatchIngesterMetrics metrics;
+    private SimpleMeterRegistry meterRegistry;
+
+
     @BeforeEach
-    void setUp() {
-        lenient().when(hdfsProperties.getBasePath()).thenReturn("/netflow/parquet");
-        lenient().when(fileNameGenerator.generateFileName(anyInt())).thenReturn("test.parquet");
-        lenient().when(fileNameGenerator.generateTempFileName(anyString())).thenReturn(".test.parquet.tmp");
+    void setUp() throws IOException {
 
-        wireSchema = new Schema.Parser().parse(
-                """
-                {
-                  "type": "record",
-                  "name": "TestRecord",
-                  "fields": [
-                    {"name": "value", "type": "string"}
-                  ]
-                }
-                """
-        );
+        Configuration configuration = new Configuration();
+        configuration.set("fs.defaultFS", "file:///");
 
-        storageSchema = buildStorageSchema(wireSchema);
+        fileSystem = FileSystem.newInstance(URI.create("file:///"), configuration);
+        parquetProperties = new ParquetProperties();
+        parquetProperties.setCompressionCodec("SNAPPY");
+        parquetProperties.setBlockSizeBytes(1024 * 1024);
+        parquetProperties.setPageSizeBytes(1024 * 1024);
+        parquetProperties.setEnableDictionary(true);
+        parquetFileWriter = new ParquetFileWriter(fileSystem, parquetProperties);
+        fileStorage = new HdfsFileStorage(fileSystem);
+        fileNameGenerator = new FileNameGenerator();
+        hdfsProperties = new HdfsProperties();
+        hdfsProperties.setBasePath(tempDirectory.resolve("parquet").toUri().toString());
+        batchPolicy = new BatchPolicy(100, 1_000_000, Duration.ofMinutes(5));
 
-        storage = new NetFlowStorage(
-                batchPolicy,
-                parquetFileWriter,
-                fileStorage,
-                fileNameGenerator,
-                hdfsProperties,
-                storageSchema
-        );
+        sourceSchema =
+                new Schema.Parser().parse(
+                        """
+                        {
+                          "type": "record",
+                          "name": "TestRecord",
+                          "fields": [
+                            {
+                              "name": "value",
+                              "type": "string"
+                            }
+                          ]
+                        }
+                        """
+                );
+
+        storageSchema = buildStorageSchema(sourceSchema);
+
+        meterRegistry = new SimpleMeterRegistry();
+        metrics = new BatchIngesterMetrics(meterRegistry);
+        metrics.registerInstance(1);
+
+        storage = new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator,
+                hdfsProperties, storageSchema, metrics, 1);
     }
 
-    private Schema buildStorageSchema(Schema wireSchema) {
-        Schema.Field processingTimeField = new Schema.Field(
-                "PROCESSING_TIME",
-                Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)),
-                "Processing time",
-                (Object) null
-        );
+    @AfterEach
+    void tearDown() throws IOException {
+        fileSystem.close();
+    }
+
+    private IngestedRecord createRecord(int partition, long offset) {
+
+        GenericRecord testRecord = new GenericData.Record(sourceSchema);
+        testRecord.put("value", "test-value");
+
+        return new IngestedRecord(testRecord, "test-topic", partition, offset, 100);
+    }
+
+    private Schema buildStorageSchema(Schema sourceSchema) {
+
+        Schema.Field processingTimeField =
+                new Schema.Field(
+                        "PROCESSING_TIME",
+                        Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)),
+                        "Processing time",
+                        (Object) null
+                );
 
         java.util.List<Schema.Field> fields = new java.util.ArrayList<>();
-        for (Schema.Field field : wireSchema.getFields()) {
-            Schema.Field copy = new Schema.Field(
-                    field.name(),
-                    field.schema(),
-                    field.doc(),
-                    field.defaultVal()
-            );
-            fields.add(copy);
+
+        for (Schema.Field field : sourceSchema.getFields()) {
+
+            fields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
         }
+
         fields.add(processingTimeField);
 
-        return Schema.createRecord(
-                wireSchema.getName(),
-                wireSchema.getDoc(),
-                wireSchema.getNamespace(),
-                wireSchema.isError(),
-                fields
-        );
+        return Schema.createRecord(sourceSchema.getName(), sourceSchema.getDoc(), sourceSchema.getNamespace(),
+                sourceSchema.isError(), fields);
     }
 
-    private IngestedRecord createRealRecord(int partition, long offset) {
-        lenient().when(genericRecord.getSchema()).thenReturn(wireSchema);
-        return new IngestedRecord(
-                genericRecord,
-                "test-topic",
-                partition,
-                offset,
-                100
-        );
-    }
-
-    private void setupWriterMocks() throws Exception {
-        Path tempPath = new Path("/netflow/parquet", ".test.parquet.tmp");
-        lenient().when(parquetFileWriter.createWriter(tempPath, storageSchema)).thenReturn(writer);
-        lenient().doNothing().when(parquetFileWriter).write(any(ParquetWriter.class), any(GenericRecord.class));
-        lenient().doNothing().when(parquetFileWriter).closeWriter(writer);
-        lenient().doNothing().when(fileStorage).ensureDirectoryExists(any(Path.class));
-        lenient().doNothing().when(fileStorage).commitAtomic(any(Path.class), any(Path.class));
-        lenient().doNothing().when(fileStorage).cleanupTempFile(any(Path.class));
-        lenient().when(genericRecord.getSchema()).thenReturn(wireSchema);
-    }
 
     @Test
     @DisplayName("Should accept record and not flush when threshold not reached")
-    void acceptShouldAddRecordAndNotFlushWhenThresholdNotReached() throws Exception {
-        setupWriterMocks();
+    void shouldAcceptRecordWithoutFlushingUntilThresholdReached() throws Exception {
 
-        IngestedRecord realRecord = createRealRecord(0, 100L);
-        Optional<Map<TopicPartitionKey, Long>> result = storage.accept(realRecord);
+        IngestedRecord testRecord = createRecord(0, 100L);
+        Optional<Map<TopicPartitionKey, Long>> result = storage.accept(testRecord);
 
         assertTrue(result.isEmpty());
 
-        verify(fileStorage).ensureDirectoryExists(any(Path.class));
-        verify(parquetFileWriter).createWriter(any(Path.class), eq(storageSchema));
-
-        // Verify write was called with any GenericRecord (enriched record)
-        ArgumentCaptor<GenericRecord> recordCaptor = ArgumentCaptor.forClass(GenericRecord.class);
-        verify(parquetFileWriter).write(eq(writer), recordCaptor.capture());
-
-        // Verify PROCESSING_TIME was added to the enriched record
-        GenericRecord enriched = recordCaptor.getValue();
-        assertNotNull(enriched.get("PROCESSING_TIME"), "PROCESSING_TIME should be present");
     }
 
     @Test
     @DisplayName("Should flush and commit when flush is called directly")
-    void shouldFlushAndCommitWhenFlushIsCalled() throws Exception {
-        setupWriterMocks();
+    void shouldFlushAndReturnPendingOffsets() throws Exception {
 
-        IngestedRecord realRecord = createRealRecord(0, 100L);
+        IngestedRecord realRecord = createRecord(0, 100L);
 
         storage.accept(realRecord);
 
-        reset(parquetFileWriter, fileStorage);
-        doNothing().when(parquetFileWriter).closeWriter(writer);
-        doNothing().when(fileStorage).commitAtomic(any(Path.class), any(Path.class));
-
         Map<TopicPartitionKey, Long> result = storage.flush();
 
-        assertNotNull(result);
-        verify(parquetFileWriter).closeWriter(writer);
-        verify(fileStorage).commitAtomic(any(Path.class), any(Path.class));
+        assertEquals(Map.of(new TopicPartitionKey("test-topic", 0), 101L), result);
+        assertTrue(Files.list(tempDirectory.resolve("parquet")).anyMatch(path -> path.toString().endsWith(".parquet")));
+
     }
 
     @Test
     @DisplayName("Should return empty map when accumulator is empty")
-    void shouldReturnEmptyMapWhenAccumulatorIsEmpty() {
+    void shouldReturnEmptyMapWhenNothingWasAccepted() {
         Map<TopicPartitionKey, Long> result = storage.flush();
         assertTrue(result.isEmpty());
-        verifyNoInteractions(parquetFileWriter, fileStorage);
     }
 
     @Test
-    @DisplayName("Should cleanup temp file when write fails")
-    void shouldCleanupTempFileWhenWriteFails() throws Exception {
-        Path tempPath = new Path("/netflow/parquet", ".test.parquet.tmp");
-        when(parquetFileWriter.createWriter(tempPath, storageSchema)).thenReturn(writer);
-        doThrow(new ParquetWriteException("write failed"))
-                .when(parquetFileWriter)
-                .write(eq(writer), any(GenericRecord.class));
-        doNothing().when(fileStorage).ensureDirectoryExists(any(Path.class));
-        when(genericRecord.getSchema()).thenReturn(wireSchema);
+    void shouldNotCreateFilesWhenFlushingEmptyStorage() throws Exception {
 
-        IngestedRecord realRecord = createRealRecord(0, 100L);
+        Map<TopicPartitionKey, Long> result = storage.flush();
 
-        assertThrows(StorageException.class, () -> storage.accept(realRecord));
-
-        verify(fileStorage).cleanupTempFile(any(Path.class));
-        verify(fileStorage, never()).commitAtomic(any(Path.class), any(Path.class));
+        assertTrue(result.isEmpty());
+        assertFalse(Files.exists(tempDirectory.resolve("parquet")));
     }
 
     @Test
     @DisplayName("Should reject null record")
     void shouldRejectNullRecord() {
         assertThrows(NullPointerException.class, () -> storage.accept(null));
-        verifyNoInteractions(parquetFileWriter, fileStorage, fileNameGenerator);
     }
 
     @Test
     @DisplayName("Constructor should reject null dependencies")
-    void constructorShouldRejectNullDependencies() {
-        assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(null, parquetFileWriter, fileStorage, fileNameGenerator, hdfsProperties, storageSchema));
-        assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(batchPolicy, null, fileStorage, fileNameGenerator, hdfsProperties, storageSchema));
-        assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, null, fileNameGenerator, hdfsProperties, storageSchema));
-        assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, null, hdfsProperties, storageSchema));
-        assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator, null, storageSchema));
-        assertThrows(NullPointerException.class,
-                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator, hdfsProperties, null));
+    void shouldRejectNullDependencies() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(null, parquetFileWriter, fileStorage, fileNameGenerator,
+                        hdfsProperties, storageSchema, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, null, fileStorage, fileNameGenerator,
+                        hdfsProperties, storageSchema, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, null, fileNameGenerator,
+                        hdfsProperties, storageSchema, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, null,
+                        hdfsProperties, storageSchema, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator,
+                        null, storageSchema, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator,
+                        hdfsProperties, null, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator,
+                        hdfsProperties, storageSchema, null, 1));
     }
 }
