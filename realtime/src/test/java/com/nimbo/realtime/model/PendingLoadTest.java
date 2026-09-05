@@ -29,6 +29,7 @@ class PendingLoadTest {
                 new OffsetAndMetadata(10)
         );
         assertThat(load.future()).isSameAs(future);
+        assertThat(load.ageSeconds()).isGreaterThanOrEqualTo(0);
     }
 
     @Test
@@ -39,5 +40,8 @@ class PendingLoadTest {
         PendingLoad load = new PendingLoad("label", 1, Map.of(), future);
 
         assertThat(load.future().isDone()).isTrue();
+
+        load.markCompleted();
+        assertThat(load.drainDelayNanos()).isGreaterThanOrEqualTo(0);
     }
 }

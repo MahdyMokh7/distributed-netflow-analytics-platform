@@ -5,6 +5,7 @@ import com.nimbo.realtime.streamload.StarRocksStreamLoadClient;
 import com.nimbo.realtime.config.KafkaProperties;
 import com.nimbo.realtime.config.StarRocksProperties;
 import com.nimbo.realtime.mapper.StarRocksRecordMapper;
+import com.nimbo.realtime.metrics.RealtimeMetrics;
 import com.nimbo.realtime.processing.BatchBuffer;
 import com.nimbo.realtime.processing.BatchProcessor;
 import com.nimbo.realtime.processing.InFlightLoadManager;
@@ -28,20 +29,23 @@ public class ConsumerWorkerFactory {
     private final NetflowValidationService validationService;
     private final StarRocksRecordMapper mapper;
     private final StarRocksStreamLoadClient streamLoadClient;
+    private final RealtimeMetrics metrics;
 
     public ConsumerWorker createWorker(int workerNumber) {
         KafkaConsumer<byte[], byte[]> consumer = createKafkaConsumer();
+        metrics.registerWorker(workerNumber);
+        metrics.bindKafkaConsumer(workerNumber, consumer);
         BatchBuffer batchBuffer = new BatchBuffer(starRocksProperties);
-        InFlightLoadManager inFlightLoadManager = new InFlightLoadManager(starRocksProperties);
-        StreamLoadRetryHandler retryHandler = new StreamLoadRetryHandler(starRocksProperties, streamLoadClient);
+        InFlightLoadManager inFlightLoadManager = new InFlightLoadManager(starRocksProperties, workerNumber, metrics);
+        StreamLoadRetryHandler retryHandler = new StreamLoadRetryHandler(starRocksProperties, streamLoadClient, workerNumber, metrics);
         StreamLoadLabelGenerator labelGenerator = new StreamLoadLabelGenerator();
 
         BatchProcessor processor = new BatchProcessor(
                 workerNumber, avroDeserializer, validationService, mapper,
-                batchBuffer, inFlightLoadManager, retryHandler, labelGenerator
+                batchBuffer, inFlightLoadManager, retryHandler, labelGenerator, metrics
         );
 
-        return new ConsumerWorker(workerNumber, consumer, kafkaProperties, processor);
+        return new ConsumerWorker(workerNumber, consumer, kafkaProperties, processor, metrics);
     }
 
     private KafkaConsumer<byte[], byte[]> createKafkaConsumer() {

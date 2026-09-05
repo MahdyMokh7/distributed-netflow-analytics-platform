@@ -1,8 +1,10 @@
 CREATE TABLE IF NOT EXISTS nimbo.netflow_realtime_v3
 (
-    kafka_timestamp BIGINT NOT NULL,
+
     ipv4_src_addr VARCHAR(15) NOT NULL,
     ipv4_dst_addr VARCHAR(15) NOT NULL,
+    kafka_timestamp BIGINT NOT NULL,
+
 
     kafka_topic VARCHAR(255) NOT NULL,
     kafka_partition INT NOT NULL,
@@ -69,7 +71,6 @@ CREATE TABLE IF NOT EXISTS nimbo.netflow_realtime_v3
     ENGINE = OLAP
 
     DUPLICATE KEY(
-                     kafka_timestamp,
                      ipv4_src_addr,
                      ipv4_dst_addr
                  )
@@ -79,5 +80,5 @@ CREATE TABLE IF NOT EXISTS nimbo.netflow_realtime_v3
                                from_unixtime_ms(kafka_timestamp)
     )
 
-    DISTRIBUTED BY HASH(ipv4_src_addr)
+    DISTRIBUTED BY HASH(ipv4_src_addr,ipv4_dst_addr)
     BUCKETS 8

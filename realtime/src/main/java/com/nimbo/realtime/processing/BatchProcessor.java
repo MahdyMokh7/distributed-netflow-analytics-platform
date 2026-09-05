@@ -9,6 +9,7 @@ import com.nimbo.realtime.model.StarRocksRow;
 import com.nimbo.realtime.model.StreamLoadResult;
 import com.nimbo.realtime.validation.NetflowValidationService;
 import com.nimbo.realtime.validation.ValidationResult;
+import com.nimbo.realtime.metrics.RealtimeMetrics;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class BatchProcessor {
     private final InFlightLoadManager inFlightLoadManager;
     private final StreamLoadRetryHandler retryHandler;
     private final StreamLoadLabelGenerator labelGenerator;
+    private final RealtimeMetrics metrics;
 
     @Getter
     private boolean kafkaPaused;
@@ -43,6 +45,9 @@ public class BatchProcessor {
             try {
                 processRecord(consumerRecord);
             } catch (Exception e) {
+                if (!(e instanceof AccountedProcessingException)) {
+                    metrics.recordProcessed(workerNumber, "processing_error");
+                }
                 log.error(
                         "Failed processing record topic={}, partition={}, offset={}",
                         consumerRecord.topic(), consumerRecord.partition(),
@@ -54,30 +59,50 @@ public class BatchProcessor {
         }
     }
 
-    private void processRecord(ConsumerRecord<byte[], byte[]> kafkaRecord) {
-        GenericRecord avroRecord = avroDeserializer.deserialize(kafkaRecord.value());
+    private void processRecord(ConsumerRecord<byte[], byte[]> consumerRecord) {
+        GenericRecord avroRecord;
+        try {
+            avroRecord = avroDeserializer.deserialize(consumerRecord.value());
+        } catch (RuntimeException exception) {
+            metrics.recordProcessed(workerNumber, "deserialization_error");
+            throw new AccountedProcessingException(exception);
+        }
         ValidationResult validation = validationService.validate(avroRecord);
-        TopicPartition partition = new TopicPartition(kafkaRecord.topic(), kafkaRecord.partition());
-        OffsetAndMetadata offset = new OffsetAndMetadata(kafkaRecord.offset() + 1);
+        TopicPartition partition = new TopicPartition(consumerRecord.topic(), consumerRecord.partition());
+        OffsetAndMetadata offset = new OffsetAndMetadata(consumerRecord.offset() + 1);
 
         if (!validation.valid()) {
+            metrics.recordProcessed(workerNumber, "validation_error");
             batchBuffer.addOffset(partition, offset);
             return;
         }
 
-        StarRocksRow row = mapper.map(avroRecord, kafkaRecord.topic(), kafkaRecord.partition(),
-                kafkaRecord.offset(), kafkaRecord.timestamp());
+        StarRocksRow row;
+        try {
+            row = mapper.map(avroRecord, consumerRecord.topic(), consumerRecord.partition(),
+                    consumerRecord.offset(), consumerRecord.timestamp());
+        } catch (RuntimeException exception) {
+            metrics.recordProcessed(workerNumber, "mapping_error");
+            throw new AccountedProcessingException(exception);
+        }
 
         batchBuffer.add(row, partition, offset);
+        metrics.recordProcessed(workerNumber, "success");
+        updateBatchMetrics();
     }
 
     public void flushIfNeeded() {
-        if (!batchBuffer.shouldFlush()) return;
-        submitBatch();
+        updateBatchMetrics();
+        BatchBuffer.FlushReason reason = batchBuffer.flushReason();
+        if (reason == null) return;
+        submitBatch(reason);
     }
 
-    private void submitBatch() {
-        if (batchBuffer.isEmpty()) return;
+    private void submitBatch(BatchBuffer.FlushReason reason) {
+        if (batchBuffer.isEmpty()) {
+            metrics.emptyBatch();
+            return;
+        }
 
         BatchBuffer.BatchSnapshot batchSnapshot = batchBuffer.snapshot();
         String label = labelGenerator.generateLabel(workerNumber, batchSnapshot.offsets());
@@ -85,7 +110,9 @@ public class BatchProcessor {
         PendingLoad pendingLoad = new PendingLoad(label, batchSnapshot.rows().size(), batchSnapshot.offsets(), future);
 
         inFlightLoadManager.add(pendingLoad);
+        metrics.batchSubmitted(workerNumber, reason.name().toLowerCase(), batchSnapshot.rows().size());
         batchBuffer.clear();
+        updateBatchMetrics();
 
         log.debug("Worker {} submitted batch. label={}, rows={}", workerNumber, label, batchSnapshot.rows().size());
     }
@@ -108,8 +135,18 @@ public class BatchProcessor {
 
     public void shutdown(KafkaConsumer<byte[], byte[]> consumer) {
         if (!batchBuffer.isEmpty()) {
-            submitBatch();
+            submitBatch(BatchBuffer.FlushReason.SHUTDOWN);
         }
         inFlightLoadManager.drain(consumer);
+    }
+
+    private void updateBatchMetrics() {
+        metrics.setOpenBatch(workerNumber, batchBuffer.rowCount(), batchBuffer.ageSeconds());
+    }
+
+    private static final class AccountedProcessingException extends RuntimeException {
+        private AccountedProcessingException(RuntimeException cause) {
+            super(cause);
+        }
     }
 }

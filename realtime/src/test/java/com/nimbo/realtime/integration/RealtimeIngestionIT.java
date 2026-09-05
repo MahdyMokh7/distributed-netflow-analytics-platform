@@ -17,6 +17,8 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -45,12 +47,12 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-@SpringBootTest(
-        classes = RealtimeApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(classes = RealtimeApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureObservability
 @ContextConfiguration(initializers = RealtimeIngestionIT.InfrastructureInitializer.class)
 class RealtimeIngestionIT {
 
+    @LocalServerPort
     private static final String TOPIC = "netflow-integration-test";
     private static final String CONSUMER_GROUP = "realtime-integration-test";
     private static final int FE_HTTP_PORT = 8030;
@@ -238,8 +240,7 @@ class RealtimeIngestionIT {
                 "root", "");
     }
 
-    static class InfrastructureInitializer
-            implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+    static class InfrastructureInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
 
         @Override
         public void initialize(ConfigurableApplicationContext context) {
@@ -248,34 +249,34 @@ class RealtimeIngestionIT {
             provisionStarRocks();
 
             TestPropertyValues.of(
-                    "spring.datasource.url=jdbc:mysql://" + STARROCKS.getHost() + ":"
-                            + STARROCKS.getMappedPort(MYSQL_PORT) + "/nimbo",
-                    "spring.datasource.username=root",
-                    "spring.datasource.password=",
-                    "realtime.kafka.bootstrap-servers=" + KAFKA.getBootstrapServers(),
-                    "realtime.kafka.topic=" + TOPIC,
-                    "realtime.kafka.consumer-group=" + CONSUMER_GROUP,
-                    "realtime.kafka.client-id=realtime-integration-test",
-                    "realtime.kafka.auto-offset-reset=earliest",
-                    "realtime.kafka.max-poll-records=10",
-                    "realtime.kafka.poll-timeout-ms=100",
-                    "realtime.kafka.max-partition-fetch-bytes=1048576",
-                    "realtime.kafka.consumer-count=2",
-                    "realtime.starrocks.stream-load-backends[0]=http://" + STARROCKS.getHost() + ":"
-                            + STARROCKS.getMappedPort(BE_HTTP_PORT),
-                    "realtime.starrocks.stream-load-backends[1]=http://" + STARROCKS.getHost() + ":"
-                            + STARROCKS.getMappedPort(BE_HTTP_PORT) + "/",
-                    "realtime.starrocks.database=nimbo",
-                    "realtime.starrocks.table=netflow_realtime_v3",
-                    "realtime.starrocks.username=root",
-                    "realtime.starrocks.password=",
-                    "realtime.starrocks.merge-commit-enabled=false",
-                    "realtime.starrocks.retry-backoff-ms=100",
-                    "realtime.starrocks.merge-commit-interval-ms=100",
-                    "realtime.starrocks.merge-commit-parallel=1",
-                    "realtime.starrocks.max-batch-size-rows=2",
-                    "realtime.starrocks.max-batch-time-ms=100",
-                    "realtime.starrocks.max-in-flight-requests=2")
+                            "spring.datasource.url=jdbc:mysql://" + STARROCKS.getHost() + ":"
+                                    + STARROCKS.getMappedPort(MYSQL_PORT) + "/nimbo",
+                            "spring.datasource.username=root",
+                            "spring.datasource.password=",
+                            "realtime.kafka.bootstrap-servers=" + KAFKA.getBootstrapServers(),
+                            "realtime.kafka.topic=" + TOPIC,
+                            "realtime.kafka.consumer-group=" + CONSUMER_GROUP,
+                            "realtime.kafka.client-id=realtime-integration-test",
+                            "realtime.kafka.auto-offset-reset=earliest",
+                            "realtime.kafka.max-poll-records=10",
+                            "realtime.kafka.poll-timeout-ms=100",
+                            "realtime.kafka.max-partition-fetch-bytes=1048576",
+                            "realtime.kafka.consumer-count=2",
+                            "realtime.starrocks.stream-load-backends[0]=http://" + STARROCKS.getHost() + ":"
+                                    + STARROCKS.getMappedPort(BE_HTTP_PORT),
+                            "realtime.starrocks.stream-load-backends[1]=http://" + STARROCKS.getHost() + ":"
+                                    + STARROCKS.getMappedPort(BE_HTTP_PORT) + "/",
+                            "realtime.starrocks.database=nimbo",
+                            "realtime.starrocks.table=netflow_realtime_v3",
+                            "realtime.starrocks.username=root",
+                            "realtime.starrocks.password=",
+                            "realtime.starrocks.merge-commit-enabled=false",
+                            "realtime.starrocks.retry-backoff-ms=100",
+                            "realtime.starrocks.merge-commit-interval-ms=100",
+                            "realtime.starrocks.merge-commit-parallel=1",
+                            "realtime.starrocks.max-batch-size-rows=2",
+                            "realtime.starrocks.max-batch-time-ms=100",
+                            "realtime.starrocks.max-in-flight-requests=2")
                     .applyTo(context.getEnvironment());
         }
 

@@ -3,6 +3,8 @@ package com.nimbo.realtime.processing;
 import com.nimbo.realtime.config.StarRocksProperties;
 import com.nimbo.realtime.model.PendingLoad;
 import org.junit.jupiter.api.Test;
+import com.nimbo.realtime.metrics.RealtimeMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -10,6 +12,12 @@ import java.util.concurrent.CompletableFuture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class InFlightLoadManagerTest {
+
+    private InFlightLoadManager manager(int maxRequests) {
+        RealtimeMetrics metrics = new RealtimeMetrics(new SimpleMeterRegistry());
+        metrics.registerWorker(1);
+        return new InFlightLoadManager(properties(maxRequests), 1, metrics);
+    }
 
     private StarRocksProperties properties(int maxRequests) {
         StarRocksProperties properties = new StarRocksProperties();
@@ -26,14 +34,14 @@ class InFlightLoadManagerTest {
 
     @Test
     void shouldNotBeBackpressuredInitially() {
-        InFlightLoadManager manager = new InFlightLoadManager(properties(2));
+        InFlightLoadManager manager = manager(2);
 
         assertThat(manager.isBackpressured()).isFalse();
     }
 
     @Test
     void shouldBecomeBackpressuredWhenLimitReached() {
-        InFlightLoadManager manager = new InFlightLoadManager(properties(1));
+        InFlightLoadManager manager = manager(1);
 
         manager.add(pendingLoad());
 
@@ -42,7 +50,7 @@ class InFlightLoadManagerTest {
 
     @Test
     void shouldAllowMultiplePendingLoads() {
-        InFlightLoadManager manager = new InFlightLoadManager(properties(5));
+        InFlightLoadManager manager = manager(5);
 
         manager.add(pendingLoad());
         manager.add(pendingLoad());

@@ -1,6 +1,8 @@
 package com.nimbo.realtime.streamload;
 
 import com.nimbo.realtime.config.StarRocksProperties;
+import com.nimbo.realtime.metrics.RealtimeMetrics;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -11,8 +13,16 @@ public class BackendSelector {
 
     private final List<String> backends;
     private final AtomicInteger index = new AtomicInteger();
+    private final RealtimeMetrics metrics;
 
     public BackendSelector(StarRocksProperties properties) {
+        this(properties, null);
+    }
+
+    @Autowired
+    public BackendSelector(StarRocksProperties properties, RealtimeMetrics metrics) {
+
+        this.metrics = metrics;
 
         this.backends = List.copyOf(
                 properties.getStreamLoadBackends()
@@ -30,6 +40,7 @@ public class BackendSelector {
                 index.getAndIncrement(),
                 backends.size()
         );
+        if (metrics != null) metrics.backendSelected(position);
         return backends.get(position);
     }
 }
