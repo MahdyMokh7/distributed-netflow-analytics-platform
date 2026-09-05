@@ -12,31 +12,24 @@ public record BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBa
             Duration maxBatchAge
     ) {
         if (maxRecordCount <= 0) {
-            throw new IllegalArgumentException(
-                    "maxRecordCount must be positive"
-            );
+            throw new IllegalArgumentException("maxRecordCount must be positive");
         }
 
         if (maxSizeBytes <= 0) {
-            throw new IllegalArgumentException(
-                    "maxSizeBytes must be positive"
-            );
+            throw new IllegalArgumentException("maxSizeBytes must be positive");
         }
 
-        this.maxBatchAge = Objects.requireNonNull(
-                maxBatchAge,
-                "maxBatchAge must not be null"
-        );
+        this.maxBatchAge = Objects.requireNonNull(maxBatchAge, "maxBatchAge must not be null");
 
         if (maxBatchAge.isZero() || maxBatchAge.isNegative()) {
-            throw new IllegalArgumentException(
-                    "maxBatchAge must be positive"
-            );
+            throw new IllegalArgumentException("maxBatchAge must be positive");
         }
 
         this.maxRecordCount = maxRecordCount;
         this.maxSizeBytes = maxSizeBytes;
     }
+
+    public enum FlushReason { RECORD_COUNT, SIZE, AGE, NONE }
 
     public boolean shouldFlush(
             long recordCount,
@@ -64,5 +57,21 @@ public record BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBa
 
         return Duration.between(firstRecordAt, now)
                 .compareTo(maxBatchAge) >= 0;
+    }
+
+    public FlushReason flushReason(long recordCount, long totalSizeBytes, Instant firstRecordAt, Instant now) {
+        if (recordCount == 0) {
+            return FlushReason.NONE;
+        }
+        if (recordCount >= maxRecordCount) {
+            return FlushReason.RECORD_COUNT;
+        }
+        if (totalSizeBytes >= maxSizeBytes) {
+            return FlushReason.SIZE;
+        }
+        if (firstRecordAt != null && Duration.between(firstRecordAt, now).compareTo(maxBatchAge) >= 0) {
+            return FlushReason.AGE;
+        }
+        return FlushReason.NONE;
     }
 }

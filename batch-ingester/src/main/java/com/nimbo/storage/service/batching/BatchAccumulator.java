@@ -70,11 +70,11 @@ public final class BatchAccumulator {
         return flush;
     }
 
-    public void clear() {
-        if (recordCount == 0) {
-            return;
-        }
+    public BatchPolicy.FlushReason flushReason() {
+        return batchPolicy.flushReason(recordCount, accumulatedSizeBytes, firstRecordAt, Instant.now());
+    }
 
+    public void clear() {
         recordCount = 0;
         accumulatedSizeBytes = 0L;
         firstRecordAt = null;

@@ -4,16 +4,13 @@ spring:
     activate:
       on-profile: prod
 
+server:
+  port: 18080
+
 logging:
   level:
     com.nimbo.ingester: INFO
     com.nimbo.storage: INFO
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
 
 ingester:
   kafka:

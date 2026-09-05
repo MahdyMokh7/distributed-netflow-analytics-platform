@@ -7,6 +7,21 @@ spring:
     username: ${STARROCKS_USERNAME:root}
     password: ${STARROCKS_PASSWORD:s@hWater}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+  endpoint:
+    health:
+      show-details: always
+
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
 server:
   port: ${SERVER_PORT:8082}
   
@@ -43,3 +58,4 @@ realtime:
     retry-backoff-ms: ${STARROCKS_RETRY_BACKOFF_MS:1000}
     max-batch-size-rows: ${STARROCKS_MAX_BATCH_SIZE_ROWS:100000}
     max-batch-time-ms: ${STARROCKS_MAX_BATCH_TIME_MS:1500}
+

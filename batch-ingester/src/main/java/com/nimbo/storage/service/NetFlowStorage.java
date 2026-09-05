@@ -1,6 +1,7 @@
 package com.nimbo.storage.service;
 
 import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.metrics.BatchIngesterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.exception.ParquetWriteException;
 import com.nimbo.storage.exception.StorageException;
@@ -10,6 +11,7 @@ import com.nimbo.storage.service.batching.BatchPolicy;
 import com.nimbo.storage.service.hdfs.FileStorage;
 import com.nimbo.storage.service.naming.FileNameGenerator;
 import com.nimbo.storage.service.parquet.ParquetFileWriter;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -17,6 +19,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetWriter;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
@@ -38,23 +41,40 @@ public final class NetFlowStorage {
     private Path currentFinalPath;
     private boolean writerOpen = false;
 
+    private final BatchIngesterMetrics metrics;
+    private final int instanceId;
+
     public NetFlowStorage(
             BatchPolicy batchPolicy,
             ParquetFileWriter parquetFileWriter,
             FileStorage fileStorage,
             FileNameGenerator fileNameGenerator,
             HdfsProperties hdfsProperties,
-            Schema storageSchema
+            Schema storageSchema,
+            BatchIngesterMetrics metrics,
+            int instanceId
     ) {
         this.parquetFileWriter = Objects.requireNonNull(parquetFileWriter);
         this.fileStorage = Objects.requireNonNull(fileStorage);
         this.fileNameGenerator = Objects.requireNonNull(fileNameGenerator);
         this.hdfsProperties = Objects.requireNonNull(hdfsProperties);
         this.storageSchema = Objects.requireNonNull(storageSchema);
-
         this.batchAccumulator = new BatchAccumulator(batchPolicy);
+        this.metrics = metrics;
+        this.instanceId = instanceId;
+
+        metrics.registerGauge("ingester_open_batch_record_count", instanceId,
+                batchAccumulator, BatchAccumulator::getRecordCount);
+        metrics.registerGauge("ingester_open_batch_age_seconds", instanceId,
+                this, NetFlowStorage::currentBatchAgeSeconds);
 
         log.info("NetFlowStorage initialized (streaming writer) with HDFS target path: {}", hdfsProperties.getBasePath());
+    }
+
+    private double currentBatchAgeSeconds() {
+        if (!writerOpen) return 0;
+        Instant firstRecordAt = batchAccumulator.getFirstRecordAt();
+        return firstRecordAt == null ? 0 : Duration.between(firstRecordAt, Instant.now()).getSeconds();
     }
 
     public Optional<Map<TopicPartitionKey, Long>> accept(IngestedRecord ingestedRecord) {
@@ -67,7 +87,7 @@ public final class NetFlowStorage {
 
             GenericRecord enrichedRecord = enrichWithProcessingTime(ingestedRecord.record());
             parquetFileWriter.write(currentWriter, enrichedRecord);
-
+            metrics.recordWritten(instanceId);
             batchAccumulator.add(ingestedRecord);
 
             if (batchAccumulator.shouldFlush()) {
@@ -157,10 +177,18 @@ public final class NetFlowStorage {
             return Map.of();
         }
 
+        long recordCount = batchAccumulator.getRecordCount();
+        long sizeBytes = batchAccumulator.getAccumulatedSizeBytes();
+        BatchPolicy.FlushReason reason = batchAccumulator.flushReason();
+
+        Timer.Sample sample = metrics.startRolloverTimer();
         parquetFileWriter.closeWriter(currentWriter);
         writerOpen = false;
 
         fileStorage.commitAtomic(currentTempPath, currentFinalPath);
+
+        metrics.stopRolloverTimer(instanceId, sample);
+        metrics.rollover(instanceId, reason, recordCount, sizeBytes);
 
         Map<TopicPartitionKey, Long> offsets = batchAccumulator.getPendingOffsets();
 
@@ -174,6 +202,7 @@ public final class NetFlowStorage {
     }
 
     private void handleWriteFailure() {
+        metrics.writeFailure(instanceId);
         if (writerOpen) {
             try {
                 parquetFileWriter.closeWriter(currentWriter);

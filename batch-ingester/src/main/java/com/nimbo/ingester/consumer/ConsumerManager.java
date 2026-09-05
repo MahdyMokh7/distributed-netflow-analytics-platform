@@ -5,6 +5,7 @@ import com.nimbo.ingester.deserializer.AvroDeserializer;
 import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
 import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.metrics.BatchIngesterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.service.NetFlowStorage;
@@ -43,6 +44,7 @@ public class ConsumerManager {
     private final HdfsFileSystemFactory hdfsFileSystemFactory;
     private final KafkaOffsetCommitter kafkaOffsetCommitter;
     private final Schema storageSchema;
+    private final BatchIngesterMetrics metrics;
 
     private final List<NetflowConsumer> consumers = new ArrayList<>();
     private ExecutorService consumerExecutor;
@@ -59,7 +61,8 @@ public class ConsumerManager {
             KafkaConsumerFactory kafkaConsumerFactory,
             HdfsFileSystemFactory hdfsFileSystemFactory,
             KafkaOffsetCommitter kafkaOffsetCommitter,
-            Schema storageSchema) {
+            Schema storageSchema,
+            BatchIngesterMetrics metrics) {
         this.kafkaProperties = kafkaProperties;
         this.avroDeserializer = avroDeserializer;
         this.validationService = validationService;
@@ -72,6 +75,7 @@ public class ConsumerManager {
         this.hdfsFileSystemFactory = hdfsFileSystemFactory;
         this.kafkaOffsetCommitter = kafkaOffsetCommitter;
         this.storageSchema = storageSchema;
+        this.metrics = metrics;
     }
 
     @PostConstruct
@@ -90,7 +94,12 @@ public class ConsumerManager {
         );
 
         for (int i = 0; i < instanceCount; i++) {
+
+            int instanceId = i + 1;
+
             try {
+
+                metrics.registerInstance(instanceId);
                 FileSystem fs = hdfsFileSystemFactory.create(hdfsProperties);
                 HdfsFileStorage fileStorage = new HdfsFileStorage(fs);
                 ParquetFileWriter parquetWriter = new ParquetFileWriter(fs, parquetProperties);
@@ -101,13 +110,16 @@ public class ConsumerManager {
                         fileStorage,
                         fileNameGenerator,
                         hdfsProperties,
-                        storageSchema
+                        storageSchema,
+                        metrics,
+                        instanceId
                 );
 
                 DataProcessingService processingService = new DataProcessingService(storage);
 
                 KafkaConsumer<byte[], byte[]> kafkaConsumer =
                         kafkaConsumerFactory.createConsumer(i + 1);
+                metrics.bindKafkaConsumer(kafkaConsumer);
 
                 NetflowConsumer consumer = new NetflowConsumer(
                         kafkaConsumer,
@@ -117,7 +129,8 @@ public class ConsumerManager {
                         validationService,
                         dlqService,
                         kafkaOffsetCommitter,
-                        i + 1
+                        instanceId,
+                        metrics
                 );
 
                 consumers.add(consumer);

@@ -9,6 +9,7 @@ import com.nimbo.ingester.model.ValidationResult;
 import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
 import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.metrics.BatchIngesterMetrics;
 import com.nimbo.storage.exception.StorageException;
 import com.nimbo.storage.model.TopicPartitionKey;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,7 @@ public class NetflowConsumer {
 
     private final AtomicBoolean running = new AtomicBoolean(true);
     private Thread consumerThread;
+    private final BatchIngesterMetrics metrics;
 
     public NetflowConsumer(
             KafkaConsumer<byte[], byte[]> kafkaConsumer,
@@ -45,7 +47,7 @@ public class NetflowConsumer {
             NetflowValidationService validationService,
             DlqService dlqService,
             KafkaOffsetCommitter kafkaOffsetCommitter,
-            int instanceId) {
+            int instanceId,BatchIngesterMetrics metrics) {
         this.kafkaConsumer = kafkaConsumer;
         this.kafkaProperties = kafkaProperties;
         this.avroDeserializer = avroDeserializer;
@@ -54,6 +56,7 @@ public class NetflowConsumer {
         this.dlqService = dlqService;
         this.kafkaOffsetCommitter = kafkaOffsetCommitter;
         this.instanceId = instanceId;
+        this.metrics = metrics;
     }
 
     private void registerRebalanceListener() {
@@ -93,8 +96,8 @@ public class NetflowConsumer {
     private void consumeLoop() {
         try {
             registerRebalanceListener();
-            log.info("Instance #{}: Subscribed to topic: {}",
-                    instanceId, kafkaProperties.getTopic());
+            metrics.consumerStarted(instanceId);
+            log.info("Instance #{}: Subscribed to topic: {}", instanceId, kafkaProperties.getTopic());
 
             while (running.get()) {
                 consumePoll();
@@ -104,6 +107,7 @@ public class NetflowConsumer {
             log.error("Instance #{}: Fatal error in consumer loop", instanceId, e);
             throw new KafkaConsumerException("Consumer loop failed", e);
         } finally {
+            metrics.consumerStopped(instanceId);
             closeConsumer();
         }
     }
@@ -114,6 +118,7 @@ public class NetflowConsumer {
                     Duration.ofMillis(kafkaProperties.getPollTimeoutMs())
             );
 
+            metrics.recordsPolled(instanceId, records.count());
             if (records.isEmpty()) {
                 handleEmptyPoll();
                 return;
@@ -157,6 +162,7 @@ public class NetflowConsumer {
             ValidationResult result = validationService.validate(genericRecord);
 
             if (!result.valid()) {
+                metrics.invalidRecord(instanceId, "VALIDATION_ERROR");
                 dlqService.publish(consumerRecord, "VALIDATION_ERROR", result.errorMessage());
                 return dataProcessingService.recordSkippedOffset(
                         consumerRecord.topic(), consumerRecord.partition(), nextOffset);
@@ -173,6 +179,7 @@ public class NetflowConsumer {
             return dataProcessingService.processRecord(ingestedRecord);
 
         } catch (DeserializationException e) {
+            metrics.invalidRecord(instanceId, "DESERIALIZATION_ERROR");
             dlqService.publish(consumerRecord, "DESERIALIZATION_ERROR", e.getMessage());
             return dataProcessingService.recordSkippedOffset(
                     consumerRecord.topic(), consumerRecord.partition(), nextOffset);
