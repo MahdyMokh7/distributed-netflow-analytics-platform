@@ -16,7 +16,7 @@ spark:
   adaptive-enabled: true
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer
-  ui-enabled: true
+  ui-enabled: false
   io-mode-default: NIO
   speculation: false
 

@@ -1,124 +1,51 @@
 package com.nimbo.batch.processor;
 
-import com.nimbo.batch.config.BatchConfig;
-import com.nimbo.batch.config.HdfsConfig;
-import com.nimbo.batch.config.OutputConfig;
-import com.nimbo.batch.exception.BatchProcessingException;
-import com.nimbo.batch.writer.PostgresWriter;
-import org.apache.hadoop.fs.Path;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class TopIpProcessorTest extends BaseProcessorTest {
 
-    private HdfsConfig hdfsConfig;
-    private BatchConfig batchConfig;
-    private OutputConfig outputConfig;
-    private PostgresWriter postgresWriter;
-    private TopIpProcessor processor;
-    private List<Path> testFiles;
+    @Test
+    void givenSourceAndDestinationFlows_whenProcessed_thenIpBandwidthPerspectivesArePersisted() {
+        // Given: deterministic flows where one address appears in both perspectives
+        TopIpProcessor processor = new TopIpProcessor(batchConfig(), databaseOutput(), postgresWriter());
+        UUID batchId = UUID.fromString("30000000-0000-0000-0000-000000000001");
 
-    @BeforeEach
-    void setUp() {
-        hdfsConfig = mock(HdfsConfig.class);
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getLocalPath());
+        // When: top-IP aggregation writes database output
+        processor.process(standardFlows(), batchId);
 
-        batchConfig = mock(BatchConfig.class);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
-
-        outputConfig = mock(OutputConfig.class);
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
-        postgresWriter = mock(PostgresWriter.class);
-
-        processor = new TopIpProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
-
-        testFiles = List.of(new Path(testParquetConfig.getLocalPath()));
+        // Then: source and destination bandwidth are combined by IP and window
+        assertThat(countRows("ip_bandwidth_aggregates")).isEqualTo(5);
+        assertThat(queryLong("SELECT inbound_bytes FROM ip_bandwidth_aggregates WHERE ip = '10.0.0.1' AND outbound_bytes = 670")).isEqualTo(450L);
+        assertThat(queryLong("SELECT outbound_bytes FROM ip_bandwidth_aggregates WHERE ip = '10.0.0.1' AND inbound_bytes = 30")).isEqualTo(20L);
     }
 
     @Test
-    void shouldProcessWithConsoleOutputWithoutException() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
+    void givenTheSameBatchTwice_whenProcessed_thenIpBandwidthUpsertRemainsExactlyOnce() {
+        // Given: one fixed batch identifier and deterministic flow records
+        TopIpProcessor processor = new TopIpProcessor(batchConfig(), databaseOutput(), postgresWriter());
+        UUID batchId = UUID.fromString("30000000-0000-0000-0000-000000000002");
+
+        // When: the same batch is processed twice
+        processor.process(standardFlows(), batchId);
+        processor.process(standardFlows(), batchId);
+
+        // Then: the five IP-window rows are not duplicated
+        assertThat(countRows("ip_bandwidth_aggregates")).isEqualTo(5);
     }
 
     @Test
-    void shouldThrowExceptionOnEmptyDataset() {
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getEmptyPath());
+    void givenNoFlows_whenProcessed_thenNoIpBandwidthRowsAreWritten() {
+        // Given: an empty netflow dataset
+        TopIpProcessor processor = new TopIpProcessor(batchConfig(), databaseOutput(), postgresWriter());
 
-        TopIpProcessor emptyProcessor = new TopIpProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
+        // When: top-IP aggregation runs
+        processor.process(emptyFlows(), UUID.fromString("30000000-0000-0000-0000-000000000003"));
 
-        UUID batchId = UUID.randomUUID();
-        List<Path> emptyFiles = List.of(
-                new Path(testParquetConfig.getEmptyPath() + "/empty.parquet")
-        );
-        assertThatThrownBy(() -> emptyProcessor.process(emptyFiles, batchId))
-                .isInstanceOf(BatchProcessingException.class)  // ✅ Changed from RuntimeException
-                .hasMessageContaining("Top IP aggregation failed");
-    }
-
-    @Test
-    void shouldThrowExceptionOnInvalidPath() {
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getInvalidPath());
-
-        TopIpProcessor invalidProcessor = new TopIpProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> invalidFiles = List.of(
-                new Path(testParquetConfig.getInvalidPath() + "/invalid.parquet")
-        );
-        assertThatThrownBy(() -> invalidProcessor.process(invalidFiles, batchId))
-                .isInstanceOf(BatchProcessingException.class)  // ✅ Changed from RuntimeException
-                .hasMessageContaining("Top IP aggregation failed");
-    }
-
-    @Test
-    void shouldWriteToDatabaseWhenDatabaseModeEnabled() {
-        when(outputConfig.isConsoleMode()).thenReturn(false);
-        when(outputConfig.isDatabaseMode()).thenReturn(true);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldOrderResultsByWindowStartDescending() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldOrderResultsByTotalBandwidthDescending() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldHandleLargeDatasetWithoutErrors() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldProcessWithEmptyFileListWithoutException() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(List.of(), batchId);
+        // Then: no database rows are created
+        assertThat(countRows("ip_bandwidth_aggregates")).isZero();
     }
 }

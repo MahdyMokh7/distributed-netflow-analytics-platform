@@ -52,4 +52,6 @@ public abstract class BaseProcessor {
         logSeparator();
     }
 
-    public abstract void process(List<Path> files, UUID batchId);}
+    public abstract void process(List<Path> files, UUID batchId);
+
+}

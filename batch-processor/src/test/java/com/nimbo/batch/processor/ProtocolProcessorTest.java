@@ -1,145 +1,51 @@
 package com.nimbo.batch.processor;
 
-import com.nimbo.batch.config.BatchConfig;
-import com.nimbo.batch.config.HdfsConfig;
-import com.nimbo.batch.config.OutputConfig;
-import com.nimbo.batch.exception.BatchProcessingException;
-import com.nimbo.batch.writer.PostgresWriter;
-import org.apache.hadoop.fs.Path;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class ProtocolProcessorTest extends BaseProcessorTest {
 
-    private HdfsConfig hdfsConfig;
-    private BatchConfig batchConfig;
-    private OutputConfig outputConfig;
-    private PostgresWriter postgresWriter;
-    private ProtocolProcessor processor;
-    private List<Path> testFiles;
+    @Test
+    void givenFlowsAcrossProtocolsAndWindows_whenProcessed_thenProtocolUsageIsPersisted() {
+        // Given: deterministic TCP and UDP flows in two windows
+        ProtocolProcessor processor = new ProtocolProcessor(batchConfig(), databaseOutput(), postgresWriter());
+        UUID batchId = UUID.fromString("40000000-0000-0000-0000-000000000001");
 
-    @BeforeEach
-    void setUp() {
-        hdfsConfig = mock(HdfsConfig.class);
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getLocalPath());
+        // When: protocol aggregation writes database output
+        processor.process(standardFlows(), batchId);
 
-        batchConfig = mock(BatchConfig.class);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
-
-        outputConfig = mock(OutputConfig.class);
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
-        postgresWriter = mock(PostgresWriter.class);
-
-        processor = new ProtocolProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
-
-        testFiles = List.of(new Path(testParquetConfig.getLocalPath()));
+        // Then: protocol-window metrics match the input flows
+        assertThat(countRows("protocol_usage_aggregates")).isEqualTo(3);
+        assertThat(queryLong("SELECT connection_count FROM protocol_usage_aggregates WHERE l7_protocol = 6.0 AND in_bytes = 400")).isEqualTo(2L);
+        assertThat(queryLong("SELECT out_bytes FROM protocol_usage_aggregates WHERE l7_protocol = 6.0 AND in_bytes = 400")).isEqualTo(600L);
     }
 
     @Test
-    void shouldProcessWithConsoleOutputWithoutException() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
+    void givenTheSameBatchTwice_whenProcessed_thenProtocolUpsertRemainsExactlyOnce() {
+        // Given: one fixed batch identifier and deterministic flow records
+        ProtocolProcessor processor = new ProtocolProcessor(batchConfig(), databaseOutput(), postgresWriter());
+        UUID batchId = UUID.fromString("40000000-0000-0000-0000-000000000002");
+
+        // When: the same batch is processed twice
+        processor.process(standardFlows(), batchId);
+        processor.process(standardFlows(), batchId);
+
+        // Then: the three protocol-window rows are not duplicated
+        assertThat(countRows("protocol_usage_aggregates")).isEqualTo(3);
     }
 
     @Test
-    void shouldThrowExceptionOnEmptyDataset() {
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getEmptyPath());
+    void givenNoFlows_whenProcessed_thenNoProtocolRowsAreWritten() {
+        // Given: an empty netflow dataset
+        ProtocolProcessor processor = new ProtocolProcessor(batchConfig(), databaseOutput(), postgresWriter());
 
-        ProtocolProcessor emptyProcessor = new ProtocolProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
+        // When: protocol aggregation runs
+        processor.process(emptyFlows(), UUID.fromString("40000000-0000-0000-0000-000000000003"));
 
-        UUID batchId = UUID.randomUUID();
-        List<Path> emptyFiles = List.of(
-                new Path(testParquetConfig.getEmptyPath() + "/empty.parquet")
-        );
-        assertThatThrownBy(() -> emptyProcessor.process(emptyFiles, batchId))
-                .isInstanceOf(BatchProcessingException.class)  // ✅ Changed
-                .hasMessageContaining("Protocol aggregation failed");
-    }
-
-    @Test
-    void shouldThrowExceptionOnInvalidPath() {
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getInvalidPath());
-
-        ProtocolProcessor invalidProcessor = new ProtocolProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> invalidFiles = List.of(
-                new Path(testParquetConfig.getInvalidPath() + "/invalid.parquet")
-        );
-        assertThatThrownBy(() -> invalidProcessor.process(invalidFiles, batchId))
-                .isInstanceOf(BatchProcessingException.class)  // ✅ Changed
-                .hasMessageContaining("Protocol aggregation failed");
-    }
-
-    @Test
-    void shouldWriteToDatabaseWhenDatabaseModeEnabled() {
-        when(outputConfig.isConsoleMode()).thenReturn(false);
-        when(outputConfig.isDatabaseMode()).thenReturn(true);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldNotWriteToDatabaseWhenConsoleModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldWriteToConsoleWhenConsoleModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldWriteToDatabaseWhenDatabaseModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(false);
-        when(outputConfig.isDatabaseMode()).thenReturn(true);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldOrderResultsByWindowStartDescending() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldHandleLargeDatasetWithoutErrors() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldProcessWithEmptyFileListWithoutException() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(List.of(), batchId);
+        // Then: no database rows are created
+        assertThat(countRows("protocol_usage_aggregates")).isZero();
     }
 }

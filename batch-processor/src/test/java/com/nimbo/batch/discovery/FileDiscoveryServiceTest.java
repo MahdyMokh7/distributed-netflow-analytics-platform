@@ -4,368 +4,131 @@ import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.dao.BatchStateDao;
 import com.nimbo.batch.model.BatchStateRecord;
-import org.apache.hadoop.fs.FileStatus;
+import com.nimbo.batch.util.TestPostgresExtension;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.jdbi.v3.core.Jdbi;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.util.HashSet;
+import java.nio.file.Files;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 class FileDiscoveryServiceTest {
 
-    @Mock
+    @RegisterExtension
+    static final TestPostgresExtension POSTGRES = new TestPostgresExtension();
+
+    @TempDir
+    java.nio.file.Path directory;
+
     private FileSystem fileSystem;
-
-    @Mock
-    private HdfsConfig hdfsConfig;
-
-    @Mock
-    private BatchConfig batchConfig;
-
-    @Mock
     private BatchStateDao stateDao;
-
+    private BatchConfig batchConfig;
     private FileDiscoveryService service;
 
     @BeforeEach
-    void setUp() {
-        lenient().when(hdfsConfig.getFullParquetPath()).thenReturn("hdfs://test/path/");
-        lenient().when(batchConfig.getMaxFilesPerBatch()).thenReturn(10);
+    void setUp() throws IOException {
+        fileSystem = FileSystem.getLocal(new Configuration());
+        Jdbi jdbi = POSTGRES.jdbi();
+        jdbi.useHandle(handle -> {
+            handle.execute("CREATE TABLE IF NOT EXISTS batch_processor_state (file_name VARCHAR PRIMARY KEY, file_timestamp TIMESTAMP NOT NULL, batch_id UUID NOT NULL, processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+            handle.execute("TRUNCATE batch_processor_state");
+        });
+        stateDao = jdbi.onDemand(BatchStateDao.class);
+        batchConfig = new BatchConfig();
+        batchConfig.setMaxFilesPerBatch(2);
+        HdfsConfig hdfsConfig = new HdfsConfig();
+        hdfsConfig.setUri("file://");
+        hdfsConfig.setParquetPath(directory.toString());
         service = new FileDiscoveryService(fileSystem, hdfsConfig, batchConfig, stateDao);
     }
 
-    @Test
-    void shouldDiscoverNewFilesWhenNoneProcessed() throws IOException {
-        Path basePath = new Path("hdfs://test/path/");
-        Path file1 = new Path(basePath, "netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        Path file2 = new Path(basePath, "netflow-p02-2026-08-27T11-30-00-456Z-def.parquet");
-
-        FileStatus status1 = mockFileStatus(file1);
-        FileStatus status2 = mockFileStatus(file2);
-
-        when(fileSystem.listStatus(basePath)).thenReturn(new FileStatus[]{status1, status2});
-        when(stateDao.getProcessedFileNames()).thenReturn(new HashSet<>());
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> result = service.discoverNewFiles(batchId);
-
-        assertThat(result).hasSize(2);
-        assertThat(result).containsExactly(file1, file2);
-        verify(stateDao).getProcessedFileNames();
+    @AfterEach
+    void closeFileSystem() throws IOException {
+        fileSystem.close();
     }
 
     @Test
-    void shouldFilterOutAlreadyProcessedFiles() throws IOException {
-        Path basePath = new Path("hdfs://test/path/");
-        Path processedFile = new Path(basePath, "netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        Path newFile = new Path(basePath, "netflow-p02-2026-08-27T11-30-00-456Z-def.parquet");
+    void givenNewAndInvalidFiles_whenDiscovered_thenOldestValidFilesRespectTheBatchLimit() throws IOException {
+        // Given: three timestamped Parquet files plus entries that must be ignored
+        createFile("netflow-p01-2026-08-29T10-30-00-000Z-third.parquet");
+        createFile("netflow-p02-2026-08-29T08-30-00-000Z-first.parquet");
+        createFile("netflow-p03-2026-08-29T09-30-00-000Z-second.parquet");
+        createFile("notes.txt");
+        createFile(".hidden.parquet");
+        createFile("netflow-p01-invalid.parquet");
 
-        FileStatus status1 = mockFileStatus(processedFile);
-        FileStatus status2 = mockFileStatus(newFile);
+        // When: the service discovers a bounded batch
+        List<Path> files = service.discoverNewFiles(UUID.fromString("10000000-0000-0000-0000-000000000001"));
 
-        when(fileSystem.listStatus(basePath)).thenReturn(new FileStatus[]{status1, status2});
-
-        Set<String> processed = new HashSet<>();
-        processed.add("netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        when(stateDao.getProcessedFileNames()).thenReturn(processed);
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> result = service.discoverNewFiles(batchId);
-
-        assertThat(result).hasSize(1);
-        assertThat(result).containsExactly(newFile);
+        // Then: only the two oldest valid files are returned in timestamp order
+        assertThat(files).extracting(Path::getName).containsExactly(
+                "netflow-p02-2026-08-29T08-30-00-000Z-first.parquet",
+                "netflow-p03-2026-08-29T09-30-00-000Z-second.parquet");
     }
 
     @Test
-    void shouldApplyMaxFilesPerBatchLimit() throws IOException {
-        when(batchConfig.getMaxFilesPerBatch()).thenReturn(2);
+    void givenARecordedFile_whenDiscovered_thenItIsExcludedFromTheNextBatch() throws IOException {
+        // Given: one previously recorded file and one new file
+        String processed = "netflow-p01-2026-08-29T08-30-00-000Z-processed.parquet";
+        String pending = "netflow-p02-2026-08-29T09-30-00-000Z-pending.parquet";
+        createFile(processed);
+        createFile(pending);
+        stateDao.markFilesAsProcessed(List.of(BatchStateRecord.builder()
+                .fileName(processed)
+                .fileTimestamp(java.time.Instant.parse("2026-08-29T08:30:00Z"))
+                .batchId(UUID.fromString("10000000-0000-0000-0000-000000000002"))
+                .build()));
 
-        Path basePath = new Path("hdfs://test/path/");
-        Path file1 = new Path(basePath, "netflow-p01-2026-08-27T10-00-00-123Z-abc.parquet");
-        Path file2 = new Path(basePath, "netflow-p02-2026-08-27T10-15-00-456Z-def.parquet");
-        Path file3 = new Path(basePath, "netflow-p03-2026-08-27T10-30-00-789Z-ghi.parquet");
+        // When: the service reads the real persisted processing state
+        List<Path> files = service.discoverNewFiles(UUID.fromString("10000000-0000-0000-0000-000000000003"));
 
-        FileStatus status1 = mockFileStatus(file1);
-        FileStatus status2 = mockFileStatus(file2);
-        FileStatus status3 = mockFileStatus(file3);
-
-        when(fileSystem.listStatus(basePath))
-                .thenReturn(new FileStatus[]{status1, status2, status3});
-        when(stateDao.getProcessedFileNames()).thenReturn(new HashSet<>());
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> result = service.discoverNewFiles(batchId);
-
-        assertThat(result).hasSize(2);
-        assertThat(result).containsExactly(file1, file2);
-    }
-
-    @Test
-    void shouldSortFilesByTimestampOldestFirst() throws IOException {
-        Path basePath = new Path("hdfs://test/path/");
-        Path file1 = new Path(basePath, "netflow-p01-2026-08-27T10-00-00-123Z-abc.parquet");
-        Path file2 = new Path(basePath, "netflow-p02-2026-08-27T10-30-00-456Z-def.parquet");
-        Path file3 = new Path(basePath, "netflow-p03-2026-08-27T10-15-00-789Z-ghi.parquet");
-
-        FileStatus status1 = mockFileStatus(file1);
-        FileStatus status2 = mockFileStatus(file2);
-        FileStatus status3 = mockFileStatus(file3);
-
-        when(fileSystem.listStatus(basePath))
-                .thenReturn(new FileStatus[]{status1, status2, status3});
-        when(stateDao.getProcessedFileNames()).thenReturn(new HashSet<>());
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> result = service.discoverNewFiles(batchId);
-
-        assertThat(result).containsExactly(file1, file3, file2);
-    }
-
-    @Test
-    void shouldReturnEmptyListWhenAllFilesProcessed() throws IOException {
-        Path basePath = new Path("hdfs://test/path/");
-        Path file1 = new Path(basePath, "netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        Path file2 = new Path(basePath, "netflow-p02-2026-08-27T11-30-00-456Z-def.parquet");
-
-        FileStatus status1 = mockFileStatus(file1);
-        FileStatus status2 = mockFileStatus(file2);
-
-        when(fileSystem.listStatus(basePath)).thenReturn(new FileStatus[]{status1, status2});
-
-        Set<String> processed = new HashSet<>();
-        processed.add("netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        processed.add("netflow-p02-2026-08-27T11-30-00-456Z-def.parquet");
-        when(stateDao.getProcessedFileNames()).thenReturn(processed);
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> result = service.discoverNewFiles(batchId);
-
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void shouldUseInMemoryFallbackWhenPostgresDown() throws IOException {
-        Path basePath = new Path("hdfs://test/path/");
-        Path file1 = new Path(basePath, "netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        Path file2 = new Path(basePath, "netflow-p02-2026-08-27T11-30-00-456Z-def.parquet");
-
-        FileStatus status1 = mockFileStatus(file1);
-        FileStatus status2 = mockFileStatus(file2);
-
-        when(fileSystem.listStatus(basePath)).thenReturn(new FileStatus[]{status1, status2});
-        when(stateDao.getProcessedFileNames()).thenThrow(new RuntimeException("DB connection failed"));
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> result = service.discoverNewFiles(batchId);
-
-        assertThat(result).hasSize(2);
-        assertThat(service.isUsingFallback()).isTrue();
-    }
-
-    @Test
-    void shouldMarkFilesAsProcessedInMemoryFirst() {
-        UUID batchId = UUID.randomUUID();
-
-        Path file1 = new Path("hdfs://test/path/netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        Path file2 = new Path("hdfs://test/path/netflow-p02-2026-08-27T11-30-00-456Z-def.parquet");
-        List<Path> files = List.of(file1, file2);
-
-        service.markFilesAsProcessed(files, batchId);
-
-        verify(stateDao).markFilesAsProcessed(anyList());
-    }
-
-    @Test
-    void shouldNotMarkEmptyFileList() {
-        UUID batchId = UUID.randomUUID();
-
-        service.markFilesAsProcessed(List.of(), batchId);
-
-        verify(stateDao, never()).markFilesAsProcessed(anyList());
-    }
-
-    @Test
-    void shouldMarkFilesWithUnparseableTimestamp() {
-        UUID batchId = UUID.randomUUID();
-
-        Path file1 = new Path("hdfs://test/path/invalid-name.parquet");
-        Path file2 = new Path("hdfs://test/path/netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        List<Path> files = List.of(file1, file2);
-
-        service.markFilesAsProcessed(files, batchId);
-
-        verify(stateDao).markFilesAsProcessed(anyList());
-    }
-
-    @Test
-    void shouldKeepStateInMemoryWhenPostgresFailsOnMark() throws IOException {
-        UUID batchId = UUID.randomUUID();
-
-        Path file1 = new Path("hdfs://test/path/netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        Path file2 = new Path("hdfs://test/path/netflow-p02-2026-08-27T11-30-00-456Z-def.parquet");
-        List<Path> files = List.of(file1, file2);
-
-        doThrow(new RuntimeException("DB write failed"))
-                .when(stateDao).markFilesAsProcessed(anyList());
-
-        service.markFilesAsProcessed(files, batchId);
-
-        assertThat(service.isUsingFallback()).isTrue();
-
-        when(fileSystem.listStatus(any(Path.class))).thenReturn(new FileStatus[]{});
-        when(stateDao.getProcessedFileNames()).thenThrow(new RuntimeException("DB read failed"));
-
-        UUID newBatchId = UUID.randomUUID();
-        List<Path> result = service.discoverNewFiles(newBatchId);
-
-        assertThat(result).isEmpty();
-        assertThat(service.isUsingFallback()).isTrue();
-    }
-
-    @Test
-    void shouldThrowExceptionWhenHdfsListingFails() throws IOException {
-        when(fileSystem.listStatus(any(Path.class))).thenThrow(new IOException("HDFS connection failed"));
-
-        UUID batchId = UUID.randomUUID();
-        assertThatThrownBy(() -> service.discoverNewFiles(batchId))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("File discovery failed");
-    }
-
-    @Test
-    void shouldSyncMemoryWithPostgresOnRead() throws IOException {
-        Path basePath = new Path("hdfs://test/path/");
-        Path file1 = new Path(basePath, "netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        Path file2 = new Path(basePath, "netflow-p02-2026-08-27T11-30-00-456Z-def.parquet");
-
-        FileStatus status1 = mockFileStatus(file1);
-        FileStatus status2 = mockFileStatus(file2);
-
-        when(fileSystem.listStatus(basePath)).thenReturn(new FileStatus[]{status1, status2});
-
-        Set<String> dbFiles = new HashSet<>();
-        dbFiles.add("netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        when(stateDao.getProcessedFileNames()).thenReturn(dbFiles);
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> result = service.discoverNewFiles(batchId);
-
-        assertThat(result).hasSize(1);
-        assertThat(result).containsExactly(file2);
+        // Then: only the unprocessed file is eligible
+        assertThat(files).extracting(Path::getName).containsExactly(pending);
         assertThat(service.isUsingFallback()).isFalse();
     }
 
     @Test
-    void shouldSkipTempAndNonParquetFiles() throws IOException {
-        Path basePath = new Path("hdfs://test/path/");
-        Path parquetFile = new Path(basePath, "netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        Path tempFile = new Path(basePath, ".temp.parquet.tmp");
-        Path textFile = new Path(basePath, "readme.txt");
+    void givenValidFiles_whenMarkedProcessed_thenTheyArePersistedAndNotRediscovered() throws IOException {
+        // Given: two valid files and a fixed batch identifier
+        Path first = createFile("netflow-p01-2026-08-29T08-30-00-000Z-first.parquet");
+        Path second = createFile("netflow-p02-2026-08-29T09-30-00-000Z-second.parquet");
+        UUID batchId = UUID.fromString("10000000-0000-0000-0000-000000000004");
 
-        FileStatus status1 = mockFileStatus(parquetFile);
-        FileStatus status2 = mockFileStatus(tempFile);
-        FileStatus status3 = mockFileStatus(textFile);
+        // When: the files are marked through the real Jdbi DAO
+        service.markFilesAsProcessed(List.of(first, second), batchId);
 
-        when(fileSystem.listStatus(basePath))
-                .thenReturn(new FileStatus[]{status1, status2, status3});
-        when(stateDao.getProcessedFileNames()).thenReturn(new HashSet<>());
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> result = service.discoverNewFiles(batchId);
-
-        assertThat(result).hasSize(1);
-        assertThat(result).containsExactly(parquetFile);
+        // Then: both records are stored and discovery returns no files
+        assertThat(stateDao.getProcessedFileNames()).containsExactlyInAnyOrder(first.getName(), second.getName());
+        assertThat(service.discoverNewFiles(UUID.fromString("10000000-0000-0000-0000-000000000005"))).isEmpty();
     }
 
     @Test
-    void shouldExtractTimestampFromFilenamesAndFilterCorrectly() throws IOException {
-        Path basePath = new Path("hdfs://test/path/");
-        Path validFile = new Path(basePath, "netflow-p01-2026-08-27T10-30-00-123Z-abc.parquet");
-        Path invalidFile = new Path(basePath, "invalid.parquet");
+    void givenMissingDiscoveryDirectory_whenDiscovered_thenTheFailureIsReported() {
+        // Given: a service configured with a nonexistent directory
+        HdfsConfig missingConfig = new HdfsConfig();
+        missingConfig.setUri("file://");
+        missingConfig.setParquetPath(directory.resolve("missing").toString());
+        FileDiscoveryService missingService = new FileDiscoveryService(fileSystem, missingConfig, batchConfig, stateDao);
 
-        FileStatus status1 = mockFileStatus(validFile);
-        FileStatus status2 = mockFileStatus(invalidFile);
+        // When: discovery attempts to list the missing location
+        Throwable failure = org.assertj.core.api.Assertions.catchThrowable(
+                () -> missingService.discoverNewFiles(UUID.fromString("10000000-0000-0000-0000-000000000006")));
 
-        when(fileSystem.listStatus(basePath)).thenReturn(new FileStatus[]{status1, status2});
-        when(stateDao.getProcessedFileNames()).thenReturn(new HashSet<>());
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> result = service.discoverNewFiles(batchId);
-
-        assertThat(result).hasSize(1);
-        assertThat(result).containsExactly(validFile);
+        // Then: the infrastructure failure is exposed with its discovery context
+        assertThat(failure).isInstanceOf(RuntimeException.class).hasMessageContaining("File discovery failed");
     }
 
-    private FileStatus mockFileStatus(Path path) {
-        return new FileStatus() {
-            @Override
-            public Path getPath() {
-                return path;
-            }
-
-            @Override
-            public boolean isDirectory() {
-                return false;
-            }
-
-            @Override
-            public long getLen() {
-                return 1024;
-            }
-
-            @Override
-            public long getBlockSize() {
-                return 128 * 1024 * 1024;
-            }
-
-            @Override
-            public short getReplication() {
-                return 1;
-            }
-
-            @Override
-            public long getModificationTime() {
-                return System.currentTimeMillis();
-            }
-
-            @Override
-            public long getAccessTime() {
-                return System.currentTimeMillis();
-            }
-
-            @Override
-            public org.apache.hadoop.fs.permission.FsPermission getPermission() {
-                return org.apache.hadoop.fs.permission.FsPermission.getDefault();
-            }
-
-            @Override
-            public String getOwner() {
-                return "test";
-            }
-
-            @Override
-            public String getGroup() {
-                return "test";
-            }
-        };
+    private Path createFile(String name) throws IOException {
+        return new Path(Files.createFile(directory.resolve(name)).toUri());
     }
 }

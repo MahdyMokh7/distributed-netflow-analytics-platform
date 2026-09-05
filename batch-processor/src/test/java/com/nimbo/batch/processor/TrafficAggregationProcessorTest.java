@@ -1,123 +1,67 @@
 package com.nimbo.batch.processor;
 
-import com.nimbo.batch.config.BatchConfig;
-import com.nimbo.batch.config.HdfsConfig;
-import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.exception.BatchProcessingException;
-import com.nimbo.batch.writer.PostgresWriter;
-import org.apache.hadoop.fs.Path;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class TrafficAggregationProcessorTest extends BaseProcessorTest {
 
-    private HdfsConfig hdfsConfig;
-    private BatchConfig batchConfig;
-    private OutputConfig outputConfig;
-    private PostgresWriter postgresWriter;
-    private TrafficAggregationProcessor processor;
-    private List<Path> testFiles;
+    @Test
+    void givenFlowsInTwoWindows_whenProcessed_thenTrafficTotalsArePersisted() {
+        // Given: deterministic flows with repeated and distinct source addresses
+        TrafficAggregationProcessor processor = new TrafficAggregationProcessor(batchConfig(), databaseOutput(), postgresWriter());
+        UUID batchId = UUID.fromString("10000000-0000-0000-0000-000000000001");
 
-    @BeforeEach
-    void setUp() {
-        hdfsConfig = mock(HdfsConfig.class);
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getLocalPath());
+        // When: traffic aggregation writes the database output
+        processor.process(standardFlows(), batchId);
 
-        batchConfig = mock(BatchConfig.class);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
-
-        outputConfig = mock(OutputConfig.class);
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
-        postgresWriter = mock(PostgresWriter.class);
-
-        processor = new TrafficAggregationProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
-
-        testFiles = List.of(new Path(testParquetConfig.getLocalPath()));
+        // Then: source-window totals match the expected aggregation
+        assertThat(countRows("traffic_aggregates")).isEqualTo(2);
+        assertThat(queryLong("SELECT in_bytes FROM traffic_aggregates WHERE src_ip = '10.0.0.1'")).isEqualTo(450L);
+        assertThat(queryLong("SELECT out_bytes FROM traffic_aggregates WHERE src_ip = '10.0.0.1'")).isEqualTo(670L);
+        assertThat(queryLong("SELECT record_count FROM traffic_aggregates WHERE src_ip = '10.0.0.1'")).isEqualTo(3L);
     }
 
     @Test
-    void shouldProcessWithConsoleOutputWithoutException() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
+    void givenTheSameBatchTwice_whenProcessed_thenTrafficUpsertRemainsExactlyOnce() {
+        // Given: one fixed batch identifier and deterministic flow records
+        TrafficAggregationProcessor processor = new TrafficAggregationProcessor(batchConfig(), databaseOutput(), postgresWriter());
+        UUID batchId = UUID.fromString("10000000-0000-0000-0000-000000000002");
+
+        // When: the same batch is processed twice
+        processor.process(standardFlows(), batchId);
+        processor.process(standardFlows(), batchId);
+
+        // Then: primary-key upserts preserve two source-window rows
+        assertThat(countRows("traffic_aggregates")).isEqualTo(2);
+        assertThat(queryLong("SELECT SUM(record_count) FROM traffic_aggregates")).isEqualTo(4L);
     }
 
     @Test
-    void shouldThrowExceptionOnEmptyDataset() {
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getEmptyPath());
+    void givenNoFlows_whenProcessed_thenNoTrafficRowsAreWritten() {
+        // Given: an empty netflow dataset
+        TrafficAggregationProcessor processor = new TrafficAggregationProcessor(batchConfig(), databaseOutput(), postgresWriter());
 
-        TrafficAggregationProcessor emptyProcessor = new TrafficAggregationProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
+        // When: traffic aggregation runs
+        processor.process(emptyFlows(), UUID.fromString("10000000-0000-0000-0000-000000000003"));
 
-        UUID batchId = UUID.randomUUID();
-        List<Path> emptyFiles = List.of(
-                new Path(testParquetConfig.getEmptyPath() + "/empty.parquet")
-        );
-        assertThatThrownBy(() -> emptyProcessor.process(emptyFiles, batchId))
-                .isInstanceOf(BatchProcessingException.class)  // ✅ Changed
+        // Then: no database rows are created
+        assertThat(countRows("traffic_aggregates")).isZero();
+    }
+
+    @Test
+    void givenFlowsMissingRequiredColumns_whenProcessed_thenBatchFailureIsReported() {
+        // Given: a dataset without traffic aggregation columns
+        TrafficAggregationProcessor processor = new TrafficAggregationProcessor(batchConfig(), databaseOutput(), postgresWriter());
+
+        // When: traffic aggregation is invoked
+        // Then: the source-schema error is wrapped with batch context
+        assertThatThrownBy(() -> processor.process(flowsMissingRequiredColumns(), UUID.fromString("10000000-0000-0000-0000-000000000004")))
+                .isInstanceOf(BatchProcessingException.class)
                 .hasMessageContaining("Traffic aggregation failed");
-    }
-
-    @Test
-    void shouldThrowExceptionOnInvalidPath() {
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getInvalidPath());
-
-        TrafficAggregationProcessor invalidProcessor = new TrafficAggregationProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> invalidFiles = List.of(
-                new Path(testParquetConfig.getInvalidPath() + "/invalid.parquet")
-        );
-        assertThatThrownBy(() -> invalidProcessor.process(invalidFiles, batchId))
-                .isInstanceOf(BatchProcessingException.class)  // ✅ Changed
-                .hasMessageContaining("Traffic aggregation failed");
-    }
-    @Test
-    void shouldWriteToDatabaseWhenDatabaseModeEnabled() {
-        when(outputConfig.isConsoleMode()).thenReturn(false);
-        when(outputConfig.isDatabaseMode()).thenReturn(true);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldOrderResultsByWindowStartDescending() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldOrderResultsByBytesDescending() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldHandleLargeDatasetWithoutErrors() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldProcessWithEmptyFileListWithoutException() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(List.of(), batchId);
     }
 }

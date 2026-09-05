@@ -63,37 +63,6 @@ public class PartitionWriter<T, D> implements Serializable {
     }
 
     public void call(Iterator<Row> partition) {
-
-        System.out.println("========== EXECUTOR CLASSLOADER DEBUG ==========");
-        try {
-            System.out.println("EXECUTOR HOST = " + java.net.InetAddress.getLocalHost().getHostName());
-        } catch (Exception e) {
-            System.out.println("EXECUTOR HOST = unknown");
-        }
-        System.out.println("CONTEXT CLASSLOADER = " + Thread.currentThread().getContextClassLoader());
-        System.out.println("PARTITION WRITER CLASSLOADER = " + PartitionWriter.class.getClassLoader());
-        System.out.println("JDBI FACTORY CLASSLOADER = " + JdbiDaoFactory.class.getClassLoader());
-
-        // Check if the driver resource is visible
-        java.net.URL resource = Thread.currentThread().getContextClassLoader().getResource("org/postgresql/Driver.class");
-        System.out.println("POSTGRES RESOURCE (context) = " + resource);
-        resource = ClassLoader.getSystemClassLoader().getResource("org/postgresql/Driver.class");
-        System.out.println("POSTGRES RESOURCE (system) = " + resource);
-
-        System.out.println("JAVA CLASS PATH = " + System.getProperty("java.class.path"));
-
-        // Try loading driver explicitly
-        try {
-            Class<?> driverClass = Class.forName("org.postgresql.Driver");
-            System.out.println("POSTGRES DRIVER LOADED = " + driverClass);
-            System.out.println("POSTGRES DRIVER SOURCE = " + driverClass.getProtectionDomain().getCodeSource().getLocation());
-        } catch (Throwable t) {
-            System.out.println("POSTGRES DRIVER LOAD FAILED");
-            t.printStackTrace();
-        }
-        System.out.println("================================================");
-
-
         int partitionId = TaskContext.get() != null ? TaskContext.get().partitionId() : -1;
         int batchNumber = 0;
         List<T> batch = new ArrayList<>(batchSize);

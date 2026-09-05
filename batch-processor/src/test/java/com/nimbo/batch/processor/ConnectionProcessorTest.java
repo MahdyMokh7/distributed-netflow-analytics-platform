@@ -1,151 +1,52 @@
 package com.nimbo.batch.processor;
 
-import com.nimbo.batch.config.BatchConfig;
-import com.nimbo.batch.config.HdfsConfig;
-import com.nimbo.batch.config.OutputConfig;
-import com.nimbo.batch.exception.BatchProcessingException;
-import com.nimbo.batch.writer.PostgresWriter;
-import org.apache.hadoop.fs.Path;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class ConnectionProcessorTest extends BaseProcessorTest {
 
-    private HdfsConfig hdfsConfig;
-    private BatchConfig batchConfig;
-    private OutputConfig outputConfig;
-    private PostgresWriter postgresWriter;
-    private ConnectionProcessor processor;
-    private List<Path> testFiles;
+    @Test
+    void givenDifferentPortsAndProtocolsForTheSameIpPair_whenProcessed_thenTheirMetricsCollapseIntoOneConnection() {
+        // Given: deterministic flows with distinct five-tuples for one IP pair
+        ConnectionProcessor processor = new ConnectionProcessor(batchConfig(), databaseOutput(), postgresWriter());
+        UUID batchId = UUID.fromString("20000000-0000-0000-0000-000000000001");
 
-    @BeforeEach
-    void setUp() {
-        hdfsConfig = mock(HdfsConfig.class);
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getLocalPath());
+        // When: connection aggregation writes database output
+        processor.process(standardFlows(), batchId);
 
-        batchConfig = mock(BatchConfig.class);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
-
-        outputConfig = mock(OutputConfig.class);
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
-        postgresWriter = mock(PostgresWriter.class);
-
-        processor = new ConnectionProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
-
-        testFiles = List.of(new Path(testParquetConfig.getLocalPath()));
+        // Then: the IP pair is merged with summed metrics and a stable SHA-256 identifier
+        assertThat(countRows("connection_aggregates")).isEqualTo(3);
+        assertThat(queryLong("SELECT in_bytes FROM connection_aggregates WHERE src_ip = '10.0.0.1' AND dst_ip = '10.0.0.2'")).isEqualTo(400L);
+        assertThat(queryLong("SELECT out_bytes FROM connection_aggregates WHERE src_ip = '10.0.0.1' AND dst_ip = '10.0.0.2'")).isEqualTo(600L);
+        assertThat(queryString("SELECT id FROM connection_aggregates WHERE src_ip = '10.0.0.1' AND dst_ip = '10.0.0.2'")).hasSize(64);
     }
 
     @Test
-    void shouldProcessWithConsoleOutputWithoutException() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
+    void givenTheSameBatchTwice_whenProcessed_thenConnectionUpsertRemainsExactlyOnce() {
+        // Given: one fixed batch identifier and deterministic connection records
+        ConnectionProcessor processor = new ConnectionProcessor(batchConfig(), databaseOutput(), postgresWriter());
+        UUID batchId = UUID.fromString("20000000-0000-0000-0000-000000000002");
+
+        // When: the same batch is processed twice
+        processor.process(standardFlows(), batchId);
+        processor.process(standardFlows(), batchId);
+
+        // Then: the three IP-pair connections are not duplicated
+        assertThat(countRows("connection_aggregates")).isEqualTo(3);
     }
 
     @Test
-    void shouldThrowExceptionOnEmptyDataset() {
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getEmptyPath());
+    void givenNoFlows_whenProcessed_thenNoConnectionRowsAreWritten() {
+        // Given: an empty netflow dataset
+        ConnectionProcessor processor = new ConnectionProcessor(batchConfig(), databaseOutput(), postgresWriter());
 
-        ConnectionProcessor emptyProcessor = new ConnectionProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
+        // When: connection aggregation runs
+        processor.process(emptyFlows(), UUID.fromString("20000000-0000-0000-0000-000000000003"));
 
-        UUID batchId = UUID.randomUUID();
-        List<Path> emptyFiles = List.of(
-                new Path(testParquetConfig.getEmptyPath() + "/empty.parquet")
-        );
-        assertThatThrownBy(() -> emptyProcessor.process(emptyFiles, batchId))
-                .isInstanceOf(BatchProcessingException.class)  // ✅ Changed
-                .hasMessageContaining("Connection aggregation failed");
-    }
-
-    @Test
-    void shouldThrowExceptionOnInvalidPath() {
-        when(hdfsConfig.getFullParquetPath())
-                .thenReturn(testParquetConfig.getInvalidPath());
-
-        ConnectionProcessor invalidProcessor = new ConnectionProcessor(
-                spark, hdfsConfig, batchConfig, outputConfig, postgresWriter
-        );
-
-        UUID batchId = UUID.randomUUID();
-        List<Path> invalidFiles = List.of(
-                new Path(testParquetConfig.getInvalidPath() + "/invalid.parquet")
-        );
-        assertThatThrownBy(() -> invalidProcessor.process(invalidFiles, batchId))
-                .isInstanceOf(BatchProcessingException.class)  // ✅ Changed
-                .hasMessageContaining("Connection aggregation failed");
-    }
-
-    @Test
-    void shouldWriteToDatabaseWhenDatabaseModeEnabled() {
-        when(outputConfig.isConsoleMode()).thenReturn(false);
-        when(outputConfig.isDatabaseMode()).thenReturn(true);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldNotWriteToDatabaseWhenConsoleModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldWriteToConsoleWhenConsoleModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(true);
-        when(outputConfig.isDatabaseMode()).thenReturn(false);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldWriteToDatabaseWhenDatabaseModeOnly() {
-        when(outputConfig.isConsoleMode()).thenReturn(false);
-        when(outputConfig.isDatabaseMode()).thenReturn(true);
-
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldGenerateSha256IdForEachConnection() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldOrderResultsByBytesDescending() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldHandleLargeDatasetWithoutErrors() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(testFiles, batchId);
-    }
-
-    @Test
-    void shouldProcessWithEmptyFileListWithoutException() {
-        UUID batchId = UUID.randomUUID();
-        processor.process(List.of(), batchId);
+        // Then: no database rows are created
+        assertThat(countRows("connection_aggregates")).isZero();
     }
 }

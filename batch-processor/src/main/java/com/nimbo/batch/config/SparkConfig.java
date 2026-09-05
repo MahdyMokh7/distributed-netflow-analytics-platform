@@ -56,11 +56,7 @@ public class SparkConfig {
         setIfPresent(builder, "spark.jars", jarsPath);
         setIfPresent(builder, "spark.executor.extraJavaOptions", executorExtraJavaOptions);
 
-        SparkSession spark = builder.getOrCreate();
-        System.out.println("EFFECTIVE spark.jars = " + spark.sparkContext().getConf().getOption("spark.jars"));
-        System.out.println("EFFECTIVE spark.executor.extraJavaOptions = " + spark.sparkContext().getConf().getOption("spark.executor.extraJavaOptions"));
-
-        return spark;
+        return builder.getOrCreate();
     }
 
     private void setIfPresent(

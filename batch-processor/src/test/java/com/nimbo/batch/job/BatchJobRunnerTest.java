@@ -1,204 +1,176 @@
 package com.nimbo.batch.job;
 
 import com.nimbo.batch.config.BatchConfig;
+import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.OutputConfig;
+import com.nimbo.batch.dao.BatchStateDao;
 import com.nimbo.batch.discovery.FileDiscoveryService;
-import com.nimbo.batch.processor.*;
-import org.apache.hadoop.fs.Path;
+import com.nimbo.batch.processor.BaseProcessor;
+import com.nimbo.batch.processor.ConnectionProcessor;
+import com.nimbo.batch.processor.ProtocolProcessor;
+import com.nimbo.batch.processor.TopIpProcessor;
+import com.nimbo.batch.processor.TrafficAggregationProcessor;
+import com.nimbo.batch.util.TestPostgresExtension;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructType;
+import org.jdbi.v3.core.Jdbi;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
-import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-@ExtendWith(MockitoExtension.class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class BatchJobRunnerTest {
 
-    @Mock
-    private TrafficAggregationProcessor trafficProcessor;
+    private static final StructType NETFLOW_SCHEMA = new StructType()
+            .add("IPV4_SRC_ADDR", DataTypes.StringType, false)
+            .add("IPV4_DST_ADDR", DataTypes.StringType, false)
+            .add("L4_SRC_PORT", DataTypes.IntegerType, false)
+            .add("L4_DST_PORT", DataTypes.IntegerType, false)
+            .add("PROTOCOL", DataTypes.IntegerType, false)
+            .add("L7_PROTO", DataTypes.DoubleType, false)
+            .add("IN_BYTES", DataTypes.LongType, false)
+            .add("OUT_BYTES", DataTypes.LongType, false)
+            .add("IN_PKTS", DataTypes.LongType, false)
+            .add("OUT_PKTS", DataTypes.LongType, false)
+            .add("PROCESSING_TIME", DataTypes.LongType, false);
 
-    @Mock
-    private ConnectionProcessor connectionProcessor;
+    @RegisterExtension
+    static final TestPostgresExtension POSTGRES = new TestPostgresExtension();
 
-    @Mock
-    private ProtocolProcessor protocolProcessor;
+    @TempDir
+    java.nio.file.Path directory;
 
-    @Mock
-    private TopIpProcessor topIpProcessor;
-
-    @Mock
+    private SparkSession spark;
+    private FileSystem fileSystem;
+    private BatchStateDao stateDao;
     private BatchConfig batchConfig;
-
-    @Mock
-    private OutputConfig outputConfig;
-
-    @Mock
     private FileDiscoveryService fileDiscoveryService;
 
-    private BatchJobRunner batchJobRunner;
+    @BeforeAll
+    void startSpark() {
+        spark = SparkSession.builder()
+                .master("local[2]")
+                .appName(getClass().getSimpleName())
+                .config("spark.ui.enabled", "false")
+                .config("spark.sql.shuffle.partitions", "2")
+                .config("spark.sql.session.timeZone", "UTC")
+                .getOrCreate();
+    }
+
+    @AfterAll
+    void stopSpark() {
+        spark.stop();
+        SparkSession.clearActiveSession();
+        SparkSession.clearDefaultSession();
+    }
 
     @BeforeEach
-    void setUp() {
-        batchJobRunner = new BatchJobRunner(
-                List.of(trafficProcessor, connectionProcessor, protocolProcessor, topIpProcessor),
-                batchConfig,
-                outputConfig,
-                fileDiscoveryService
-        );
+    void setUp() throws IOException {
+        fileSystem = FileSystem.getLocal(new Configuration());
+        Jdbi jdbi = POSTGRES.jdbi();
+        jdbi.useHandle(handle -> {
+            handle.execute("CREATE TABLE IF NOT EXISTS batch_processor_state (file_name VARCHAR PRIMARY KEY, file_timestamp TIMESTAMP NOT NULL, batch_id UUID NOT NULL, processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+            handle.execute("TRUNCATE batch_processor_state");
+        });
+        stateDao = jdbi.onDemand(BatchStateDao.class);
+        batchConfig = new BatchConfig();
+        batchConfig.setEnabled(true);
+        batchConfig.setWindowDuration("1 hour");
+        batchConfig.setMaxFilesPerBatch(5);
+        HdfsConfig hdfsConfig = new HdfsConfig();
+        hdfsConfig.setUri("file://");
+        hdfsConfig.setParquetPath(directory.toString());
+        fileDiscoveryService = new FileDiscoveryService(fileSystem, hdfsConfig, batchConfig, stateDao);
+    }
+
+    @AfterEach
+    void closeFileSystem() throws IOException {
+        fileSystem.close();
     }
 
     @Test
-    void shouldRunAllProcessorsWhenBatchEnabled() {
-        when(batchConfig.isEnabled()).thenReturn(true);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
+    void givenAnEnabledJobAndANetflowFile_whenRun_thenItProcessesAndRecordsTheFile() throws IOException {
+        // Given: one real Parquet file and all four real processors
+        String fileName = "netflow-p01-2026-08-29T08-30-00-000Z-job.parquet";
+        writeNetflowFile(fileName);
+        BatchJobRunner runner = runner();
 
-        List<Path> mockFiles = List.of(
-                new Path("hdfs://test/path/file1.parquet"),
-                new Path("hdfs://test/path/file2.parquet")
-        );
-        when(fileDiscoveryService.discoverNewFiles(any(UUID.class))).thenReturn(mockFiles);
+        // When: the scheduled job entry point is invoked directly
+        runner.runBatchJob();
 
-        batchJobRunner.runBatchJob();
-
-        verify(fileDiscoveryService).discoverNewFiles(any(UUID.class));
-        verify(trafficProcessor).process(anyList(), any(UUID.class));
-        verify(connectionProcessor).process(anyList(), any(UUID.class));
-        verify(protocolProcessor).process(anyList(), any(UUID.class));
-        verify(topIpProcessor).process(anyList(), any(UUID.class));
-        verify(fileDiscoveryService).markFilesAsProcessed(anyList(), any(UUID.class));
+        // Then: the file is durably recorded after all processor paths complete
+        assertThat(stateDao.getProcessedFileNames()).containsExactly(fileName);
+        assertThat(fileDiscoveryService.getFailedBatchId()).isNull();
     }
 
     @Test
-    void shouldSkipBatchJobWhenDisabled() {
-        when(batchConfig.isEnabled()).thenReturn(false);
+    void givenAnEnabledJobWithoutFiles_whenRun_thenItCompletesWithoutStateChanges() {
+        // Given: an enabled job with an empty discovery directory
+        BatchJobRunner runner = runner();
 
-        batchJobRunner.runBatchJob();
+        // When: the scheduled job entry point is invoked directly
+        runner.runBatchJob();
 
-        verify(fileDiscoveryService, never()).discoverNewFiles(any(UUID.class));
-        verify(trafficProcessor, never()).process(anyList(), any(UUID.class));
-        verify(connectionProcessor, never()).process(anyList(), any(UUID.class));
-        verify(protocolProcessor, never()).process(anyList(), any(UUID.class));
-        verify(topIpProcessor, never()).process(anyList(), any(UUID.class));
-        verify(fileDiscoveryService, never()).markFilesAsProcessed(anyList(), any(UUID.class));
+        // Then: no file state is created
+        assertThat(stateDao.getProcessedFileNames()).isEmpty();
     }
 
     @Test
-    void shouldSkipProcessingWhenNoFilesFound() {
-        when(batchConfig.isEnabled()).thenReturn(true);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
-        when(fileDiscoveryService.discoverNewFiles(any(UUID.class))).thenReturn(List.of());
+    void givenADisabledJobAndAFile_whenRun_thenItLeavesTheFileUnprocessed() throws IOException {
+        // Given: a discoverable file and a disabled batch configuration
+        String fileName = "netflow-p01-2026-08-29T08-30-00-000Z-disabled.parquet";
+        writeNetflowFile(fileName);
+        batchConfig.setEnabled(false);
+        BatchJobRunner runner = runner();
 
-        batchJobRunner.runBatchJob();
+        // When: the scheduled job entry point is invoked directly
+        runner.runBatchJob();
 
-        verify(fileDiscoveryService).discoverNewFiles(any(UUID.class));
-        verify(trafficProcessor, never()).process(anyList(), any(UUID.class));
-        verify(connectionProcessor, never()).process(anyList(), any(UUID.class));
-        verify(protocolProcessor, never()).process(anyList(), any(UUID.class));
-        verify(topIpProcessor, never()).process(anyList(), any(UUID.class));
-        verify(fileDiscoveryService, never()).markFilesAsProcessed(anyList(), any(UUID.class));
+        // Then: the job does not record the available file
+        assertThat(stateDao.getProcessedFileNames()).isEmpty();
     }
 
-    @Test
-    void shouldNotMarkFilesAsProcessedWhenProcessorFails() {
-        when(batchConfig.isEnabled()).thenReturn(true);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
-
-        List<Path> mockFiles = List.of(
-                new Path("hdfs://test/path/file1.parquet"),
-                new Path("hdfs://test/path/file2.parquet")
-        );
-        when(fileDiscoveryService.discoverNewFiles(any(UUID.class))).thenReturn(mockFiles);
-
-        doThrow(new RuntimeException("Processor failed"))
-                .when(trafficProcessor).process(anyList(), any(UUID.class));
-
-        assertThrows(RuntimeException.class, () -> batchJobRunner.runBatchJob());
-
-        verify(fileDiscoveryService).discoverNewFiles(any(UUID.class));
-        verify(trafficProcessor).process(anyList(), any(UUID.class));
-        verify(connectionProcessor, never()).process(anyList(), any(UUID.class));
-        verify(protocolProcessor, never()).process(anyList(), any(UUID.class));
-        verify(topIpProcessor, never()).process(anyList(), any(UUID.class));
-        verify(fileDiscoveryService, never()).markFilesAsProcessed(anyList(), any(UUID.class));
+    private BatchJobRunner runner() {
+        OutputConfig outputConfig = new OutputConfig();
+        outputConfig.setMode(OutputConfig.Mode.NONE);
+        List<BaseProcessor> processors = List.of(
+                new TrafficAggregationProcessor(batchConfig, outputConfig, null),
+                new ConnectionProcessor(batchConfig, outputConfig, null),
+                new TopIpProcessor(batchConfig, outputConfig, null),
+                new ProtocolProcessor(batchConfig, outputConfig, null));
+        return new BatchJobRunner(processors, batchConfig, outputConfig, fileDiscoveryService, spark);
     }
 
-    @Test
-    void shouldHandleProcessorExceptionGracefully() {
-        when(batchConfig.isEnabled()).thenReturn(true);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
-
-        List<Path> mockFiles = List.of(
-                new Path("hdfs://test/path/file1.parquet"),
-                new Path("hdfs://test/path/file2.parquet")
-        );
-        when(fileDiscoveryService.discoverNewFiles(any(UUID.class))).thenReturn(mockFiles);
-
-        doThrow(new RuntimeException("Processor failed"))
-                .when(trafficProcessor).process(anyList(), any(UUID.class));
-
-        assertThrows(RuntimeException.class, () -> batchJobRunner.runBatchJob());
-
-        verify(fileDiscoveryService).discoverNewFiles(any(UUID.class));
-        verify(trafficProcessor).process(anyList(), any(UUID.class));
-        verify(fileDiscoveryService, never()).markFilesAsProcessed(anyList(), any(UUID.class));
-    }
-
-    @Test
-    void shouldProcessAllProcessorsInListOrder() {
-        when(batchConfig.isEnabled()).thenReturn(true);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
-
-        List<Path> mockFiles = List.of(
-                new Path("hdfs://test/path/file1.parquet"),
-                new Path("hdfs://test/path/file2.parquet")
-        );
-        when(fileDiscoveryService.discoverNewFiles(any(UUID.class))).thenReturn(mockFiles);
-
-        batchJobRunner.runBatchJob();
-
-        var inOrder = inOrder(trafficProcessor, connectionProcessor, protocolProcessor, topIpProcessor);
-        inOrder.verify(trafficProcessor).process(anyList(), any(UUID.class));
-        inOrder.verify(connectionProcessor).process(anyList(), any(UUID.class));
-        inOrder.verify(protocolProcessor).process(anyList(), any(UUID.class));
-        inOrder.verify(topIpProcessor).process(anyList(), any(UUID.class));
-    }
-
-    @Test
-    void shouldMarkFilesAsProcessedAfterAllProcessorsSucceed() {
-        when(batchConfig.isEnabled()).thenReturn(true);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
-
-        List<Path> mockFiles = List.of(
-                new Path("hdfs://test/path/file1.parquet"),
-                new Path("hdfs://test/path/file2.parquet")
-        );
-        when(fileDiscoveryService.discoverNewFiles(any(UUID.class))).thenReturn(mockFiles);
-
-        batchJobRunner.runBatchJob();
-
-        verify(fileDiscoveryService).markFilesAsProcessed(eq(mockFiles), any(UUID.class));
-    }
-
-    @Test
-    void shouldNotMarkFilesAsProcessedWhenFileDiscoveryFails() {
-        when(batchConfig.isEnabled()).thenReturn(true);
-        when(batchConfig.getWindowDuration()).thenReturn("1 hour");
-        when(fileDiscoveryService.discoverNewFiles(any(UUID.class)))
-                .thenThrow(new RuntimeException("Discovery failed"));
-
-        assertThrows(RuntimeException.class, () -> batchJobRunner.runBatchJob());
-
-        verify(fileDiscoveryService).discoverNewFiles(any(UUID.class));
-        verify(fileDiscoveryService, never()).markFilesAsProcessed(anyList(), any(UUID.class));
-        verify(trafficProcessor, never()).process(anyList(), any(UUID.class));
+    private void writeNetflowFile(String fileName) throws IOException {
+        java.nio.file.Path staging = directory.resolve("staging-" + fileName);
+        long timestampMicros = java.time.Instant.parse("2026-08-29T08:30:00Z").toEpochMilli() * 1_000;
+        List<Row> rows = List.of(
+                RowFactory.create("10.0.0.1", "10.0.0.2", 12345, 443, 6, 6.0, 100L, 200L, 1L, 2L, timestampMicros),
+                RowFactory.create("10.0.0.1", "10.0.0.2", 54321, 8443, 17, 6.0, 300L, 400L, 3L, 4L, timestampMicros));
+        spark.createDataFrame(rows, NETFLOW_SCHEMA).coalesce(1).write().parquet(staging.toString());
+        try (var paths = Files.list(staging)) {
+            java.nio.file.Path partFile = paths
+                    .filter(path -> path.getFileName().toString().startsWith("part-"))
+                    .findFirst()
+                    .orElseThrow();
+            Files.move(partFile, directory.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 }

@@ -7,35 +7,51 @@ spring:
     baseline-on-migrate: true
     validate-on-migrate: true
     locations: classpath:db.migration
+    # Disable Flyway's own data source for tests (we use Testcontainers)
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:test_db}
+    user: ${POSTGRES_USER:test_user}
+    password: ${POSTGRES_PASSWORD:test_pass}
 
 logging:
   level:
     com.nimbo.batch: DEBUG
+    com.nimbo.batch.discovery: DEBUG
+    com.nimbo.batch.processor: DEBUG
+    com.nimbo.batch.writer: DEBUG
     org.apache.spark: WARN
     org.apache.hadoop: WARN
+    org.apache.parquet: WARN
     org.testcontainers: INFO
+    org.flywaydb: INFO
+    org.jdbi: DEBUG
 
 spark:
   master: local[*]
   app-name: nimbo-batch-processor-test
+  shuffle-partitions: 8
   adaptive-enabled: true
   adaptive-coalesce-partitions-enabled: true
+  serializer: org.apache.spark.serializer.KryoSerializer
   ui-enabled: false
   io-mode-default: NIO
+  speculation: false
+  executor-extra-java-options: "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED --add-opens=java.base/sun.net.util=ALL-UNNAMED"
 
 hdfs:
-  uri: hdfs://10.10.61.53:8020
-  parquet-path: /netflow/parquetFiles-test/
+  # Overridden in test to use local filesystem with @TempDir
+  uri: file://${java.io.tmpdir}/nimbo-test/parquet
+  parquet-path: /
 
 output:
-  mode: console
+  mode: both
 
 postgres:
-  host: localhost
-  port: 5432
-  database: test_db
-  username: test_user
-  password: test_pass
+  driver-class-name: org.postgresql.Driver
+  host: ${POSTGRES_HOST:localhost}
+  port: ${POSTGRES_PORT:5432}
+  database: ${POSTGRES_DB:test_db}
+  username: ${POSTGRES_USER:test_user}
+  password: ${POSTGRES_PASSWORD:test_pass}
   batch-size: 100
 
   driver-pool:
@@ -63,9 +79,21 @@ batch:
 
 test:
   parquet:
-    local-path: src/test/resources/sample-data/parquet/
-    empty-path: src/test/resources/empty/
-    invalid-path: hdfs://invalid/path/
-    sample-path: src/test/resources/sample-data/
-    records-per-file: 1000
-    files-per-partition: 3
+    records-per-file: 200
+    files-per-partition: 2
+    total-partitions: 3
+    base-timestamp: 2026-08-27T10:00:00Z
+    known-ips:
+      - "192.168.1.100"
+      - "192.168.1.101"
+      - "10.0.0.1"
+      - "10.0.0.2"
+    known-protocols:
+      - 6   # TCP
+      - 17  # UDP
+      - 1   # ICMP
+    full-batch-files: 5
+    incremental-first-batch: 3
+    incremental-additional: 2
+    max-files-test-total: 10
+    fallback-files: 3
