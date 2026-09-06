@@ -364,7 +364,7 @@ public final class TestDataGenerator {
 
         // CHANGED: Generate PROCESSING_TIME as epoch microseconds (Long)
         // This matches the real data format from the ingester
-        long processingTimeMicros = Instant.now().toEpochMilli() * 1000L;
+        long processingTimeMicros = Instant.parse("2026-08-29T08:00:00Z").plusSeconds(index).toEpochMilli() * 1000L;
 
         return RowFactory.create(
 

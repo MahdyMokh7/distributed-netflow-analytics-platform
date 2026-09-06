@@ -1,20 +1,16 @@
 package com.nimbo.batch.processor;
 
 import com.nimbo.batch.config.BatchConfig;
-import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.exception.BatchProcessingException;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.apache.spark.sql.functions.col;
@@ -33,34 +29,21 @@ public class TrafficAggregationProcessor extends BaseProcessor {
     private final OutputConfig outputConfig;
 
     public TrafficAggregationProcessor(
-            SparkSession spark,
-            HdfsConfig hdfsConfig,
             BatchConfig batchConfig,
             OutputConfig outputConfig,
             PostgresWriter postgresWriter) {
 
-        super(
-                spark,
-                hdfsConfig.getFullParquetPath(),
-                batchConfig.getWindowDuration(),
-                postgresWriter
-        );
+        super(batchConfig.getWindowDuration(), postgresWriter);
 
         this.outputConfig = outputConfig;
     }
 
     @Override
-    public void process(List<Path> files, UUID batchId) {
+    public void process(Dataset<Row> sourceDf, UUID batchId) {
         logHeader("=== TRAFFIC AGGREGATION (IP Bandwidth by {} Windows) ===", windowDuration);
 
         try {
-            if (files == null || files.isEmpty()) {
-                log.warn("No files provided, skipping traffic aggregation");
-                return;
-            }
-
-            Dataset<Row> aggregated = aggregateTraffic(files);
-            log.info("AGGREGATION COMPLETED.????????????????????????????????????????");
+            Dataset<Row> aggregated = aggregateTraffic(sourceDf);
 
             long recordCount = aggregated.count();
             log.info("Total aggregation records: {}", recordCount);
@@ -74,16 +57,13 @@ public class TrafficAggregationProcessor extends BaseProcessor {
 
         } catch (Exception e) {
             log.error("Error processing traffic aggregation", e);
+
             throw new BatchProcessingException(batchId, "Traffic aggregation failed", e);
         }
     }
 
-    private Dataset<Row> aggregateTraffic(List<Path> files) {
-        Dataset<Row> parquetDf = readParquetFiles(files);
-
-        log.info("READ PARQUET FILES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-
-        return parquetDf
+    private Dataset<Row> aggregateTraffic(Dataset<Row> sourceDf) {
+        return sourceDf
                 .groupBy(
                         col(NETFLOW_SRC_IP).alias(SPARK_SRC_IP),
                         window(timestamp_micros(col(NETFLOW_PROCESSING_TIME)), windowDuration)

@@ -32,28 +32,22 @@ public class ProtocolProcessor extends BaseProcessor {
 
     private final OutputConfig outputConfig;
 
-    public ProtocolProcessor(SparkSession spark,
-                             HdfsConfig hdfsConfig,
-                             BatchConfig batchConfig,
-                             OutputConfig outputConfig,
-                             PostgresWriter postgresWriter) {
-        super(spark, hdfsConfig.getFullParquetPath(), batchConfig.getWindowDuration(), postgresWriter);
+    public ProtocolProcessor(
+            BatchConfig batchConfig,
+            OutputConfig outputConfig,
+            PostgresWriter postgresWriter) {
+
+        super(batchConfig.getWindowDuration(), postgresWriter);
+
         this.outputConfig = outputConfig;
     }
 
     @Override
-    public void process(List<Path> files, UUID batchId) {
+    public void process(Dataset<Row> sourceDf, UUID batchId) {
         logHeader("=== PROTOCOL STATISTICS (Protocol Usage {} Windows) ===", windowDuration);
 
         try {
-            if (files == null || files.isEmpty()) {
-                log.warn("No files provided, skipping Protocol aggregation");
-                return;
-            }
-
-            Dataset<Row> aggregated = aggregateProtocols(files);
-            log.info("AGGREGATION COMPLETED.????????????????????????????????????????/");
-
+            Dataset<Row> aggregated = aggregateProtocols(sourceDf);
 
             long recordCount = aggregated.count();
             log.info("Total protocol aggregation records: {}", recordCount);
@@ -66,18 +60,14 @@ public class ProtocolProcessor extends BaseProcessor {
             writeOutput(aggregated, batchId);
 
         } catch (Exception e) {
+
             log.error("Error processing protocol aggregation", e);
             throw new BatchProcessingException(batchId, "Protocol aggregation failed", e);
         }
     }
 
-    private Dataset<Row> aggregateProtocols(List<Path> files) {
-        Dataset<Row> parquetDf = readParquetFiles(files);
-
-        log.info("READ PARQUET FILES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-
-
-        return parquetDf
+    private Dataset<Row> aggregateProtocols(Dataset<Row> sourceDf) {
+        return sourceDf
                 .groupBy(
                         col(NETFLOW_L7_PROTO).alias(SPARK_L7_PROTOCOL),
                         window(timestamp_micros(col(NETFLOW_PROCESSING_TIME)), windowDuration)

@@ -33,27 +33,22 @@ public class ConnectionProcessor extends BaseProcessor {
 
     private final OutputConfig outputConfig;
 
-    public ConnectionProcessor(SparkSession spark,
-                               HdfsConfig hdfsConfig,
-                               BatchConfig batchConfig,
-                               OutputConfig outputConfig,
-                               PostgresWriter postgresWriter) {
-        super(spark, hdfsConfig.getFullParquetPath(), batchConfig.getWindowDuration(), postgresWriter);
+    public ConnectionProcessor(
+            BatchConfig batchConfig,
+            OutputConfig outputConfig,
+            PostgresWriter postgresWriter) {
+
+        super(batchConfig.getWindowDuration(), postgresWriter);
+
         this.outputConfig = outputConfig;
     }
 
     @Override
-    public void process(List<Path> files, UUID batchId) {
+    public void process(Dataset<Row> sourceDf, UUID batchId) {
         logHeader("=== CONNECTION AGGREGATION (IP Connections {} Windows) ===", windowDuration);
 
         try {
-            if (files == null || files.isEmpty()) {
-                log.warn("No files provided, skipping connection aggregation");
-                return;
-            }
-
-            Dataset<Row> aggregated = aggregateConnections(files);
-            log.info("AGGREGATION COMPLETED.????????????????????????????????????????/");
+            Dataset<Row> aggregated = aggregateConnections(sourceDf);
 
             long recordCount = aggregated.count();
             log.info("Total connection aggregation records: {}", recordCount);
@@ -67,22 +62,16 @@ public class ConnectionProcessor extends BaseProcessor {
 
         } catch (Exception e) {
             log.error("Error processing connection aggregation", e);
+
             throw new BatchProcessingException(batchId, "Connection aggregation failed", e);
         }
     }
 
-    private Dataset<Row> aggregateConnections(List<Path> files) {
-        Dataset<Row> parquetDf = readParquetFiles(files);
-
-        log.info("READ PARQUET FILES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-
-        return parquetDf
+    private Dataset<Row> aggregateConnections(Dataset<Row> sourceDf) {
+        return sourceDf
                 .groupBy(
                         col(NETFLOW_SRC_IP).alias(SPARK_SRC_IP),
                         col(NETFLOW_DST_IP).alias(SPARK_DST_IP),
-                        col(NETFLOW_SRC_PORT).alias(SPARK_SRC_PORT),
-                        col(NETFLOW_DST_PORT).alias(SPARK_DST_PORT),
-                        col(NETFLOW_PROTOCOL).alias(SPARK_L4_PROTOCOL),
                         window(timestamp_micros(col(NETFLOW_PROCESSING_TIME)), windowDuration)
                 )
                 .agg(
@@ -97,9 +86,6 @@ public class ConnectionProcessor extends BaseProcessor {
                 .withColumn(SPARK_ID, sha2(concat_ws("|",
                         col(SPARK_SRC_IP),
                         col(SPARK_DST_IP),
-                        col(SPARK_SRC_PORT),
-                        col(SPARK_DST_PORT),
-                        col(SPARK_L4_PROTOCOL),
                         col(SPARK_WINDOW_START).cast("string")
                 ), 256));
     }
@@ -116,9 +102,8 @@ public class ConnectionProcessor extends BaseProcessor {
 
     private void writeToConsole(Dataset<Row> aggregated) {
         log.info("Top 20 Connection Aggregations in Console ({} windows):", windowDuration);
-        log.info("Id | Src IP | Dst IP | Src Port | Dst Port | Protocol | Window Start " +
-                "| Window End | In Bytes | Out Bytes | In Packets | Out Packets");
-        log.info("-".repeat(140));
+        log.info("Id | Src IP | Dst IP | Window Start | Window End | In Bytes | Out Bytes | In Packets | Out Packets");
+        log.info("-".repeat(110));
 
         aggregated.show(DISPLAY_LIMIT, false);
     }

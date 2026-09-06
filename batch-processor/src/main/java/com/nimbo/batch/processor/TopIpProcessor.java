@@ -31,31 +31,25 @@ public class TopIpProcessor extends BaseProcessor {
 
     private final OutputConfig outputConfig;
 
-    public TopIpProcessor(SparkSession spark,
-                          HdfsConfig hdfsConfig,
-                          BatchConfig batchConfig,
-                          OutputConfig outputConfig,
-                          PostgresWriter postgresWriter) {
-        super(spark, hdfsConfig.getFullParquetPath(), batchConfig.getWindowDuration(), postgresWriter);
+    public TopIpProcessor(
+            BatchConfig batchConfig,
+            OutputConfig outputConfig,
+            PostgresWriter postgresWriter) {
+
+        super(batchConfig.getWindowDuration(), postgresWriter);
+
         this.outputConfig = outputConfig;
     }
 
     @Override
-    public void process(List<Path> files, UUID batchId) {
+    public void process(Dataset<Row> sourceDf, UUID batchId) {
         logHeader("=== TOP IPs BY BANDWIDTH CONSUMPTION (per {} windows) ===", windowDuration);
 
         try {
-            if (files == null || files.isEmpty()) {
-                log.warn("No files provided, skipping IP aggregation");
-                return;
-            }
-
-            Dataset<Row> aggregated = aggregateTopIps(files);
-            log.info("AGGREGATION COMPLETED.????????????????????????????????????????/");
-
+            Dataset<Row> aggregated = aggregateTopIps(sourceDf);
 
             long recordCount = aggregated.count();
-            log.info("Total unique IPs (src+dst): {}", recordCount);
+            log.info("Total unique IP/window aggregates: {}", recordCount);
 
             if (recordCount == 0) {
                 log.warn("No IP records found in the time window");
@@ -66,16 +60,13 @@ public class TopIpProcessor extends BaseProcessor {
 
         } catch (Exception e) {
             log.error("Error processing top IP aggregation", e);
+
             throw new BatchProcessingException(batchId, "Top IP aggregation failed", e);
         }
     }
 
-    private Dataset<Row> aggregateTopIps(List<Path> files) {
-        Dataset<Row> parquetDf = readParquetFiles(files);
-
-        log.info("READ PARQUET FILES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-
-        Dataset<Row> srcPerspective = parquetDf
+    private Dataset<Row> aggregateTopIps(Dataset<Row> sourceDf) {
+        Dataset<Row> srcPerspective = sourceDf
                 .select(
                         col(NETFLOW_SRC_IP).alias(SPARK_IP),
                         col(NETFLOW_OUT_BYTES).alias(SPARK_OUTBOUND_BYTES),
@@ -85,7 +76,7 @@ public class TopIpProcessor extends BaseProcessor {
                         timestamp_micros(col(NETFLOW_PROCESSING_TIME)).alias(NETFLOW_PROCESSING_TIME)
                 );
 
-        Dataset<Row> dstPerspective = parquetDf
+        Dataset<Row> dstPerspective = sourceDf
                 .select(
                         col(NETFLOW_DST_IP).alias(SPARK_IP),
                         col(NETFLOW_IN_BYTES).alias(SPARK_OUTBOUND_BYTES),
