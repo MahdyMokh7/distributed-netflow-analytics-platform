@@ -174,7 +174,7 @@ docker exec -it nimbo-postgres psql -U nimbo_user -d nimbo_db
 - **Spark History UI:** `http://10.10.61.72/`
 - **Logs:** `tail -f batch-processor.log`
 
-spark-ui ip : http://10.10.61.71/
+spark-ui ip : http://10.10.61.71/ , 10.10.61.52:4040 current application running
 spark-ui history ip : http://10.10.61.72/
 
 

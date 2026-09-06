@@ -27,21 +27,16 @@ public final class SqlConstants {
 
     // ============ Connection Aggregates ============
     public static final String CONNECTION_AGGREGATES_INSERT =
-            "INSERT INTO connection_aggregates (id, src_ip, dst_ip, src_port, " +
-                    "dst_port, l4_protocol, window_start, window_end, " +
+            "INSERT INTO connection_aggregates (id, src_ip, dst_ip, window_start, window_end, " +
                     "in_bytes, out_bytes, in_packets, out_packets, " +
                     "batch_id, ingested_at) " +
-                    "VALUES (:id, :srcIp, :dstIp, :srcPort, :dstPort, :l4Protocol, " +
-                    ":windowStart, :windowEnd, :inBytes, :outBytes, " +
+                    "VALUES (:id, :srcIp, :dstIp, :windowStart, :windowEnd, :inBytes, :outBytes, " +
                     ":inPackets, :outPackets, :batchId, :ingestedAt)";
 
     public static final String CONNECTION_AGGREGATES_CONFLICT =
             "ON CONFLICT (id, window_start, batch_id) DO UPDATE SET " +
                     "src_ip = EXCLUDED.src_ip, " +
                     "dst_ip = EXCLUDED.dst_ip, " +
-                    "src_port = EXCLUDED.src_port, " +
-                    "dst_port = EXCLUDED.dst_port, " +
-                    "l4_protocol = EXCLUDED.l4_protocol, " +
                     "window_start = EXCLUDED.window_start, " +
                     "window_end = EXCLUDED.window_end, " +
                     "in_bytes = EXCLUDED.in_bytes, " +

@@ -18,6 +18,7 @@ public class SparkConfig {
     private String executorMemory;
     private int executorCores;
     private int numExecutors;
+    private int maxCores;
     private int shufflePartitions;
     private String driverMemory;
 
@@ -41,6 +42,8 @@ public class SparkConfig {
 
         setIfPresent(builder, "spark.executor.memory", executorMemory);
         setIfPositive(builder, "spark.executor.cores", executorCores);
+        setIfPositive(builder, "spark.executor.instances", numExecutors);
+        setIfPositive(builder, "spark.cores.max", maxCores);
         setIfPositive(builder, "spark.sql.shuffle.partitions", shufflePartitions);
 
         setIfPresent(builder, "spark.sql.adaptive.enabled", adaptiveEnabled);

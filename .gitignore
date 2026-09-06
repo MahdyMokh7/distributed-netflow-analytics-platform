@@ -53,6 +53,8 @@ terminal.log
 /rest-api/docs/
 /rest-api/code-extracter.py
 
+/docs/plan
+
 # Multi-module generated files
 
 # Maven build output for all modules

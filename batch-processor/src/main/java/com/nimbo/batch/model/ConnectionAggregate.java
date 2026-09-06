@@ -16,9 +16,6 @@ public class ConnectionAggregate {
     private String id;
     private String srcIp;
     private String dstIp;
-    private int srcPort;
-    private int dstPort;
-    private int l4Protocol;
     private LocalDateTime windowStart;
     private LocalDateTime windowEnd;
     private long inBytes;
