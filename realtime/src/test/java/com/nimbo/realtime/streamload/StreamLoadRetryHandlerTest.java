@@ -12,6 +12,8 @@ import org.apache.avro.Schema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.nimbo.realtime.metrics.RealtimeMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -66,7 +68,9 @@ class StreamLoadRetryHandlerTest {
                 new SchemaMapping(schema)
         );
 
-        retryHandler = new StreamLoadRetryHandler(properties, client);
+        RealtimeMetrics metrics = new RealtimeMetrics(new SimpleMeterRegistry());
+        metrics.registerWorker(1);
+        retryHandler = new StreamLoadRetryHandler(properties, client, 1, metrics);
     }
 
     @AfterEach

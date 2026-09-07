@@ -29,7 +29,13 @@ public class BatchBuffer {
     }
 
     public boolean shouldFlush() {
-        return reachedSize() || reachedTime();
+        return flushReason() != null;
+    }
+
+    public FlushReason flushReason() {
+        if (reachedSize()) return FlushReason.SIZE;
+        if (reachedTime()) return FlushReason.TIME;
+        return null;
     }
 
     private boolean reachedSize() {
@@ -44,6 +50,14 @@ public class BatchBuffer {
     public boolean isEmpty() {
         return rows.isEmpty();
     }
+
+    public int rowCount() { return rows.size(); }
+
+    public long ageSeconds() {
+        return rows.isEmpty() ? 0 : (System.currentTimeMillis() - lastFlushTime) / 1000;
+    }
+
+    public enum FlushReason { SIZE, TIME, SHUTDOWN }
 
     public BatchSnapshot snapshot() {
         return new BatchSnapshot(List.copyOf(rows), Map.copyOf(offsets));
