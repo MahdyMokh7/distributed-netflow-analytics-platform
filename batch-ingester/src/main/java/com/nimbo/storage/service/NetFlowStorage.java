@@ -165,7 +165,7 @@ public final class NetFlowStorage {
         currentFinalPath = new Path(basePath, finalFileName);
         currentTempPath = new Path(basePath, tempFileName);
 
-        fileStorage.ensureDirectoryExists(basePath);
+        fileStorage.ensureDirectoryExists(currentFinalPath.getParent());
         currentWriter = parquetFileWriter.createWriter(currentTempPath, storageSchema);
         writerOpen = true;
 

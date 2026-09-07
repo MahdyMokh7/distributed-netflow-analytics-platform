@@ -17,7 +17,7 @@ ingester:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
     topic: ${KAFKA_TOPIC:netflow}
     dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
-    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-consumer-deploy}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-consumer-batch-deploy}
     consumer-instances: ${CONSUMER_INSTANCES:3}
     enable-auto-commit: false
     poll-timeout-ms: ${KAFKA_POLL_TIMEOUT_MS:1000}

@@ -1,6 +1,7 @@
 package com.nimbo.batch.integration.util;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -189,12 +190,30 @@ public final class TestDataGenerator {
             ).toString();
 
             String fileName = String.format("netflow-p%02d-%s-%s.parquet", partition, timestampStr, uuid);
-            Path filePath = new Path(basePath, fileName);
+            String dateDirectory = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneOffset.UTC).format(fileTimestamp);
+            String hourDirectory = DateTimeFormatter.ofPattern("HH").withZone(ZoneOffset.UTC).format(fileTimestamp);
+            Path partitionPath = new Path(new Path(basePath, dateDirectory), hourDirectory);
+            Path stagingPath = new Path(basePath, ".staging-" + uuid);
 
             df.coalesce(1)
                     .write()
                     .mode("overwrite")
-                    .parquet(filePath.toString());
+                    .parquet(stagingPath.toString());
+
+            try {
+                org.apache.hadoop.fs.FileSystem fileSystem = stagingPath.getFileSystem(spark.sparkContext().hadoopConfiguration());
+                fileSystem.mkdirs(partitionPath);
+                FileStatus partFile = java.util.Arrays.stream(fileSystem.listStatus(stagingPath))
+                        .filter(status -> status.getPath().getName().startsWith("part-"))
+                        .findFirst()
+                        .orElseThrow();
+                if (!fileSystem.rename(partFile.getPath(), new Path(partitionPath, fileName))) {
+                    throw new IllegalStateException("Failed to publish test Parquet file: " + fileName);
+                }
+                fileSystem.delete(stagingPath, true);
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException("Failed to publish test Parquet file: " + fileName, e);
+            }
 
             log.debug("Generated test file: {} with {} records", fileName, recordsPerFile);
         }

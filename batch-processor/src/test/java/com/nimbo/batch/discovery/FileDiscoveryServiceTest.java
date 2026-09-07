@@ -17,6 +17,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -45,7 +46,7 @@ class FileDiscoveryServiceTest {
         });
         stateDao = jdbi.onDemand(BatchStateDao.class);
         batchConfig = new BatchConfig();
-        batchConfig.setMaxFilesPerBatch(2);
+        batchConfig.setMaxFilesPerBatch(3);
         HdfsConfig hdfsConfig = new HdfsConfig();
         hdfsConfig.setUri("file://");
         hdfsConfig.setParquetPath(directory.toString());
@@ -58,69 +59,75 @@ class FileDiscoveryServiceTest {
     }
 
     @Test
-    void givenNewAndInvalidFiles_whenDiscovered_thenOldestValidFilesRespectTheBatchLimit() throws IOException {
-        // Given: three timestamped Parquet files plus entries that must be ignored
-        createFile("netflow-p01-2026-08-29T10-30-00-000Z-third.parquet");
-        createFile("netflow-p02-2026-08-29T08-30-00-000Z-first.parquet");
-        createFile("netflow-p03-2026-08-29T09-30-00-000Z-second.parquet");
-        createFile("notes.txt");
-        createFile(".hidden.parquet");
-        createFile("netflow-p01-invalid.parquet");
+    void givenFilesAcrossUnorderedHourDirectories_whenDiscovered_thenTheGloballyOldestFilesFillTheBatch() throws IOException {
+        // Given: four partitioned files created in an order unrelated to their timestamps
+        createFile("2026-09-08", "00", "netflow-p01-2026-09-08T00-05-00-000Z-fourth.parquet");
+        createFile("2026-09-07", "14", "netflow-p01-2026-09-07T14-40-00-000Z-third.parquet");
+        createFile("2026-09-07", "13", "netflow-p02-2026-09-07T13-45-00-000Z-second.parquet");
+        createFile("2026-09-07", "13", "netflow-p03-2026-09-07T13-10-00-000Z-first.parquet");
 
-        // When: the service discovers a bounded batch
+        // When: discovery fills a three-file batch
         List<Path> files = service.discoverNewFiles(UUID.fromString("10000000-0000-0000-0000-000000000001"));
 
-        // Then: only the two oldest valid files are returned in timestamp order
+        // Then: directory time is primary and filename time orders files within an hour
         assertThat(files).extracting(Path::getName).containsExactly(
-                "netflow-p02-2026-08-29T08-30-00-000Z-first.parquet",
-                "netflow-p03-2026-08-29T09-30-00-000Z-second.parquet");
+                "netflow-p03-2026-09-07T13-10-00-000Z-first.parquet",
+                "netflow-p02-2026-09-07T13-45-00-000Z-second.parquet",
+                "netflow-p01-2026-09-07T14-40-00-000Z-third.parquet"
+        );
     }
 
     @Test
-    void givenARecordedFile_whenDiscovered_thenItIsExcludedFromTheNextBatch() throws IOException {
-        // Given: one previously recorded file and one new file
-        String processed = "netflow-p01-2026-08-29T08-30-00-000Z-processed.parquet";
-        String pending = "netflow-p02-2026-08-29T09-30-00-000Z-pending.parquet";
-        createFile(processed);
-        createFile(pending);
+    void givenProcessedAndMalformedEntries_whenDiscovered_thenOnlyValidPendingPartitionedFilesAreReturned() throws IOException {
+        // Given: processed, temporary, misplaced, malformed, nested, and root-level files
+        String processed = "netflow-p01-2026-09-07T13-10-00-000Z-processed.parquet";
+        String pending = "netflow-p02-2026-09-07T13-20-00-000Z-pending.parquet";
+        createFile("2026-09-07", "13", processed);
+        createFile("2026-09-07", "13", pending);
+        createFile("2026-09-07", "13", ".netflow-p03-2026-09-07T13-30-00-000Z-open.parquet.tmp");
+        createFile("2026-09-07", "13", "netflow-p04-2026-09-07T14-00-00-000Z-misplaced.parquet");
+        createFile("invalid-date", "13", "netflow-p05-2026-09-07T13-40-00-000Z-invalid-date.parquet");
+        createFile("2026-09-07", "24", "netflow-p06-2026-09-07T23-40-00-000Z-invalid-hour.parquet");
+        Files.createDirectories(directory.resolve("2026-09-07/13/nested.parquet"));
+        Files.createFile(directory.resolve("netflow-p07-2026-09-07T12-00-00-000Z-root.parquet"));
         stateDao.markFilesAsProcessed(List.of(BatchStateRecord.builder()
                 .fileName(processed)
-                .fileTimestamp(java.time.Instant.parse("2026-08-29T08:30:00Z"))
+                .fileTimestamp(Instant.parse("2026-09-07T13:10:00Z"))
                 .batchId(UUID.fromString("10000000-0000-0000-0000-000000000002"))
                 .build()));
 
-        // When: the service reads the real persisted processing state
+        // When: the hierarchical layout is discovered
         List<Path> files = service.discoverNewFiles(UUID.fromString("10000000-0000-0000-0000-000000000003"));
 
-        // Then: only the unprocessed file is eligible
+        // Then: only the valid unprocessed file from the new layout is returned
         assertThat(files).extracting(Path::getName).containsExactly(pending);
         assertThat(service.isUsingFallback()).isFalse();
     }
 
     @Test
-    void givenValidFiles_whenMarkedProcessed_thenTheyArePersistedAndNotRediscovered() throws IOException {
-        // Given: two valid files and a fixed batch identifier
-        Path first = createFile("netflow-p01-2026-08-29T08-30-00-000Z-first.parquet");
-        Path second = createFile("netflow-p02-2026-08-29T09-30-00-000Z-second.parquet");
+    void givenAValidPartitionedBatch_whenMarkedProcessed_thenItIsDurableAndNotRediscovered() throws IOException {
+        // Given: two completed files in consecutive hourly directories
+        Path first = createFile("2026-09-07", "13", "netflow-p01-2026-09-07T13-10-00-000Z-first.parquet");
+        Path second = createFile("2026-09-07", "14", "netflow-p02-2026-09-07T14-10-00-000Z-second.parquet");
         UUID batchId = UUID.fromString("10000000-0000-0000-0000-000000000004");
 
         // When: the files are marked through the real Jdbi DAO
         service.markFilesAsProcessed(List.of(first, second), batchId);
 
-        // Then: both records are stored and discovery returns no files
+        // Then: both names are stored and neither file is discovered again
         assertThat(stateDao.getProcessedFileNames()).containsExactlyInAnyOrder(first.getName(), second.getName());
         assertThat(service.discoverNewFiles(UUID.fromString("10000000-0000-0000-0000-000000000005"))).isEmpty();
     }
 
     @Test
-    void givenMissingDiscoveryDirectory_whenDiscovered_thenTheFailureIsReported() {
-        // Given: a service configured with a nonexistent directory
+    void givenMissingDiscoveryRoot_whenDiscovered_thenTheFailureIncludesDiscoveryContext() {
+        // Given: a service configured with a nonexistent partition root
         HdfsConfig missingConfig = new HdfsConfig();
         missingConfig.setUri("file://");
         missingConfig.setParquetPath(directory.resolve("missing").toString());
         FileDiscoveryService missingService = new FileDiscoveryService(fileSystem, missingConfig, batchConfig, stateDao);
 
-        // When: discovery attempts to list the missing location
+        // When: hierarchical discovery attempts to list the missing root
         Throwable failure = org.assertj.core.api.Assertions.catchThrowable(
                 () -> missingService.discoverNewFiles(UUID.fromString("10000000-0000-0000-0000-000000000006")));
 
@@ -128,7 +135,8 @@ class FileDiscoveryServiceTest {
         assertThat(failure).isInstanceOf(RuntimeException.class).hasMessageContaining("File discovery failed");
     }
 
-    private Path createFile(String name) throws IOException {
-        return new Path(Files.createFile(directory.resolve(name)).toUri());
+    private Path createFile(String date, String hour, String name) throws IOException {
+        java.nio.file.Path hourDirectory = Files.createDirectories(directory.resolve(date).resolve(hour));
+        return new Path(Files.createFile(hourDirectory.resolve(name)).toUri());
     }
 }

@@ -160,6 +160,7 @@ class BatchJobRunnerTest {
 
     private void writeNetflowFile(String fileName) throws IOException {
         java.nio.file.Path staging = directory.resolve("staging-" + fileName);
+        java.nio.file.Path hourDirectory = Files.createDirectories(directory.resolve("2026-08-29").resolve("08"));
         long timestampMicros = java.time.Instant.parse("2026-08-29T08:30:00Z").toEpochMilli() * 1_000;
         List<Row> rows = List.of(
                 RowFactory.create("10.0.0.1", "10.0.0.2", 12345, 443, 6, 6.0, 100L, 200L, 1L, 2L, timestampMicros),
@@ -170,7 +171,7 @@ class BatchJobRunnerTest {
                     .filter(path -> path.getFileName().toString().startsWith("part-"))
                     .findFirst()
                     .orElseThrow();
-            Files.move(partFile, directory.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+            Files.move(partFile, hourDirectory.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
         }
     }
 }

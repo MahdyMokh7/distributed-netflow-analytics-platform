@@ -22,7 +22,7 @@ spark:
 
 hdfs:
   uri: hdfs://10.10.61.53:8020
-  parquet-path: /netflow/parquetFiles-new/
+  parquet-path: /netflow/parquetFiles/
 
 output:
   mode: both

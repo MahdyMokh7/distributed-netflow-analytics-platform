@@ -10,8 +10,8 @@ spark:
   app-name: nimbo-batch-processor
   executor-memory: 1g
   executor-cores: 2
-  num-executors: 1
-  driver-memory: 2g
+  num-executors: 3
+  max-cores: 6
   shuffle-partitions: 12
   adaptive-enabled: true
   adaptive-coalesce-partitions-enabled: true
@@ -26,7 +26,7 @@ spark:
 
 hdfs:
   uri: hdfs://10.10.61.53:8020
-  parquet-path: /netflow/parquetFiles-new/
+  parquet-path: /netflow/parquetFiles/
 
 output:
   mode: both
@@ -58,7 +58,7 @@ postgres:
     max-delay-ms: 30000
 
 batch:
-  schedule: "0 */3 * * * ?"  ## should change
+  schedule: "0 */10 * * * ?"
   window-duration: "1 hour"
   enabled: true
-  max-files-per-batch: 5
+  max-files-per-batch: 10

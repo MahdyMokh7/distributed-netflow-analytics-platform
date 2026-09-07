@@ -6,12 +6,14 @@ import com.nimbo.batch.dao.BatchStateDao;
 import com.nimbo.batch.model.BatchStateRecord;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -23,7 +25,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -42,10 +43,13 @@ public class FileDiscoveryService {
     private UUID failedBatchId = null;
 
     private static final Pattern FILE_NAME_PATTERN =
-            Pattern.compile("netflow-p\\d{2}-(\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z)-.*\\.parquet");
+            Pattern.compile("netflow-p\\d{2,}-(\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z)-.*\\.parquet");
 
     private static final DateTimeFormatter FILENAME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss-SSS'Z'").withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter DATE_DIRECTORY_FORMATTER =
+            DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(java.time.format.ResolverStyle.STRICT);
+    private static final Pattern HOUR_DIRECTORY_PATTERN = Pattern.compile("(?:[01]\\d|2[0-3])");
 
     public FileDiscoveryService(
             FileSystem fileSystem,
@@ -65,48 +69,16 @@ public class FileDiscoveryService {
             Set<String> processedFileNames = getProcessedFileNames();
             log.debug("Found {} already processed files", processedFileNames.size());
 
-            List<Path> allFiles = listHdfsFiles();
-            log.debug("Found {} total files in HDFS", allFiles.size());
-
             int maxFiles = batchConfig.getMaxFilesPerBatch();
+            List<Path> newFiles = listOldestNewFiles(processedFileNames, maxFiles);
 
-            List<FileInfo> allNewFiles = new ArrayList<>();
-            for (Path file : allFiles) {
-                String fileName = file.getName();
-
-                if (processedFileNames.contains(fileName)) {
-                    continue;
-                }
-
-                Instant timestamp = extractTimestamp(fileName);
-                if (timestamp == null) {
-                    log.warn("Could not parse timestamp from filename: {}", fileName);
-                    continue;
-                }
-
-                allNewFiles.add(new FileInfo(file, timestamp));
-            }
-
-            allNewFiles.sort(Comparator.comparing(f -> f.timestamp));
-
-            if (allNewFiles.isEmpty()) {
+            if (newFiles.isEmpty()) {
                 log.info("No new files to process (batch: {})", batchId);
                 return List.of();
             }
 
-            int limit = Math.min(allNewFiles.size(), maxFiles);
-            if (allNewFiles.size() > maxFiles) {
-                log.warn("Found {} new files, limiting to {} files per batch (oldest first)",
-                        allNewFiles.size(), maxFiles);
-            }
-
-            List<Path> result = allNewFiles.stream()
-                    .limit(limit)
-                    .map(f -> f.path)
-                    .collect(Collectors.toList());
-
-            log.info("Discovered {} new files to process (batch: {})", result.size(), batchId);
-            return result;
+            log.info("Discovered {} new files to process (batch: {})", newFiles.size(), batchId);
+            return newFiles;
 
         } catch (Exception e) {
             log.error("Failed to discover files", e);
@@ -173,24 +145,92 @@ public class FileDiscoveryService {
         }
     }
 
-    private List<Path> listHdfsFiles() {
+    private List<Path> listOldestNewFiles(Set<String> processedFileNames, int maxFiles) {
+        if (maxFiles <= 0) {
+            return List.of();
+        }
+
         try {
             Path basePath = new Path(hdfsConfig.getFullParquetPath());
-            org.apache.hadoop.fs.FileStatus[] statuses = fileSystem.listStatus(basePath);
-            List<Path> files = new ArrayList<>();
+            List<FileStatus> dateDirectories = validDateDirectories(fileSystem.listStatus(basePath));
+            List<Path> result = new ArrayList<>(maxFiles);
 
-            for (org.apache.hadoop.fs.FileStatus status : statuses) {
-                if (!status.isDirectory()) {
-                    String name = status.getPath().getName();
-                    if (name.endsWith(".parquet") && !name.startsWith(".")) {
-                        files.add(status.getPath());
+            for (FileStatus dateDirectory : dateDirectories) {
+                LocalDate date = parseDateDirectory(dateDirectory.getPath().getName());
+                List<FileStatus> hourDirectories = validHourDirectories(fileSystem.listStatus(dateDirectory.getPath()));
+
+                for (FileStatus hourDirectory : hourDirectories) {
+                    int hour = Integer.parseInt(hourDirectory.getPath().getName());
+                    List<FileInfo> files = validFiles(fileSystem.listStatus(hourDirectory.getPath()), date, hour);
+
+                    for (FileInfo file : files) {
+                        if (!processedFileNames.contains(file.path.getName())) {
+                            result.add(file.path);
+                            if (result.size() == maxFiles) {
+                                return result;
+                            }
+                        }
                     }
                 }
             }
-
-            return files;
+            return result;
         } catch (IOException e) {
             throw new RuntimeException("Failed to list HDFS files", e);
+        }
+    }
+
+    private List<FileStatus> validDateDirectories(FileStatus[] statuses) {
+        List<FileStatus> directories = new ArrayList<>();
+        for (FileStatus status : statuses) {
+            if (status.isDirectory() && parseDateDirectory(status.getPath().getName()) != null) {
+                directories.add(status);
+            }
+        }
+        directories.sort(Comparator.comparing(status -> parseDateDirectory(status.getPath().getName())));
+        return directories;
+    }
+
+    private List<FileStatus> validHourDirectories(FileStatus[] statuses) {
+        List<FileStatus> directories = new ArrayList<>();
+        for (FileStatus status : statuses) {
+            if (status.isDirectory() && HOUR_DIRECTORY_PATTERN.matcher(status.getPath().getName()).matches()) {
+                directories.add(status);
+            }
+        }
+        directories.sort(Comparator.comparingInt(status -> Integer.parseInt(status.getPath().getName())));
+        return directories;
+    }
+
+    private List<FileInfo> validFiles(FileStatus[] statuses, LocalDate directoryDate, int directoryHour) {
+        List<FileInfo> files = new ArrayList<>();
+        for (FileStatus status : statuses) {
+            String fileName = status.getPath().getName();
+            if (status.isDirectory() || fileName.startsWith(".") || !fileName.endsWith(".parquet")) {
+                continue;
+            }
+
+            Instant timestamp = extractTimestamp(fileName);
+            if (timestamp == null) {
+                log.warn("Could not parse timestamp from filename: {}", fileName);
+                continue;
+            }
+
+            var timestampUtc = timestamp.atZone(ZoneOffset.UTC);
+            if (!timestampUtc.toLocalDate().equals(directoryDate) || timestampUtc.getHour() != directoryHour) {
+                log.warn("Ignoring Parquet file outside its timestamp partition: {}", status.getPath());
+                continue;
+            }
+            files.add(new FileInfo(status.getPath(), timestamp));
+        }
+        files.sort(Comparator.comparing(file -> file.timestamp));
+        return files;
+    }
+
+    private LocalDate parseDateDirectory(String name) {
+        try {
+            return LocalDate.parse(name, DATE_DIRECTORY_FORMATTER);
+        } catch (DateTimeParseException e) {
+            return null;
         }
     }
 
