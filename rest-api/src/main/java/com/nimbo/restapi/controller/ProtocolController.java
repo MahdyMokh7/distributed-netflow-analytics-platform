@@ -35,10 +35,10 @@ public class ProtocolController {
     )
     public ResponseEntity<ApiResponseDto<List<ProtocolResponseDto>>> getProtocolUsage(
             @Parameter(description = "Time range parameters")
-            @Valid TimeRangeRequestDto timeRange
+            @Valid
+            TimeRangeRequestDto timeRange
     ) {
-        log.debug("Protocol query for time range: {} to {}",
-                timeRange.getStartTime(), timeRange.getEndTime());
+        log.debug("Protocol query for time range: {} to {}", timeRange.getStartTime(), timeRange.getEndTime());
 
         ProtocolQueryRequestDto request = ProtocolQueryRequestDto.builder()
                 .startTime(timeRange.getStartTime())

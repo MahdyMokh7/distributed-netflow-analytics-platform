@@ -1,6 +1,7 @@
 package com.nimbo.batch.integration;
 
 import com.nimbo.batch.BatchProcessorApplication;
+import com.nimbo.batch.discovery.FileDiscoveryService;
 import com.nimbo.batch.integration.config.TestFileSystemConfig;
 import com.nimbo.batch.integration.config.TestParquetProperties;
 import com.nimbo.batch.integration.config.TestPostgresProperties;
@@ -8,6 +9,7 @@ import com.nimbo.batch.job.BatchJobRunner;
 import com.nimbo.batch.model.*;
 import com.nimbo.batch.integration.util.TestDataGenerator;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.SparkSession;
 import org.jdbi.v3.core.Jdbi;
@@ -25,6 +27,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -59,6 +62,12 @@ public class BatchProcessorModuleTest {
     private Jdbi jdbi;
 
     @Autowired
+    private FileSystem fileSystem;
+
+    @Autowired
+    private FileDiscoveryService fileDiscoveryService;
+
+    @Autowired
     private TestParquetProperties testProperties;
 
     @TempDir
@@ -84,8 +93,19 @@ public class BatchProcessorModuleTest {
     }
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws IOException {
         parquetRoot = new Path(tempDir.toString());
+        fileSystem.delete(parquetRoot, true);
+        fileSystem.mkdirs(parquetRoot);
+        fileDiscoveryService.clearFailedBatch();
+        jdbi.useHandle(handle -> handle.execute("""
+                TRUNCATE TABLE
+                    batch_processor_state,
+                    traffic_aggregates,
+                    connection_aggregates,
+                    protocol_usage_aggregates,
+                    ip_bandwidth_aggregates
+                """));
     }
 
     @Test

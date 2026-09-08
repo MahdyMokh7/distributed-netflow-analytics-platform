@@ -3,12 +3,14 @@ package com.nimbo.restapi.model;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
-import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigInteger;
 import java.time.Instant;
@@ -20,6 +22,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Entity
 @Table(name = "connection_aggregates")
+@IdClass(ConnectionAggregateId.class)
 public class ConnectionAggregate {
 
     @Id
@@ -31,36 +34,30 @@ public class ConnectionAggregate {
     @Column(name = "dst_ip", nullable = false)
     private String dstIp;
 
-    @Column(name = "src_port", nullable = false)
-    private Integer srcPort;
-
-    @Column(name = "dst_port", nullable = false)
-    private Integer dstPort;
-
-    @Column(name = "l4_protocol", nullable = false)
-    private Integer l4Protocol;
-
-    @Transient
-    private String protocolName;
-
+    @Id
     @Column(name = "window_start", nullable = false)
     private Instant windowStart;
 
     @Column(name = "window_end", nullable = false)
     private Instant windowEnd;
 
-    @Column(name = "in_bytes", nullable = false)
+    @Column(name = "in_bytes", nullable = false, columnDefinition = "BIGINT")
+    @JdbcTypeCode(SqlTypes.BIGINT)
     private BigInteger inBytes;
 
-    @Column(name = "out_bytes", nullable = false)
+    @Column(name = "out_bytes", nullable = false, columnDefinition = "BIGINT")
+    @JdbcTypeCode(SqlTypes.BIGINT)
     private BigInteger outBytes;
 
-    @Column(name = "in_packets", nullable = false)
+    @Column(name = "in_packets", nullable = false, columnDefinition = "BIGINT")
+    @JdbcTypeCode(SqlTypes.BIGINT)
     private BigInteger inPackets;
 
-    @Column(name = "out_packets", nullable = false)
+    @Column(name = "out_packets", nullable = false, columnDefinition = "BIGINT")
+    @JdbcTypeCode(SqlTypes.BIGINT)
     private BigInteger outPackets;
 
+    @Id
     @Column(name = "batch_id", nullable = false)
     private UUID batchId;
 

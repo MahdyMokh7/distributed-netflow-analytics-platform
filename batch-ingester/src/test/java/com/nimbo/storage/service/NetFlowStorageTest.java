@@ -161,7 +161,9 @@ class NetFlowStorageTest {
         Map<TopicPartitionKey, Long> result = storage.flush();
 
         assertEquals(Map.of(new TopicPartitionKey("test-topic", 0), 101L), result);
-        assertTrue(Files.list(tempDirectory.resolve("parquet")).anyMatch(path -> path.toString().endsWith(".parquet")));
+        try (var paths = Files.walk(tempDirectory.resolve("parquet"))) {
+            assertTrue(paths.anyMatch(path -> path.toString().endsWith(".parquet")));
+        }
 
     }
 

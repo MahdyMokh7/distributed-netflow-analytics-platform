@@ -1,6 +1,7 @@
 package com.nimbo.storage;
 
 import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.metrics.BatchIngesterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.model.TopicPartitionKey;
@@ -19,6 +20,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -169,6 +171,8 @@ class StorageIT {
 
         HdfsProperties hdfsProperties = new HdfsProperties();
         hdfsProperties.setBasePath("/netflow/parquet");
+        BatchIngesterMetrics metrics = new BatchIngesterMetrics(new SimpleMeterRegistry());
+        metrics.registerInstance(1);
 
         return new NetFlowStorage(
                 batchPolicy,
@@ -176,7 +180,9 @@ class StorageIT {
                 hdfsFileStorage,
                 fileNameGenerator,
                 hdfsProperties,
-                storageSchema
+                storageSchema,
+                metrics,
+                1
         );
     }
 

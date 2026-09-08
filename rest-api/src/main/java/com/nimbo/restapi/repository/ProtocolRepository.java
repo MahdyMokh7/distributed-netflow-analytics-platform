@@ -1,6 +1,7 @@
 package com.nimbo.restapi.repository;
 
 import com.nimbo.restapi.model.ProtocolUsage;
+import com.nimbo.restapi.model.ProtocolUsageId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -10,7 +11,7 @@ import java.time.Instant;
 import java.util.List;
 
 @Repository
-public interface ProtocolRepository extends JpaRepository<ProtocolUsage, Long> {
+public interface ProtocolRepository extends JpaRepository<ProtocolUsage, ProtocolUsageId> {
 
     @Query("SELECT p FROM ProtocolUsage p " +
             "WHERE p.windowStart >= :startTime " +

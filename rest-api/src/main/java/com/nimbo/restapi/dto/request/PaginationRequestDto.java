@@ -3,6 +3,8 @@ package com.nimbo.restapi.dto.request;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,8 +26,10 @@ public class PaginationRequestDto {
     private Integer size;
 
     @Builder.Default
+    @NotBlank(message = "Sort field is required")
     private String sortBy = "windowStart";
 
     @Builder.Default
+    @Pattern(regexp = "(?i)ASC|DESC", message = "Sort direction must be ASC or DESC")
     private String sortDirection = "DESC";
 }

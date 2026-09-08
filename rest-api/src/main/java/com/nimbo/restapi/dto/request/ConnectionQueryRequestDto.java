@@ -20,11 +20,5 @@ public class ConnectionQueryRequestDto extends TimeRangeRequestDto {
     @ValidIpAddress
     private String dstIp;
 
-    private Integer srcPort;
-
-    private Integer dstPort;
-
-    private Integer l4Protocol;
-
     private PaginationRequestDto pagination;
 }

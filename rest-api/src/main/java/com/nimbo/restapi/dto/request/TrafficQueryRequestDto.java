@@ -15,8 +15,5 @@ public class TrafficQueryRequestDto extends TimeRangeRequestDto {
     @ValidIpAddress
     private String srcIp;
 
-    @ValidIpAddress
-    private String dstIp;
-
     private PaginationRequestDto pagination;
 }

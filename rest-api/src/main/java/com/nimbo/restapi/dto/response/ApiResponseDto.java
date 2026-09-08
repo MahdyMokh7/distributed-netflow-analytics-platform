@@ -49,4 +49,12 @@ public class ApiResponseDto<T> {
                 .timestamp(Instant.now())
                 .build();
     }
+
+    public static <T> ApiResponseDto<T> error(String message) {
+        return ApiResponseDto.<T>builder()
+                .success(false)
+                .message(message)
+                .timestamp(Instant.now())
+                .build();
+    }
 }

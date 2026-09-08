@@ -52,8 +52,6 @@ public class ConnectionController {
                 pagination.getPage(), pagination.getSize());
 
         ConnectionQueryRequestDto request = ConnectionQueryRequestDto.builder()
-                .srcIp(ip)
-                .dstIp(ip)
                 .startTime(timeRange.getStartTime())
                 .endTime(timeRange.getEndTime())
                 .pagination(pagination)
@@ -62,11 +60,7 @@ public class ConnectionController {
         Page<ConnectionResponseDto> result = connectionService.queryConnectionsByIp(ip, request);
 
         return ResponseEntity.ok(
-                ApiResponseDto.success(result.getContent(), PaginationMetadataDto.of(
-                        result.getTotalElements(),
-                        result.getNumber(),
-                        result.getSize()
-                ))
+                ApiResponseDto.success(result.getContent(), PaginationMetadataDto.of(result))
         );
     }
 
@@ -77,35 +71,26 @@ public class ConnectionController {
     )
     public ResponseEntity<ApiResponseDto<List<ConnectionResponseDto>>> queryConnections(
             @Parameter(description = "Source IP filter")
-            @ValidIpAddress String srcIp,
+            @ValidIpAddress
+            String srcIp,
 
             @Parameter(description = "Destination IP filter")
-            @ValidIpAddress String dstIp,
-
-            @Parameter(description = "Source port filter")
-            Integer srcPort,
-
-            @Parameter(description = "Destination port filter")
-            Integer dstPort,
-
-            @Parameter(description = "Layer 4 protocol filter")
-            Integer l4Protocol,
+            @ValidIpAddress
+            String dstIp,
 
             @Parameter(description = "Time range parameters")
-            @Valid TimeRangeRequestDto timeRange,
+            @Valid
+            TimeRangeRequestDto timeRange,
 
             @Parameter(description = "Pagination parameters")
-            @Valid PaginationRequestDto pagination
+            @Valid
+            PaginationRequestDto pagination
     ) {
-        log.debug("Connection query with filters - srcIp: {}, dstIp: {}, srcPort: {}, dstPort: {}, l4Protocol: {}",
-                srcIp, dstIp, srcPort, dstPort, l4Protocol);
+        log.debug("Connection query with filters - srcIp: {}, dstIp: {}", srcIp, dstIp);
 
         ConnectionQueryRequestDto request = ConnectionQueryRequestDto.builder()
                 .srcIp(srcIp)
                 .dstIp(dstIp)
-                .srcPort(srcPort)
-                .dstPort(dstPort)
-                .l4Protocol(l4Protocol)
                 .startTime(timeRange.getStartTime())
                 .endTime(timeRange.getEndTime())
                 .pagination(pagination)
@@ -114,11 +99,7 @@ public class ConnectionController {
         Page<ConnectionResponseDto> result = connectionService.queryConnections(request);
 
         return ResponseEntity.ok(
-                ApiResponseDto.success(result.getContent(), PaginationMetadataDto.of(
-                        result.getTotalElements(),
-                        result.getNumber(),
-                        result.getSize()
-                ))
+                ApiResponseDto.success(result.getContent(), PaginationMetadataDto.of(result))
         );
     }
 }

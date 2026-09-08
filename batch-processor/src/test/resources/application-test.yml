@@ -26,9 +26,9 @@ logging:
     org.jdbi: DEBUG
 
 spark:
-  master: local[*]
+  master: local[2]
   app-name: nimbo-batch-processor-test
-  shuffle-partitions: 8
+  shuffle-partitions: 2
   adaptive-enabled: true
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer

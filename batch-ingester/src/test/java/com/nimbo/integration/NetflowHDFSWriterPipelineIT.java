@@ -25,7 +25,9 @@ import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -174,25 +176,17 @@ class NetflowHDFSWriterPipelineIT {
         await().atMost(ofSeconds(30))
                 .pollInterval(ofSeconds(1))
                 .until(() -> {
-                    if (!fileSystem.exists(storageDirectory)) return false;
-                    FileStatus[] files = fileSystem.listStatus(storageDirectory);
-                    return Arrays.stream(files)
-                            .filter(f -> !f.getPath().getName().startsWith("."))
-                            .filter(f -> f.getPath().getName().endsWith(".parquet"))
-                            .findFirst()
-                            .map(f -> f.getLen() > 0)
-                            .orElse(false);
+                    List<FileStatus> files = finalizedParquetFiles(storageDirectory);
+                    return files.size() == 1 && files.get(0).getLen() > 0;
                 });
 
-        FileStatus[] files = Arrays.stream(fileSystem.listStatus(storageDirectory))
-                .filter(fs -> !fs.getPath().getName().startsWith("."))
-                .toArray(FileStatus[]::new);
-        assertEquals(1, files.length, "Exactly one finalized Parquet file should be created");
+        List<FileStatus> files = finalizedParquetFiles(storageDirectory);
+        assertEquals(1, files.size(), "Exactly one finalized Parquet file should be created");
 
-        Path parquetFile = files[0].getPath();
+        Path parquetFile = files.get(0).getPath();
         assertTrue(parquetFile.getName().endsWith(".parquet"));
         assertFalse(parquetFile.getName().startsWith("."), "Temp file must not remain");
-        assertTrue(files[0].getLen() > 0);
+        assertTrue(files.get(0).getLen() > 0);
 
         try (ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(
                 HadoopInputFile.fromPath(parquetFile, hadoopConfiguration)).withDataModel(GenericData.get()).build()) {
@@ -432,6 +426,23 @@ class NetflowHDFSWriterPipelineIT {
                     ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
                     return records.isEmpty() ? null : records.iterator().next();
                 }, Objects::nonNull);
+    }
+
+    private List<FileStatus> finalizedParquetFiles(Path storageDirectory) throws IOException {
+        if (!fileSystem.exists(storageDirectory)) {
+            return List.of();
+        }
+
+        List<FileStatus> files = new ArrayList<>();
+        RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(storageDirectory, true);
+        while (iterator.hasNext()) {
+            LocatedFileStatus file = iterator.next();
+            String fileName = file.getPath().getName();
+            if (!fileName.startsWith(".") && fileName.endsWith(".parquet")) {
+                files.add(file);
+            }
+        }
+        return files;
     }
 
     private String headerValue(ConsumerRecord<byte[], byte[]> record, String key) {

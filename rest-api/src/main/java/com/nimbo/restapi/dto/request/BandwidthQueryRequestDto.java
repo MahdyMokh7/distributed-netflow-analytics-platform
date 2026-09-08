@@ -6,7 +6,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import lombok.Builder;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 @Data
 @SuperBuilder
 @NoArgsConstructor
@@ -17,6 +18,7 @@ public class BandwidthQueryRequestDto extends TimeRangeRequestDto {
     @ValidIpAddress
     private String ip;
 
-    @Builder.Default
-    private Integer limit = 10;
+    @Min(value = 1, message = "Limit must be at least 1")
+    @Max(value = 100, message = "Limit must not exceed 100")
+    private Integer limit;
 }

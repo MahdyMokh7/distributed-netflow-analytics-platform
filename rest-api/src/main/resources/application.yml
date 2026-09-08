@@ -6,17 +6,16 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/nimbo}
-    username: ${DB_USER:nimbo}
-    password: ${DB_PASSWORD:secret}
-    driver-class-name: org.postgresql.Driver
+    url: ${DB_URL:jdbc:postgresql://10.10.61.70:5432/nimbo_db}
+    username: ${DB_USERNAME:nimbo_user}
+    password: ${DB_PASSWORD:123456}
     hikari:
-      maximum-pool-size: 20
-      minimum-idle: 10
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
       idle-timeout: 300000
       connection-timeout: 30000
       max-lifetime: 1800000
-      leak-detection-threshold: 2000
+      leak-detection-threshold: ${DB_LEAK_DETECTION_THRESHOLD_MS:180000}
       pool-name: NimboHikariPool
       auto-commit: false
       connection-test-query: SELECT 1
@@ -25,8 +24,11 @@ spring:
     database: POSTGRESQL
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     show-sql: false
+    hibernate:
+      ddl-auto: validate
     properties:
       hibernate:
+        jdbc.time_zone: UTC
         format_sql: true
         use_sql_comments: true
         jdbc:

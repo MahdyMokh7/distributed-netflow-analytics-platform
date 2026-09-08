@@ -21,7 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.Duration;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -33,10 +34,14 @@ public class TrafficQueryServiceImpl implements TrafficQueryService {
     private final QueryMetrics metrics;
 
     private static final int MAX_TIME_RANGE_DAYS = 7;
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "srcIp", "windowStart", "windowEnd", "inBytes", "outBytes",
+            "inPackets", "outPackets", "recordCount", "ingestedAt"
+    );
 
     @Override
-    @Cacheable(value = "traffic", key = "#request.srcIp + '_' + #request.startTime + '_' + #request.endTime + '_' + #request.pagination.page + '_' + #request.pagination.size")
-    @CircuitBreaker(name = "database", fallbackMethod = "fallbackTrafficQuery")
+    @Cacheable(value = "traffic", key = "#request.srcIp + '_' + #request.startTime + '_' + #request.endTime + '_' + #request.pagination.page + '_' + #request.pagination.size + '_' + #request.pagination.sortBy + '_' + #request.pagination.sortDirection")
+    @CircuitBreaker(name = "database")
     @Retry(name = "database")
     public Page<TrafficResponseDto> queryTraffic(TrafficQueryRequestDto request) {
         long startTime = System.currentTimeMillis();
@@ -44,13 +49,7 @@ public class TrafficQueryServiceImpl implements TrafficQueryService {
         try {
             validateTimeRange(request.getStartTime(), request.getEndTime());
 
-            Pageable pageable = PageRequest.of(
-                    request.getPagination().getPage(),
-                    request.getPagination().getSize(),
-                    Sort.by(Sort.Direction.fromString(
-                                    request.getPagination().getSortDirection()),
-                            request.getPagination().getSortBy())
-            );
+            Pageable pageable = createPageable(request);
 
             Page<TrafficAggregate> aggregates;
 
@@ -88,8 +87,8 @@ public class TrafficQueryServiceImpl implements TrafficQueryService {
     }
 
     @Override
-    @Cacheable(value = "traffic", key = "#srcIp + '_' + #request.startTime + '_' + #request.endTime + '_' + #request.pagination.page + '_' + #request.pagination.size")
-    @CircuitBreaker(name = "database", fallbackMethod = "fallbackTrafficQueryByIp")
+    @Cacheable(value = "traffic", key = "#srcIp + '_' + #request.startTime + '_' + #request.endTime + '_' + #request.pagination.page + '_' + #request.pagination.size + '_' + #request.pagination.sortBy + '_' + #request.pagination.sortDirection")
+    @CircuitBreaker(name = "database")
     @Retry(name = "database")
     public Page<TrafficResponseDto> queryTrafficBySrcIp(String srcIp, TrafficQueryRequestDto request) {
         request.setSrcIp(srcIp);
@@ -97,7 +96,7 @@ public class TrafficQueryServiceImpl implements TrafficQueryService {
     }
 
     private void validateTimeRange(Instant start, Instant end) {
-        if (end.isBefore(start)) {
+        if (!end.isAfter(start)) {
             throw new InvalidTimeRangeException("End time must be after start time");
         }
 
@@ -106,8 +105,7 @@ public class TrafficQueryServiceImpl implements TrafficQueryService {
             throw new InvalidTimeRangeException("Cannot query future dates");
         }
 
-        long daysBetween = ChronoUnit.DAYS.between(start, end);
-        if (daysBetween > MAX_TIME_RANGE_DAYS) {
+        if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_TIME_RANGE_DAYS)) > 0) {
             throw new InvalidTimeRangeException(
                     "Time range cannot exceed " + MAX_TIME_RANGE_DAYS + " days"
             );
@@ -131,13 +129,18 @@ public class TrafficQueryServiceImpl implements TrafficQueryService {
                 .build();
     }
 
-    private Page<TrafficResponseDto> fallbackTrafficQuery(TrafficQueryRequestDto request, Throwable t) {
-        log.warn("Circuit breaker fallback triggered for traffic query: {}", t.getMessage());
-        return Page.empty();
-    }
-
-    private Page<TrafficResponseDto> fallbackTrafficQueryByIp(String srcIp, TrafficQueryRequestDto request, Throwable t) {
-        log.warn("Circuit breaker fallback triggered for traffic query by IP: {}", t.getMessage());
-        return Page.empty();
+    private Pageable createPageable(TrafficQueryRequestDto request) {
+        String sortBy = request.getPagination().getSortBy();
+        if (!ALLOWED_SORT_FIELDS.contains(sortBy)) {
+            throw new IllegalArgumentException("Unsupported traffic sort field: " + sortBy);
+        }
+        return PageRequest.of(
+                request.getPagination().getPage(),
+                request.getPagination().getSize(),
+                Sort.by(
+                        Sort.Direction.fromString(request.getPagination().getSortDirection()),
+                        sortBy
+                )
+        );
     }
 }

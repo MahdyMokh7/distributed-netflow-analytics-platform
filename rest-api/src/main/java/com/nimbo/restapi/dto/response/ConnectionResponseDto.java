@@ -21,14 +21,6 @@ public class ConnectionResponseDto {
 
     private String dstIp;
 
-    private Integer srcPort;
-
-    private Integer dstPort;
-
-    private Integer l4Protocol;
-
-    private String protocolName;
-
     private Instant windowStart;
 
     private Instant windowEnd;

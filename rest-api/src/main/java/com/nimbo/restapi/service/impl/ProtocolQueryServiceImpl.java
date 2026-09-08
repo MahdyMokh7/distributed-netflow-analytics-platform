@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -34,7 +34,7 @@ public class ProtocolQueryServiceImpl implements ProtocolQueryService {
 
     @Override
     @Cacheable(value = "protocols", key = "#request.startTime + '_' + #request.endTime + '_' + #request.l7Protocol")
-    @CircuitBreaker(name = "database", fallbackMethod = "fallbackProtocolQuery")
+    @CircuitBreaker(name = "database")
     @Retry(name = "database")
     public List<ProtocolResponseDto> queryProtocolUsage(ProtocolQueryRequestDto request) {
         long startTime = System.currentTimeMillis();
@@ -79,7 +79,7 @@ public class ProtocolQueryServiceImpl implements ProtocolQueryService {
 
     @Override
     @Cacheable(value = "protocols", key = "#l7Protocol + '_' + #request.startTime + '_' + #request.endTime")
-    @CircuitBreaker(name = "database", fallbackMethod = "fallbackProtocolQueryByProtocol")
+    @CircuitBreaker(name = "database")
     @Retry(name = "database")
     public ProtocolResponseDto queryProtocolUsageByProtocol(Double l7Protocol, ProtocolQueryRequestDto request) {
         request.setL7Protocol(l7Protocol);
@@ -91,7 +91,7 @@ public class ProtocolQueryServiceImpl implements ProtocolQueryService {
     }
 
     private void validateTimeRange(Instant start, Instant end) {
-        if (end.isBefore(start)) {
+        if (!end.isAfter(start)) {
             throw new InvalidTimeRangeException("End time must be after start time");
         }
 
@@ -100,8 +100,7 @@ public class ProtocolQueryServiceImpl implements ProtocolQueryService {
             throw new InvalidTimeRangeException("Cannot query future dates");
         }
 
-        long daysBetween = ChronoUnit.DAYS.between(start, end);
-        if (daysBetween > MAX_TIME_RANGE_DAYS) {
+        if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_TIME_RANGE_DAYS)) > 0) {
             throw new InvalidTimeRangeException(
                     "Time range cannot exceed " + MAX_TIME_RANGE_DAYS + " days"
             );
@@ -111,7 +110,6 @@ public class ProtocolQueryServiceImpl implements ProtocolQueryService {
     private ProtocolResponseDto toResponse(ProtocolUsage usage) {
         return ProtocolResponseDto.builder()
                 .l7Protocol(usage.getL7Protocol())
-                .protocolName(usage.getProtocolName())
                 .windowStart(usage.getWindowStart())
                 .windowEnd(usage.getWindowEnd())
                 .inBytes(usage.getInBytes())
@@ -126,13 +124,4 @@ public class ProtocolQueryServiceImpl implements ProtocolQueryService {
                 .build();
     }
 
-    private List<ProtocolResponseDto> fallbackProtocolQuery(ProtocolQueryRequestDto request, Throwable t) {
-        log.warn("Circuit breaker fallback triggered for protocol query: {}", t.getMessage());
-        return List.of();
-    }
-
-    private ProtocolResponseDto fallbackProtocolQueryByProtocol(Double l7Protocol, ProtocolQueryRequestDto request, Throwable t) {
-        log.warn("Circuit breaker fallback triggered for protocol query by protocol: {}", t.getMessage());
-        return ProtocolResponseDto.builder().build();
-    }
 }

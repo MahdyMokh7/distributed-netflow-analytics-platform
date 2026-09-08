@@ -3,11 +3,14 @@ package com.nimbo.restapi.model;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigInteger;
 import java.time.Instant;
@@ -19,32 +22,40 @@ import java.util.UUID;
 @AllArgsConstructor
 @Entity
 @Table(name = "ip_bandwidth_aggregates")
+@IdClass(IpBandwidthAggregateId.class)
 public class IpBandwidthAggregate {
 
-    @Id
+    @Column(name = "id", insertable = false, updatable = false)
     private Long id;
 
+    @Id
     @Column(name = "ip", nullable = false)
     private String ip;
 
+    @Id
     @Column(name = "window_start", nullable = false)
     private Instant windowStart;
 
     @Column(name = "window_end", nullable = false)
     private Instant windowEnd;
 
-    @Column(name = "inbound_bytes", nullable = false)
+    @Column(name = "inbound_bytes", nullable = false, columnDefinition = "BIGINT")
+    @JdbcTypeCode(SqlTypes.BIGINT)
     private BigInteger inboundBytes;
 
-    @Column(name = "outbound_bytes", nullable = false)
+    @Column(name = "outbound_bytes", nullable = false, columnDefinition = "BIGINT")
+    @JdbcTypeCode(SqlTypes.BIGINT)
     private BigInteger outboundBytes;
 
-    @Column(name = "inbound_packets", nullable = false)
+    @Column(name = "inbound_packets", nullable = false, columnDefinition = "BIGINT")
+    @JdbcTypeCode(SqlTypes.BIGINT)
     private BigInteger inboundPackets;
 
-    @Column(name = "outbound_packets", nullable = false)
+    @Column(name = "outbound_packets", nullable = false, columnDefinition = "BIGINT")
+    @JdbcTypeCode(SqlTypes.BIGINT)
     private BigInteger outboundPackets;
 
+    @Id
     @Column(name = "batch_id", nullable = false)
     private UUID batchId;
 

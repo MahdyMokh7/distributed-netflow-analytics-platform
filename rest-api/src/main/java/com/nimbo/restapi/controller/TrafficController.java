@@ -39,13 +39,17 @@ public class TrafficController {
     )
     public ResponseEntity<ApiResponseDto<List<TrafficResponseDto>>> getTrafficByIp(
             @Parameter(description = "Source IP address", required = true)
-            @PathVariable @ValidIpAddress String srcIp,
+            @PathVariable @ValidIpAddress
+            String srcIp,
 
             @Parameter(description = "Time range parameters")
-            @Valid TimeRangeRequestDto timeRange,
+            @Valid
+            TimeRangeRequestDto timeRange,
 
             @Parameter(description = "Pagination parameters")
-            @Valid PaginationRequestDto pagination
+            @Valid
+            PaginationRequestDto pagination
+
     ) {
         log.debug("Traffic query for IP: {}, time range: {} to {}, page: {}, size: {}",
                 srcIp, timeRange.getStartTime(), timeRange.getEndTime(),
@@ -61,11 +65,7 @@ public class TrafficController {
         Page<TrafficResponseDto> result = trafficService.queryTrafficBySrcIp(srcIp, request);
 
         return ResponseEntity.ok(
-                ApiResponseDto.success(result.getContent(), PaginationMetadataDto.of(
-                        result.getTotalElements(),
-                        result.getNumber(),
-                        result.getSize()
-                ))
+                ApiResponseDto.success(result.getContent(), PaginationMetadataDto.of(result))
         );
     }
 
@@ -78,21 +78,17 @@ public class TrafficController {
             @Parameter(description = "Source IP filter")
             @ValidIpAddress String srcIp,
 
-            @Parameter(description = "Destination IP filter")
-            @ValidIpAddress String dstIp,
-
             @Parameter(description = "Time range parameters")
             @Valid TimeRangeRequestDto timeRange,
 
             @Parameter(description = "Pagination parameters")
             @Valid PaginationRequestDto pagination
     ) {
-        log.debug("Traffic query with filters - srcIp: {}, dstIp: {}, page: {}, size: {}",
-                srcIp, dstIp, pagination.getPage(), pagination.getSize());
+        log.debug("Traffic query with filters - srcIp: {}, page: {}, size: {}",
+                srcIp, pagination.getPage(), pagination.getSize());
 
         TrafficQueryRequestDto request = TrafficQueryRequestDto.builder()
                 .srcIp(srcIp)
-                .dstIp(dstIp)
                 .startTime(timeRange.getStartTime())
                 .endTime(timeRange.getEndTime())
                 .pagination(pagination)
@@ -101,11 +97,7 @@ public class TrafficController {
         Page<TrafficResponseDto> result = trafficService.queryTraffic(request);
 
         return ResponseEntity.ok(
-                ApiResponseDto.success(result.getContent(), PaginationMetadataDto.of(
-                        result.getTotalElements(),
-                        result.getNumber(),
-                        result.getSize()
-                ))
+                ApiResponseDto.success(result.getContent(), PaginationMetadataDto.of(result))
         );
     }
 }

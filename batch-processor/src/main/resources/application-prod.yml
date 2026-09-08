@@ -32,7 +32,6 @@ output:
   mode: both
 
 postgres:
-  driver-class-name: org.postgresql.Driver
   host: 10.10.61.70
   port: 5432
   database: nimbo_db

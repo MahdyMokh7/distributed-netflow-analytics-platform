@@ -13,7 +13,7 @@ import java.time.Instant;
 public class TimeRangeValidator implements ConstraintValidator<ValidTimeRange, TimeRangeRequestDto> {
 
     @Value("${api.time-range.max-days:7}")
-    private int maxDays;
+    private int maxDays = 7;
 
     @Override
     public boolean isValid(TimeRangeRequestDto request, ConstraintValidatorContext context) {
@@ -28,7 +28,7 @@ public class TimeRangeValidator implements ConstraintValidator<ValidTimeRange, T
             return true;
         }
 
-        if (end.isBefore(start)) {
+        if (!end.isAfter(start)) {
             context.disableDefaultConstraintViolation();
             context.buildConstraintViolationWithTemplate("End time must be after start time")
                     .addPropertyNode("endTime")
@@ -46,7 +46,7 @@ public class TimeRangeValidator implements ConstraintValidator<ValidTimeRange, T
         }
 
         Duration duration = Duration.between(start, end);
-        if (duration.toDays() > maxDays) {
+        if (duration.compareTo(Duration.ofDays(maxDays)) > 0) {
             context.disableDefaultConstraintViolation();
             context.buildConstraintViolationWithTemplate(
                             "Time range cannot exceed " + maxDays + " days")

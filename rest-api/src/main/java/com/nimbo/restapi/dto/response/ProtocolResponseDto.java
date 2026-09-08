@@ -17,8 +17,6 @@ public class ProtocolResponseDto {
 
     private Double l7Protocol;
 
-    private String protocolName;
-
     private Instant windowStart;
 
     private Instant windowEnd;

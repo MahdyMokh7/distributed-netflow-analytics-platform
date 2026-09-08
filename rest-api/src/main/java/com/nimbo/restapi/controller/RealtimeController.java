@@ -29,22 +29,14 @@ import java.util.List;
 @RequestMapping("/realtime")
 @RequiredArgsConstructor
 @Validated
-@Tag(
-        name = "Realtime Analytics",
-        description = "Realtime NetFlow queries backed by StarRocks"
-)
+@Tag(name = "Realtime Analytics", description = "Realtime NetFlow queries backed by StarRocks")
 public class RealtimeController {
 
     private final RealtimeQueryService queryService;
 
     @GetMapping("/traffic/{ip}")
-    @Operation(
-            summary = "Get traffic for an IP"
-    )
-    public ResponseEntity<
-            ApiResponseDto<RealtimeTrafficResponseDto>
-            > getTrafficByIp(
-
+    @Operation(summary = "Get traffic for an IP")
+    public ResponseEntity<ApiResponseDto<RealtimeTrafficResponseDto>> getTrafficByIp(
             @PathVariable
             @ValidIpAddress
             String ip,
@@ -53,26 +45,14 @@ public class RealtimeController {
             TimeRangeRequestDto timeRange
     ) {
         RealtimeTrafficResponseDto result =
-                queryService.getTrafficByIp(
-                        ip,
-                        timeRange.getStartTime(),
-                        timeRange.getEndTime()
-                );
+                queryService.getTrafficByIp(ip, timeRange.getStartTime(), timeRange.getEndTime());
 
-        return ResponseEntity.ok(
-                ApiResponseDto.success(result)
-        );
+        return ResponseEntity.ok(ApiResponseDto.success(result));
     }
 
     @GetMapping("/connections/{ip}")
-    @Operation(
-            summary = "List connections for an IP"
-    )
-    public ResponseEntity<
-            ApiResponseDto<
-                    List<RealtimeConnectionResponseDto>
-                    >
-            > getConnectionsByIp(
+    @Operation(summary = "List connections for an IP")
+    public ResponseEntity<ApiResponseDto<List<RealtimeConnectionResponseDto>>> getConnectionsByIp(
 
             @PathVariable
             @ValidIpAddress
@@ -88,81 +68,42 @@ public class RealtimeController {
             int size
     ) {
         Page<RealtimeConnectionResponseDto> result =
-                queryService.getConnectionsByIp(
-                        ip,
-                        timeRange.getStartTime(),
-                        timeRange.getEndTime(),
-                        page,
-                        size
-                );
+                queryService.getConnectionsByIp(ip, timeRange.getStartTime(), timeRange.getEndTime(), page, size);
 
         PaginationMetadataDto pagination =
-                PaginationMetadataDto.of(
-                        result.getTotalElements(),
-                        result.getNumber(),
-                        result.getSize()
-                );
+                PaginationMetadataDto.of(result.getTotalElements(), result.getNumber(), result.getSize());
 
         return ResponseEntity.ok(
-                ApiResponseDto.success(
-                        result.getContent(),
-                        pagination
-                )
-        );
+                ApiResponseDto.success(result.getContent(), pagination));
     }
 
     @GetMapping("/bandwidth/top")
-    @Operation(
-            summary = "Get IPs with highest bandwidth usage"
-    )
-    public ResponseEntity<
-            ApiResponseDto<
-                    List<RealtimeBandwidthResponseDto>
-                    >
-            > getTopBandwidthIps(
+    @Operation(summary = "Get IPs with highest bandwidth usage")
+    public ResponseEntity<ApiResponseDto<List<RealtimeBandwidthResponseDto>>> getTopBandwidthIps(
 
             @Valid
             TimeRangeRequestDto timeRange,
 
-            @Parameter(
-                    description = "Maximum number of IPs"
-            )
+            @Parameter(description = "Maximum number of IPs")
             @RequestParam(defaultValue = "10")
             int limit
     ) {
         List<RealtimeBandwidthResponseDto> result =
-                queryService.getTopBandwidthIps(
-                        timeRange.getStartTime(),
-                        timeRange.getEndTime(),
-                        limit
-                );
+                queryService.getTopBandwidthIps(timeRange.getStartTime(), timeRange.getEndTime(), limit);
 
-        return ResponseEntity.ok(
-                ApiResponseDto.success(result)
-        );
+        return ResponseEntity.ok(ApiResponseDto.success(result));
     }
 
     @GetMapping("/protocols")
-    @Operation(
-            summary = "Get most commonly used protocols"
-    )
-    public ResponseEntity<
-            ApiResponseDto<
-                    List<RealtimeProtocolResponseDto>
-                    >
-            > getProtocolUsage(
+    @Operation(summary = "Get most commonly used protocols")
+    public ResponseEntity<ApiResponseDto<List<RealtimeProtocolResponseDto>>> getProtocolUsage(
 
             @Valid
             TimeRangeRequestDto timeRange
     ) {
         List<RealtimeProtocolResponseDto> result =
-                queryService.getProtocolUsage(
-                        timeRange.getStartTime(),
-                        timeRange.getEndTime()
-                );
+                queryService.getProtocolUsage(timeRange.getStartTime(), timeRange.getEndTime());
 
-        return ResponseEntity.ok(
-                ApiResponseDto.success(result)
-        );
+        return ResponseEntity.ok(ApiResponseDto.success(result));
     }
 }

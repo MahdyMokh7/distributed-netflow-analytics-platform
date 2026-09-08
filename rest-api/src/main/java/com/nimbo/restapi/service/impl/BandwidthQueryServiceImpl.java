@@ -19,8 +19,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -39,7 +40,7 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
 
     @Override
     @Cacheable(value = "bandwidth", key = "'top_' + #request.limit + '_' + #request.startTime + '_' + #request.endTime")
-    @CircuitBreaker(name = "database", fallbackMethod = "fallbackTopBandwidth")
+    @CircuitBreaker(name = "database")
     @Retry(name = "database")
     public List<BandwidthResponseDto> getTopBandwidthIps(BandwidthQueryRequestDto request) {
         long startTime = System.currentTimeMillis();
@@ -80,7 +81,7 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
 
     @Override
     @Cacheable(value = "bandwidth", key = "#ip + '_' + #request.startTime + '_' + #request.endTime")
-    @CircuitBreaker(name = "database", fallbackMethod = "fallbackBandwidthByIp")
+    @CircuitBreaker(name = "database")
     @Retry(name = "database")
     public BandwidthResponseDto queryBandwidthByIp(String ip, BandwidthQueryRequestDto request) {
         long startTime = System.currentTimeMillis();
@@ -113,7 +114,7 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
     }
 
     private void validateTimeRange(Instant start, Instant end) {
-        if (end.isBefore(start)) {
+        if (!end.isAfter(start)) {
             throw new InvalidTimeRangeException("End time must be after start time");
         }
 
@@ -122,8 +123,7 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
             throw new InvalidTimeRangeException("Cannot query future dates");
         }
 
-        long daysBetween = ChronoUnit.DAYS.between(start, end);
-        if (daysBetween > MAX_TIME_RANGE_DAYS) {
+        if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_TIME_RANGE_DAYS)) > 0) {
             throw new InvalidTimeRangeException(
                     "Time range cannot exceed " + MAX_TIME_RANGE_DAYS + " days"
             );
@@ -131,10 +131,24 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
     }
 
     private BandwidthResponseDto toTopResponse(Object[] row) {
+        BigInteger inboundPackets = toBigInteger(row[3]);
+        BigInteger outboundPackets = toBigInteger(row[4]);
         return BandwidthResponseDto.builder()
                 .ip((String) row[0])
-                .totalBytes((java.math.BigInteger) row[4])
+                .inboundBytes(toBigInteger(row[1]))
+                .outboundBytes(toBigInteger(row[2]))
+                .inboundPackets(inboundPackets)
+                .outboundPackets(outboundPackets)
+                .totalPackets(inboundPackets.add(outboundPackets))
+                .totalBytes(toBigInteger(row[5]))
                 .build();
+    }
+
+    private BigInteger toBigInteger(Object value) {
+        if (value instanceof BigInteger bigInteger) {
+            return bigInteger;
+        }
+        return BigInteger.valueOf(((Number) value).longValue());
     }
 
     private BandwidthResponseDto toResponse(IpBandwidthAggregate aggregate) {
@@ -153,13 +167,4 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
                 .build();
     }
 
-    private List<BandwidthResponseDto> fallbackTopBandwidth(BandwidthQueryRequestDto request, Throwable t) {
-        log.warn("Circuit breaker fallback triggered for top bandwidth query: {}", t.getMessage());
-        return List.of();
-    }
-
-    private BandwidthResponseDto fallbackBandwidthByIp(String ip, BandwidthQueryRequestDto request, Throwable t) {
-        log.warn("Circuit breaker fallback triggered for bandwidth by IP query: {}", t.getMessage());
-        return BandwidthResponseDto.builder().build();
-    }
 }

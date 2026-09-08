@@ -18,7 +18,6 @@ public class PostgresConfig implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private String driverClassName;
     private String host;
     private int port;
     private String database;

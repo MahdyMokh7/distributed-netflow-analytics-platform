@@ -1,0 +1,66 @@
+CREATE TABLE protocol_dim (
+    id INTEGER PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    description VARCHAR(200),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE traffic_aggregates (
+    id BIGSERIAL,
+    src_ip VARCHAR(45) NOT NULL,
+    window_start TIMESTAMP NOT NULL,
+    window_end TIMESTAMP NOT NULL,
+    in_bytes BIGINT NOT NULL CHECK (in_bytes >= 0),
+    out_bytes BIGINT NOT NULL CHECK (out_bytes >= 0),
+    in_packets BIGINT NOT NULL CHECK (in_packets >= 0),
+    out_packets BIGINT NOT NULL CHECK (out_packets >= 0),
+    record_count BIGINT NOT NULL CHECK (record_count >= 0),
+    batch_id UUID NOT NULL,
+    ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (src_ip, window_start, batch_id)
+);
+
+CREATE TABLE connection_aggregates (
+    id VARCHAR(64) NOT NULL,
+    src_ip VARCHAR(45) NOT NULL,
+    dst_ip VARCHAR(45) NOT NULL,
+    window_start TIMESTAMP NOT NULL,
+    window_end TIMESTAMP NOT NULL,
+    in_bytes BIGINT NOT NULL CHECK (in_bytes >= 0),
+    out_bytes BIGINT NOT NULL CHECK (out_bytes >= 0),
+    in_packets BIGINT NOT NULL CHECK (in_packets >= 0),
+    out_packets BIGINT NOT NULL CHECK (out_packets >= 0),
+    batch_id UUID NOT NULL,
+    ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id, window_start, batch_id)
+);
+
+CREATE TABLE protocol_usage_aggregates (
+    id BIGSERIAL,
+    l7_protocol DOUBLE PRECISION NOT NULL,
+    window_start TIMESTAMP NOT NULL,
+    window_end TIMESTAMP NOT NULL,
+    in_bytes BIGINT NOT NULL CHECK (in_bytes >= 0),
+    out_bytes BIGINT NOT NULL CHECK (out_bytes >= 0),
+    in_packets BIGINT NOT NULL CHECK (in_packets >= 0),
+    out_packets BIGINT NOT NULL CHECK (out_packets >= 0),
+    connection_count BIGINT NOT NULL CHECK (connection_count >= 0),
+    batch_id UUID NOT NULL,
+    ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (l7_protocol, window_start, batch_id)
+);
+
+CREATE TABLE ip_bandwidth_aggregates (
+    id BIGSERIAL,
+    ip VARCHAR(45) NOT NULL,
+    window_start TIMESTAMP NOT NULL,
+    window_end TIMESTAMP NOT NULL,
+    inbound_bytes BIGINT NOT NULL CHECK (inbound_bytes >= 0),
+    outbound_bytes BIGINT NOT NULL CHECK (outbound_bytes >= 0),
+    inbound_packets BIGINT NOT NULL CHECK (inbound_packets >= 0),
+    outbound_packets BIGINT NOT NULL CHECK (outbound_packets >= 0),
+    batch_id UUID NOT NULL,
+    ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (ip, window_start),
+    PRIMARY KEY (ip, window_start, batch_id)
+);

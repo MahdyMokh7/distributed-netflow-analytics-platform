@@ -21,7 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.Duration;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -33,10 +34,14 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
     private final QueryMetrics metrics;
 
     private static final int MAX_TIME_RANGE_DAYS = 7;
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "srcIp", "dstIp", "windowStart", "windowEnd",
+            "inBytes", "outBytes", "inPackets", "outPackets", "ingestedAt"
+    );
 
     @Override
-    @Cacheable(value = "connections", key = "#request.srcIp + '_' + #request.dstIp + '_' + #request.srcPort + '_' + #request.dstPort + '_' + #request.l4Protocol + '_' + #request.startTime + '_' + #request.endTime + '_' + #request.pagination.page + '_' + #request.pagination.size")
-    @CircuitBreaker(name = "database", fallbackMethod = "fallbackConnectionQuery")
+    @Cacheable(value = "connections", key = "#request.srcIp + '_' + #request.dstIp + '_' + #request.startTime + '_' + #request.endTime + '_' + #request.pagination.page + '_' + #request.pagination.size + '_' + #request.pagination.sortBy + '_' + #request.pagination.sortDirection")
+    @CircuitBreaker(name = "database")
     @Retry(name = "database")
     public Page<ConnectionResponseDto> queryConnections(ConnectionQueryRequestDto request) {
         long startTime = System.currentTimeMillis();
@@ -44,13 +49,7 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
         try {
             validateTimeRange(request.getStartTime(), request.getEndTime());
 
-            Pageable pageable = PageRequest.of(
-                    request.getPagination().getPage(),
-                    request.getPagination().getSize(),
-                    Sort.by(Sort.Direction.fromString(
-                                    request.getPagination().getSortDirection()),
-                            request.getPagination().getSortBy())
-            );
+            Pageable pageable = createPageable(request);
 
             Page<ConnectionAggregate> aggregates;
 
@@ -103,8 +102,8 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
     }
 
     @Override
-    @Cacheable(value = "connections", key = "#ip + '_' + #request.startTime + '_' + #request.endTime + '_' + #request.pagination.page + '_' + #request.pagination.size")
-    @CircuitBreaker(name = "database", fallbackMethod = "fallbackConnectionQueryByIp")
+    @Cacheable(value = "connections", key = "#ip + '_' + #request.startTime + '_' + #request.endTime + '_' + #request.pagination.page + '_' + #request.pagination.size + '_' + #request.pagination.sortBy + '_' + #request.pagination.sortDirection")
+    @CircuitBreaker(name = "database")
     @Retry(name = "database")
     public Page<ConnectionResponseDto> queryConnectionsByIp(String ip, ConnectionQueryRequestDto request) {
         long startTime = System.currentTimeMillis();
@@ -112,13 +111,7 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
         try {
             validateTimeRange(request.getStartTime(), request.getEndTime());
 
-            Pageable pageable = PageRequest.of(
-                    request.getPagination().getPage(),
-                    request.getPagination().getSize(),
-                    Sort.by(Sort.Direction.fromString(
-                                    request.getPagination().getSortDirection()),
-                            request.getPagination().getSortBy())
-            );
+            Pageable pageable = createPageable(request);
 
             Page<ConnectionAggregate> aggregates = connectionRepository.findByIpAndTimeRange(
                     ip,
@@ -146,7 +139,7 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
     }
 
     private void validateTimeRange(Instant start, Instant end) {
-        if (end.isBefore(start)) {
+        if (!end.isAfter(start)) {
             throw new InvalidTimeRangeException("End time must be after start time");
         }
 
@@ -155,8 +148,7 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
             throw new InvalidTimeRangeException("Cannot query future dates");
         }
 
-        long daysBetween = ChronoUnit.DAYS.between(start, end);
-        if (daysBetween > MAX_TIME_RANGE_DAYS) {
+        if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_TIME_RANGE_DAYS)) > 0) {
             throw new InvalidTimeRangeException(
                     "Time range cannot exceed " + MAX_TIME_RANGE_DAYS + " days"
             );
@@ -168,10 +160,6 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
                 .id(aggregate.getId())
                 .srcIp(aggregate.getSrcIp())
                 .dstIp(aggregate.getDstIp())
-                .srcPort(aggregate.getSrcPort())
-                .dstPort(aggregate.getDstPort())
-                .l4Protocol(aggregate.getL4Protocol())
-                .protocolName(aggregate.getProtocolName())
                 .windowStart(aggregate.getWindowStart())
                 .windowEnd(aggregate.getWindowEnd())
                 .inBytes(aggregate.getInBytes())
@@ -185,13 +173,18 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
                 .build();
     }
 
-    private Page<ConnectionResponseDto> fallbackConnectionQuery(ConnectionQueryRequestDto request, Throwable t) {
-        log.warn("Circuit breaker fallback triggered for connection query: {}", t.getMessage());
-        return Page.empty();
-    }
-
-    private Page<ConnectionResponseDto> fallbackConnectionQueryByIp(String ip, ConnectionQueryRequestDto request, Throwable t) {
-        log.warn("Circuit breaker fallback triggered for connection query by IP: {}", t.getMessage());
-        return Page.empty();
+    private Pageable createPageable(ConnectionQueryRequestDto request) {
+        String sortBy = request.getPagination().getSortBy();
+        if (!ALLOWED_SORT_FIELDS.contains(sortBy)) {
+            throw new IllegalArgumentException("Unsupported connection sort field: " + sortBy);
+        }
+        return PageRequest.of(
+                request.getPagination().getPage(),
+                request.getPagination().getSize(),
+                Sort.by(
+                        Sort.Direction.fromString(request.getPagination().getSortDirection()),
+                        sortBy
+                )
+        );
     }
 }
