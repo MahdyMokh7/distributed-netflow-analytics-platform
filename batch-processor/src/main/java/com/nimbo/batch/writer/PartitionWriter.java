@@ -33,6 +33,7 @@ public class PartitionWriter<T, D> implements Serializable {
     private final Timestamp ingestedAt;
     private final BatchExecutor batchExecutor;
     private final LongAccumulator accumulator;
+    private final LongAccumulator retryAccumulator;
 
     public PartitionWriter(
             String tableName,
@@ -46,7 +47,8 @@ public class PartitionWriter<T, D> implements Serializable {
             UUID batchId,
             Timestamp ingestedAt,
             BatchExecutor batchExecutor,
-            LongAccumulator accumulator) {
+            LongAccumulator accumulator,
+            LongAccumulator retryAccumulator) {
 
         this.tableName = tableName;
         this.batchSize = batchSize;
@@ -60,6 +62,7 @@ public class PartitionWriter<T, D> implements Serializable {
         this.ingestedAt = ingestedAt;
         this.batchExecutor = batchExecutor;
         this.accumulator = accumulator;
+        this.retryAccumulator = retryAccumulator;
     }
 
     public void call(Iterator<Row> partition) {
@@ -96,7 +99,8 @@ public class PartitionWriter<T, D> implements Serializable {
                 tableName,
                 maxRetryAttempts,
                 initialRetryDelayMs,
-                maxDelayMs
+                maxDelayMs,
+                () -> retryAccumulator.add(1L)
         );
         accumulator.add(batchExecutor.sumResults(results));
         batch.clear();

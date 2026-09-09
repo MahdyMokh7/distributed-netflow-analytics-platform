@@ -1,6 +1,9 @@
 global:
   scrape_interval: 30s
 
+rule_files:
+  - /etc/prometheus/rules.yml
+
 scrape_configs:
 
   # NODE EXPORTERS
@@ -56,7 +59,7 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-        - '10.10.61.53:18081'
+        - '10.10.61.52:18081'
         labels:
           instance: batch-processor
 

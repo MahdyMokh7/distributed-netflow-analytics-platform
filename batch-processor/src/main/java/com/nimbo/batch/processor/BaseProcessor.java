@@ -1,5 +1,6 @@
 package com.nimbo.batch.processor;
 
+import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
 import com.nimbo.batch.writer.PostgresWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
@@ -28,6 +29,8 @@ public abstract class BaseProcessor {
         log.info(title, args);
         logSeparator();
     }
+
+    public abstract Stage metricStage();
 
     public abstract void process(Dataset<Row> sourceDf, UUID batchId);
 }

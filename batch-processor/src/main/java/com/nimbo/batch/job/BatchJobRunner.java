@@ -4,7 +4,11 @@ import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.discovery.FileDiscoveryService;
 import com.nimbo.batch.exception.BatchProcessingException;
+import com.nimbo.batch.metrics.BatchProcessorMetrics;
+import com.nimbo.batch.metrics.BatchProcessorMetrics.RunOutcome;
+import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
 import com.nimbo.batch.processor.BaseProcessor;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
@@ -16,6 +20,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @Slf4j
 @Component
@@ -26,23 +31,27 @@ public class BatchJobRunner {
     private final OutputConfig outputConfig;
     private final FileDiscoveryService fileDiscoveryService;
     private final SparkSession spark;
+    private final BatchProcessorMetrics metrics;
 
     public BatchJobRunner(List<BaseProcessor> processors,
                           BatchConfig batchConfig,
                           OutputConfig outputConfig,
                           FileDiscoveryService fileDiscoveryService,
-                          SparkSession spark) {
+                          SparkSession spark,
+                          BatchProcessorMetrics metrics) {
         this.processors = processors;
         this.batchConfig = batchConfig;
         this.outputConfig = outputConfig;
         this.fileDiscoveryService = fileDiscoveryService;
         this.spark = spark;
+        this.metrics = metrics;
     }
 
     @Scheduled(cron = "${batch.schedule}")
     public void runBatchJob() {
         if (!batchConfig.isEnabled()) {
             log.info("Batch job is disabled. Skipping...");
+            metrics.disabledRun();
             return;
         }
 
@@ -54,26 +63,35 @@ public class BatchJobRunner {
 
         long startTime = System.currentTimeMillis();
         Dataset<Row> cachedDf = null;
+        Timer.Sample runTimer = metrics.startTimer();
+        RunOutcome outcome = RunOutcome.FAILED;
+        metrics.runStarted();
 
         try {
-            List<Path> files = fileDiscoveryService.discoverNewFiles(batchId);
+            List<Path> files = executeStage(Stage.DISCOVERY,
+                    () -> fileDiscoveryService.discoverNewFiles(batchId));
 
             if (files.isEmpty()) {
                 log.info("No new files to process. Batch {} complete.", batchId);
+                outcome = RunOutcome.NO_DATA;
                 return;
             }
 
-            log.info("Found {} new files to process (batch: {})", files, batchId);
+            log.info("Found {} new files to process (batch: {})", files.size(), batchId);
 
             cachedDf = readAndCacheFiles(files);
+            long sourceRecordCount = executeStage(Stage.PARQUET_MATERIALIZATION, cachedDf::count);
 
-            if (!hasValidRecords(cachedDf, files, batchId)) {
-                markFilesAsProcessed(files, batchId);
+            if (!hasValidRecords(sourceRecordCount, files, batchId)) {
+                executeStage(Stage.STATE_COMMIT, () -> markFilesAsProcessed(files, batchId));
+                outcome = RunOutcome.NO_DATA;
                 return;
             }
 
             runProcessors(cachedDf, batchId);
-            markFilesAsProcessed(files, batchId);
+            executeStage(Stage.STATE_COMMIT, () -> markFilesAsProcessed(files, batchId));
+            metrics.sourceRecordsProcessed(sourceRecordCount);
+            outcome = RunOutcome.SUCCESS;
 
             long duration = System.currentTimeMillis() - startTime;
             log.info("+++ BATCH JOB COMPLETED SUCCESSFULLY +++");
@@ -83,10 +101,14 @@ public class BatchJobRunner {
 
         } catch (BatchProcessingException e) {
             handleBatchFailure(e, startTime);
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             handleUnexpectedFailure(batchId, e, startTime);
         } finally {
-            unpersistDataset(cachedDf, batchId);
+            try {
+                unpersistDataset(cachedDf, batchId);
+            } finally {
+                metrics.runFinished(runTimer, outcome);
+            }
         }
     }
 
@@ -111,8 +133,7 @@ public class BatchJobRunner {
                 .persist(StorageLevel.MEMORY_AND_DISK());
     }
 
-    private boolean hasValidRecords(Dataset<Row> cachedDf, List<Path> files, UUID batchId) {
-        long sourceRecordCount = cachedDf.count();
+    private boolean hasValidRecords(long sourceRecordCount, List<Path> files, UUID batchId) {
         log.info(
                 "Loaded and cached {} source records from {} files (batch: {})",
                 sourceRecordCount,
@@ -136,7 +157,7 @@ public class BatchJobRunner {
             log.info("Starting processor: {} (batch_id: {})", processorName, batchId);
 
             long processorStartTime = System.currentTimeMillis();
-            processor.process(cachedDf, batchId);
+            executeStage(processor.metricStage(), () -> processor.process(cachedDf, batchId));
             long processorDuration = System.currentTimeMillis() - processorStartTime;
 
             log.info("Completed processor: {} in {} ms (batch_id: {})", processorName, processorDuration, batchId);
@@ -158,7 +179,7 @@ public class BatchJobRunner {
         throw new RuntimeException("Batch job execution failed - Batch ID: " + failedId, e);
     }
 
-    private void handleUnexpectedFailure(UUID batchId, Exception e, long startTime) {
+    private void handleUnexpectedFailure(UUID batchId, RuntimeException e, long startTime) {
         long duration = System.currentTimeMillis() - startTime;
         log.error("Batch job failed with unexpected error - Batch ID: {}, Duration: {} ms", batchId, duration, e);
         throw new RuntimeException("Batch job execution failed - Batch ID: " + batchId, e);
@@ -169,5 +190,24 @@ public class BatchJobRunner {
             log.info("Unpersisting cached source Dataset for batch: {}", batchId);
             cachedDf.unpersist(false);
         }
+    }
+
+    private <T> T executeStage(Stage stage, Supplier<T> operation) {
+        Timer.Sample sample = metrics.startTimer();
+        try {
+            return operation.get();
+        } catch (RuntimeException | Error e) {
+            metrics.stageFailed(stage);
+            throw e;
+        } finally {
+            metrics.stageFinished(sample, stage);
+        }
+    }
+
+    private void executeStage(Stage stage, Runnable operation) {
+        executeStage(stage, () -> {
+            operation.run();
+            return null;
+        });
     }
 }

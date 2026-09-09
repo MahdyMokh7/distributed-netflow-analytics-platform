@@ -5,8 +5,11 @@ import com.nimbo.batch.dao.ConnectionAggregateDao;
 import com.nimbo.batch.dao.IpBandwidthAggregateDao;
 import com.nimbo.batch.dao.ProtocolAggregateDao;
 import com.nimbo.batch.dao.TrafficAggregateDao;
+import com.nimbo.batch.metrics.BatchProcessorMetrics;
+import com.nimbo.batch.metrics.BatchProcessorMetrics.Cube;
+import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.spark.TaskContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.util.LongAccumulator;
@@ -16,12 +19,8 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.BiFunction;
-import java.util.function.Supplier;
 
 import static com.nimbo.batch.constants.ColumnConstants.*;
 
@@ -39,12 +38,14 @@ public class PostgresWriter implements Serializable {
     private final int maxRetryAttempts;
     private final long initialRetryDelayMs;
     private final long maxDelayMs;
+    private final BatchProcessorMetrics metrics;
 
     public PostgresWriter(
             TableRowMapper rowMapper,
             BatchExecutor batchExecutor,
             JdbiDaoFactory daoFactory,
-            PostgresConfig postgresConfig) {
+            PostgresConfig postgresConfig,
+            BatchProcessorMetrics metrics) {
 
         this.rowMapper = rowMapper;
         this.batchExecutor = batchExecutor;
@@ -53,6 +54,7 @@ public class PostgresWriter implements Serializable {
         this.maxRetryAttempts = postgresConfig.getRetry().getMaxAttempts();
         this.initialRetryDelayMs = postgresConfig.getRetry().getInitialDelayMs();
         this.maxDelayMs = postgresConfig.getRetry().getMaxDelayMs();
+        this.metrics = metrics;
 
         log.info(
                 "PostgresWriter initialized - batchSize: {}, maxRetries: {}, retryDelayMs: {}, maxDelayMs: {}",
@@ -66,6 +68,8 @@ public class PostgresWriter implements Serializable {
                 batchId,
                 "records_written_traffic_",
                 TABLE_TRAFFIC_AGGREGATES,
+                Cube.TRAFFIC,
+                Stage.POSTGRES_TRAFFIC,
                 daoFactory::createTrafficDao,
                 TrafficAggregateDao::upsertBatch,
                 rowMapper::toTrafficAggregate
@@ -78,6 +82,8 @@ public class PostgresWriter implements Serializable {
                 batchId,
                 "records_written_connection_",
                 TABLE_CONNECTION_AGGREGATES,
+                Cube.CONNECTION,
+                Stage.POSTGRES_CONNECTION,
                 daoFactory::createConnectionDao,
                 ConnectionAggregateDao::upsertBatch,
                 rowMapper::toConnectionAggregate
@@ -90,6 +96,8 @@ public class PostgresWriter implements Serializable {
                 batchId,
                 "records_written_protocol_",
                 TABLE_PROTOCOL_USAGE_AGGREGATES,
+                Cube.PROTOCOL,
+                Stage.POSTGRES_PROTOCOL,
                 daoFactory::createProtocolDao,
                 ProtocolAggregateDao::upsertBatch,
                 rowMapper::toProtocolAggregate
@@ -102,6 +110,8 @@ public class PostgresWriter implements Serializable {
                 batchId,
                 "records_written_ipbandwidth_",
                 TABLE_IP_BANDWIDTH_AGGREGATES,
+                Cube.TOP_IP,
+                Stage.POSTGRES_TOP_IP,
                 daoFactory::createIpBandwidthDao,
                 IpBandwidthAggregateDao::upsertBatch,
                 rowMapper::toIpBandwidthAggregate
@@ -113,6 +123,8 @@ public class PostgresWriter implements Serializable {
             UUID batchId,
             String accumulatorPrefix,
             String tableName,
+            Cube cube,
+            Stage writeStage,
             SerializableSupplier<D> daoSupplier,
             SerializableBiFunction<D, List<T>, int[]> upsertFunction,
             RowMapper<T> rowMapperFn) {
@@ -120,6 +132,9 @@ public class PostgresWriter implements Serializable {
         LongAccumulator accumulator = dataset.sparkSession()
                 .sparkContext()
                 .longAccumulator(accumulatorPrefix + batchId);
+        LongAccumulator retryAccumulator = dataset.sparkSession()
+                .sparkContext()
+                .longAccumulator("postgres_retries_" + cube.tagValue() + "_" + batchId);
 
         Timestamp ingestedAt = Timestamp.from(Instant.now());
 
@@ -135,13 +150,23 @@ public class PostgresWriter implements Serializable {
                 batchId,
                 ingestedAt,
                 batchExecutor,
-                accumulator
+                accumulator,
+                retryAccumulator
         );
 
-        // Pass the serializable writer to Spark
-        dataset.foreachPartition(partitionWriter::call);
+        Timer.Sample writeTimer = metrics.startTimer();
+        try {
+            dataset.foreachPartition(partitionWriter::call);
+        } catch (RuntimeException | Error e) {
+            metrics.stageFailed(writeStage);
+            throw e;
+        } finally {
+            metrics.stageFinished(writeTimer, writeStage);
+            metrics.postgresRetries(cube, retryAccumulator.value());
+        }
 
         long totalWritten = accumulator.value();
+        metrics.outputRows(cube, totalWritten);
         log.info("Wrote {} records to {} with batch_id: {}", totalWritten, tableName, batchId);
         return totalWritten;
     }

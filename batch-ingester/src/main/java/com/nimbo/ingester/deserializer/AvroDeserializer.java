@@ -8,6 +8,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.DecoderFactory;
 
+import java.io.IOException;
+
 public class AvroDeserializer {
 
     @Getter
@@ -24,7 +26,7 @@ public class AvroDeserializer {
         try {
             BinaryDecoder decoder = decoderFactory.binaryDecoder(data, null);
             return reader.read(null, decoder);
-        } catch (Exception e) {
+        } catch (IOException | RuntimeException e) {
             throw new DeserializationException("Failed to deserialize Avro record", e);
         }
     }

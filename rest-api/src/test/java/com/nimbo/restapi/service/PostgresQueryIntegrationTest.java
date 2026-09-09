@@ -18,11 +18,15 @@ import com.nimbo.restapi.service.impl.BandwidthQueryServiceImpl;
 import com.nimbo.restapi.service.impl.ConnectionQueryServiceImpl;
 import com.nimbo.restapi.service.impl.ProtocolQueryServiceImpl;
 import com.nimbo.restapi.service.impl.TrafficQueryServiceImpl;
-import com.nimbo.restapi.support.PostgresIntegrationTest;
+import com.nimbo.restapi.support.PostgresTestExtension;
 import com.nimbo.restapi.util.QueryMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -32,7 +36,14 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class PostgresQueryIntegrationTest extends PostgresIntegrationTest {
+@ExtendWith(PostgresTestExtension.class)
+@DataJpaTest(properties = {
+        "spring.jpa.hibernate.ddl-auto=validate",
+        "spring.jpa.properties.hibernate.jdbc.time_zone=UTC"
+})
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@ContextConfiguration(initializers = PostgresTestExtension.DatasourceInitializer.class)
+class PostgresQueryIntegrationTest {
 
     private static final Instant RANGE_START = Instant.parse("2026-01-01T00:00:00Z");
     private static final Instant RANGE_END = Instant.parse("2026-01-01T01:00:00Z");

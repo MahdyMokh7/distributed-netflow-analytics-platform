@@ -3,6 +3,8 @@ package com.nimbo.batch.discovery;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.dao.BatchStateDao;
+import com.nimbo.batch.metrics.BatchProcessorMetrics;
+import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
 import com.nimbo.batch.model.BatchStateRecord;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -34,13 +36,14 @@ public class FileDiscoveryService {
     private final HdfsConfig hdfsConfig;
     private final BatchConfig batchConfig;
     private final BatchStateDao stateDao;
+    private final BatchProcessorMetrics metrics;
 
     private final Set<String> inMemoryProcessedFiles = ConcurrentHashMap.newKeySet();
     @Getter
-    private boolean usingFallback = false;
+    private volatile boolean usingFallback = false;
 
     @Getter
-    private UUID failedBatchId = null;
+    private volatile UUID failedBatchId = null;
 
     private static final Pattern FILE_NAME_PATTERN =
             Pattern.compile("netflow-p\\d{2,}-(\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z)-.*\\.parquet");
@@ -55,11 +58,13 @@ public class FileDiscoveryService {
             FileSystem fileSystem,
             HdfsConfig hdfsConfig,
             BatchConfig batchConfig,
-            BatchStateDao stateDao) {
+            BatchStateDao stateDao,
+            BatchProcessorMetrics metrics) {
         this.fileSystem = fileSystem;
         this.hdfsConfig = hdfsConfig;
         this.batchConfig = batchConfig;
         this.stateDao = stateDao;
+        this.metrics = metrics;
     }
 
     public List<Path> discoverNewFiles(UUID batchId) {
@@ -120,12 +125,18 @@ public class FileDiscoveryService {
 
         try {
             stateDao.markFilesAsProcessed(records);
-            usingFallback = false;
+            setUsingFallback(false);
+            Instant newestTimestamp = records.stream()
+                    .map(BatchStateRecord::getFileTimestamp)
+                    .max(Comparator.naturalOrder())
+                    .orElse(null);
+            metrics.filesProcessed(records.size(), newestTimestamp);
             log.info("Successfully marked {} files as processed in PostgreSQL", records.size());
         } catch (Exception e) {
             log.warn("Failed to mark files in PostgreSQL. State preserved in memory only. ({} files)",
                     records.size(), e);
-            usingFallback = true;
+            setUsingFallback(true);
+            metrics.stageFailed(Stage.STATE_COMMIT);
         }
     }
 
@@ -134,13 +145,13 @@ public class FileDiscoveryService {
             Set<String> dbFiles = stateDao.getProcessedFileNames();
             inMemoryProcessedFiles.clear();
             inMemoryProcessedFiles.addAll(dbFiles);
-            usingFallback = false;
+            setUsingFallback(false);
             log.debug("Loaded {} processed files from PostgreSQL", dbFiles.size());
             return dbFiles;
         } catch (Exception e) {
             log.warn("PostgreSQL unavailable, using in-memory fallback ({} files)",
                     inMemoryProcessedFiles.size(), e);
-            usingFallback = true;
+            setUsingFallback(true);
             return inMemoryProcessedFiles;
         }
     }
@@ -261,6 +272,7 @@ public class FileDiscoveryService {
 
     public void storeFailedBatch(UUID batchId) {
         this.failedBatchId = batchId;
+        metrics.failedBatchPending(true);
         log.info("Stored failed batch ID: {} for retry", batchId);
     }
 
@@ -268,6 +280,12 @@ public class FileDiscoveryService {
         if (failedBatchId != null) {
             log.info("Clearing failed batch: {}", failedBatchId);
             failedBatchId = null;
+            metrics.failedBatchPending(false);
         }
+    }
+
+    private void setUsingFallback(boolean active) {
+        usingFallback = active;
+        metrics.stateFallbackActive(active);
     }
 }

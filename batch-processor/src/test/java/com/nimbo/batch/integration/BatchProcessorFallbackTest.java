@@ -4,6 +4,7 @@ import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.dao.BatchStateDao;
 import com.nimbo.batch.discovery.FileDiscoveryService;
+import com.nimbo.batch.metrics.BatchProcessorMetrics;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.apache.hadoop.conf.Configuration;
@@ -12,6 +13,7 @@ import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.sqlobject.SqlObjectPlugin;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -60,8 +62,10 @@ class BatchProcessorFallbackTest {
                 HikariDataSource dataSource = new HikariDataSource(hikariConfig)) {
             Jdbi jdbi = Jdbi.create(dataSource).installPlugin(new SqlObjectPlugin());
             BatchStateDao stateDao = jdbi.onDemand(BatchStateDao.class);
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            BatchProcessorMetrics metrics = new BatchProcessorMetrics(registry);
             FileDiscoveryService discoveryService =
-                    new FileDiscoveryService(fileSystem, hdfsConfig, batchConfig, stateDao);
+                    new FileDiscoveryService(fileSystem, hdfsConfig, batchConfig, stateDao, metrics);
 
             // When: discovery reads state through the unavailable real data source
             List<Path> discoveredFiles = discoveryService.discoverNewFiles(
@@ -70,6 +74,7 @@ class BatchProcessorFallbackTest {
             // Then: the file is found and state tracking reports fallback mode
             assertThat(discoveredFiles).extracting(Path::getName).containsExactly(fileName);
             assertThat(discoveryService.isUsingFallback()).isTrue();
+            assertThat(registry.get("batch.processor.state.fallback.active").gauge().value()).isEqualTo(1.0);
         }
     }
 }

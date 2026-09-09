@@ -4,6 +4,7 @@ import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.exception.BatchProcessingException;
+import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,11 @@ public class ProtocolProcessor extends BaseProcessor {
     }
 
     @Override
+    public Stage metricStage() {
+        return Stage.PROTOCOL;
+    }
+
+    @Override
     public void process(Dataset<Row> sourceDf, UUID batchId) {
         logHeader("=== PROTOCOL STATISTICS (Protocol Usage {} Windows) ===", windowDuration);
 
@@ -59,7 +65,7 @@ public class ProtocolProcessor extends BaseProcessor {
 
             writeOutput(aggregated, batchId);
 
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
 
             log.error("Error processing protocol aggregation", e);
             throw new BatchProcessingException(batchId, "Protocol aggregation failed", e);

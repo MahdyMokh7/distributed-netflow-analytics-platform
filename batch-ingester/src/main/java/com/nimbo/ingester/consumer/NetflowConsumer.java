@@ -17,6 +17,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 
 import java.time.Duration;
@@ -71,7 +72,7 @@ public class NetflowConsumer {
                             kafkaOffsetCommitter.commit(kafkaConsumer, flushedOffsets);
                             log.info("Instance #{}: Flushed {} offsets during rebalance",
                                     instanceId, flushedOffsets.size());
-                        } catch (Exception e) {
+                        } catch (StorageException | KafkaException e) {
                             log.error("Instance #{}: Failed to flush during rebalance", instanceId, e);
                         }
                     }
@@ -103,7 +104,7 @@ public class NetflowConsumer {
                 consumePoll();
             }
 
-        } catch (Exception e) {
+        } catch (KafkaException | IllegalArgumentException | IllegalStateException e) {
             log.error("Instance #{}: Fatal error in consumer loop", instanceId, e);
             throw new KafkaConsumerException("Consumer loop failed", e);
         } finally {
@@ -127,8 +128,12 @@ public class NetflowConsumer {
             Map<TopicPartitionKey, Long> offsetsToCommit = processRecords(records);
             commitOffsets(offsetsToCommit);
 
-        } catch (Exception e) {
-            log.error("Instance #{}: Error during Kafka consumption", instanceId, e);
+        } catch (KafkaException e) {
+            log.error("Instance #{}: Kafka error during polling or offset commit", instanceId, e);
+            throw new KafkaConsumerException("Kafka polling failed for consumer instance #" + instanceId, e);
+
+        } catch (StorageException | IllegalStateException e) {
+            log.error("Instance #{}: Error while processing or flushing consumed records", instanceId, e);
         }
     }
 
@@ -205,7 +210,7 @@ public class NetflowConsumer {
         try {
             kafkaConsumer.close();
             log.info("Instance #{}: Kafka consumer closed", instanceId);
-        } catch (Exception e) {
+        } catch (KafkaException | IllegalStateException e) {
             log.warn("Instance #{}: Error closing Kafka consumer", instanceId, e);
         }
     }
@@ -217,12 +222,14 @@ public class NetflowConsumer {
         try {
             log.info("Flushing remaining buffered records before shutdown...");
             Map<TopicPartitionKey, Long> flushedOffsets = dataProcessingService.flush();
+
             if (!flushedOffsets.isEmpty()) {
                 kafkaOffsetCommitter.commit(kafkaConsumer, flushedOffsets);
                 log.info("Instance #{}: Flushed {} offsets during shutdown",
                         instanceId, flushedOffsets.size());
             }
-        } catch (Exception e) {
+
+        } catch (StorageException | KafkaException | IllegalStateException e) {
             log.error("Instance #{}: Error flushing during shutdown", instanceId, e);
         }
 
@@ -234,6 +241,7 @@ public class NetflowConsumer {
                 Thread.currentThread().interrupt();
             }
         }
+
         log.info("Instance #{}: Shutdown complete", instanceId);
     }
 }

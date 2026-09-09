@@ -8,6 +8,7 @@ services:
 
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules.yml:/etc/prometheus/rules.yml:ro
       - /mnt/disk1/monitoring/prometheus-data:/prometheus
     ports:
       - "9090:9090"
@@ -20,3 +21,5 @@ services:
       - "3000:3000"
     volumes:
       - /mnt/disk1/monitoring/grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

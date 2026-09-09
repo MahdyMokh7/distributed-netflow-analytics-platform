@@ -17,6 +17,7 @@ mvn clean package -DskipTests
 
 ```bash
 scp target/batch-processor-1.0.0-SNAPSHOT-spark.jar team1@10.10.61.53:/home/team1/
+java --add-opens=java.base/java.nio=ALL-UNNAMED      --add-opens=java.base/java.lang.invoke=ALL-UNNAMED      --add-opens=java.base/java.util=ALL-UNNAMED      -jar /home/team1/batch-processor.jar      --spring.profiles.active=prod
 ```
 
 ---

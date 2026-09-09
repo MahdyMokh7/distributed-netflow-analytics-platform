@@ -3,9 +3,12 @@ package com.nimbo.batch.processor;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.exception.BatchProcessingException;
+import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.spark.SparkException;
+import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.springframework.core.annotation.Order;
@@ -39,6 +42,11 @@ public class TrafficAggregationProcessor extends BaseProcessor {
     }
 
     @Override
+    public Stage metricStage() {
+        return Stage.TRAFFIC;
+    }
+
+    @Override
     public void process(Dataset<Row> sourceDf, UUID batchId) {
         logHeader("=== TRAFFIC AGGREGATION (IP Bandwidth by {} Windows) ===", windowDuration);
 
@@ -58,7 +66,11 @@ public class TrafficAggregationProcessor extends BaseProcessor {
         } catch (Exception e) {
             log.error("Error processing traffic aggregation", e);
 
-            throw new BatchProcessingException(batchId, "Traffic aggregation failed", e);
+            throw new BatchProcessingException(
+                    batchId,
+                    "Traffic aggregation failed",
+                    e
+            );
         }
     }
 

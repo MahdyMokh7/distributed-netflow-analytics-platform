@@ -22,6 +22,7 @@ import com.nimbo.storage.service.hdfs.HdfsFileSystemFactory;
 import org.springframework.stereotype.Component;
 import org.apache.avro.Schema;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -141,7 +142,7 @@ public class ConsumerManager {
                 log.error("Thread interrupted while creating consumer instance #{}", i + 1, e);
                 break;
 
-            } catch (Exception e) {
+            } catch (IOException | RuntimeException e) {
                 log.error("Failed to create consumer instance #{}", i + 1, e);
             }
         }

@@ -1,0 +1,54 @@
+groups:
+  - name: batch-processor
+    rules:
+      - alert: BatchProcessorDown
+        expr: up{job="batch-processor"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Batch processor metrics endpoint is unavailable
+          description: Prometheus has been unable to scrape the batch processor for two minutes.
+
+      - alert: BatchProcessorRunFailed
+        expr: increase(batch_processor_runs_total{job="batch-processor",outcome="failed"}[30m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: Batch processor run failed
+          description: At least one batch processor run failed during the last thirty minutes.
+
+      - alert: BatchProcessorRunStuck
+        expr: batch_processor_run_in_progress{job="batch-processor"} == 1
+        for: 20m
+        labels:
+          severity: critical
+        annotations:
+          summary: Batch processor run is taking too long
+          description: A batch processor run has remained active for more than twenty minutes.
+
+      - alert: BatchProcessorStateFallbackActive
+        expr: batch_processor_state_fallback_active{job="batch-processor"} == 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Batch processor state is not durable
+          description: Processed-file state is using the in-memory fallback instead of PostgreSQL.
+
+      - alert: BatchProcessorDataStale
+        expr: batch_processor_last_processed_file_timestamp_seconds{job="batch-processor"} > 0 and time() - batch_processor_last_processed_file_timestamp_seconds{job="batch-processor"} > 1800
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Batch processor data watermark is stale
+          description: The newest durably processed Parquet file is more than thirty minutes old.
+
+      - alert: BatchProcessorPostgresRetriesHigh
+        expr: sum(increase(batch_processor_postgres_retries_total{job="batch-processor"}[15m])) > 5
+        labels:
+          severity: warning
+        annotations:
+          summary: Batch processor PostgreSQL retries are elevated
+          description: More than five PostgreSQL write retries occurred during the last fifteen minutes.

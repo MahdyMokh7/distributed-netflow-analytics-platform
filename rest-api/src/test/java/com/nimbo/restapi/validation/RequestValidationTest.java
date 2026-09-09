@@ -92,10 +92,16 @@ class RequestValidationTest {
                 .build();
 
         // When: both requests are validated
-        int violationCount = validator.validate(pagination).size() + validator.validate(bandwidth).size();
+        var paginationViolations = validator.validate(pagination);
+        var bandwidthViolations = validator.validate(bandwidth);
 
         // Then: page size and limit constraints all fail
-        assertThat(violationCount).isEqualTo(3);
+        assertThat(paginationViolations)
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .containsExactlyInAnyOrder("page", "size");
+        assertThat(bandwidthViolations)
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .containsExactly("limit");
     }
 
     @Test

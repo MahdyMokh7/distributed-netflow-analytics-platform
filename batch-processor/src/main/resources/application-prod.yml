@@ -5,6 +5,9 @@ spring:
     validate-on-migrate: true
     locations: classpath:db.migration
 
+server:
+  port: ${SERVER_PORT:18081}
+
 spark:
   master: spark://10.10.61.71:7077
   app-name: nimbo-batch-processor
@@ -18,7 +21,7 @@ spark:
   serializer: org.apache.spark.serializer.KryoSerializer
   ui-enabled: true
   io-mode-default: NIO
-  driver-host: ${DRIVER_HOST:10.10.61.52}
+  driver-host: ${DRIVER_HOST:10.10.61.53}
   driver-bind-address: 0.0.0.0
   speculation: false
   jars-path: ${SPARK_JARS_PATH:/tmp/batch-processor-spark.jar}

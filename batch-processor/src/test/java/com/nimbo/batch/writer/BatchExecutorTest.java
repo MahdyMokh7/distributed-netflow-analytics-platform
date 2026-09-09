@@ -15,6 +15,7 @@ class BatchExecutorTest {
     void givenATransientFailure_whenExecuted_thenItRetriesAndReturnsTheCompleteBatchResult() {
         // Given: an operation that fails once before returning two successful updates
         AtomicInteger attempts = new AtomicInteger();
+        AtomicInteger retries = new AtomicInteger();
 
         // When: the operation is executed with a bounded retry policy
         int[] results = executor.executeWithRetry(() -> {
@@ -22,10 +23,11 @@ class BatchExecutorTest {
                 throw new IllegalStateException("temporary database outage");
             }
             return new int[]{1, 1};
-        }, "traffic_aggregates", 2, 0, 0);
+        }, "traffic_aggregates", 2, 0, 0, retries::incrementAndGet);
 
         // Then: the second attempt succeeds and every row is confirmed
         assertThat(attempts.get()).isEqualTo(2);
+        assertThat(retries.get()).isEqualTo(1);
         assertThat(results).containsExactly(1, 1);
     }
 

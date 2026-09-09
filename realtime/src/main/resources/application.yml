@@ -25,15 +25,6 @@ management:
 server:
   port: ${SERVER_PORT:8082}
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics,prometheus
-  endpoint:
-    health:
-      show-details: always
-  
 realtime:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092}
@@ -67,4 +58,3 @@ realtime:
     retry-backoff-ms: ${STARROCKS_RETRY_BACKOFF_MS:1000}
     max-batch-size-rows: ${STARROCKS_MAX_BATCH_SIZE_ROWS:100000}
     max-batch-time-ms: ${STARROCKS_MAX_BATCH_TIME_MS:1500}
-

@@ -2,7 +2,9 @@ package com.nimbo.batch.writer;
 
 import com.nimbo.batch.config.ExecutorPoolConfig;
 import com.nimbo.batch.config.PostgresConfig;
+import com.nimbo.batch.metrics.BatchProcessorMetrics;
 import com.nimbo.batch.util.TestPostgresExtension;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
@@ -11,6 +13,7 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +36,7 @@ class PostgresWriterTest {
     private SparkSession spark;
     private Jdbi jdbi;
     private PostgresWriter writer;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeAll
     void startInfrastructure() {
@@ -50,12 +54,20 @@ class PostgresWriterTest {
             handle.execute("CREATE TABLE IF NOT EXISTS protocol_usage_aggregates (l7_protocol DOUBLE PRECISION NOT NULL, window_start TIMESTAMP NOT NULL, window_end TIMESTAMP NOT NULL, in_bytes BIGINT NOT NULL, out_bytes BIGINT NOT NULL, in_packets BIGINT NOT NULL, out_packets BIGINT NOT NULL, connection_count BIGINT NOT NULL, batch_id UUID NOT NULL, ingested_at TIMESTAMP NOT NULL, PRIMARY KEY (l7_protocol, window_start, batch_id))");
             handle.execute("CREATE TABLE IF NOT EXISTS ip_bandwidth_aggregates (ip VARCHAR NOT NULL, window_start TIMESTAMP NOT NULL, window_end TIMESTAMP NOT NULL, inbound_bytes BIGINT NOT NULL, outbound_bytes BIGINT NOT NULL, inbound_packets BIGINT NOT NULL, outbound_packets BIGINT NOT NULL, batch_id UUID NOT NULL, ingested_at TIMESTAMP NOT NULL, PRIMARY KEY (ip, window_start, batch_id))");
         });
-        writer = new PostgresWriter(new TableRowMapper(), new BatchExecutor(), new JdbiDaoFactory(postgresConfig(), executorPoolConfig()), postgresConfig());
     }
 
     @BeforeEach
     void resetDatabase() {
         jdbi.useHandle(handle -> handle.execute("TRUNCATE traffic_aggregates, connection_aggregates, protocol_usage_aggregates, ip_bandwidth_aggregates"));
+        meterRegistry = new SimpleMeterRegistry();
+        writer = new PostgresWriter(new TableRowMapper(), new BatchExecutor(),
+                new JdbiDaoFactory(postgresConfig(), executorPoolConfig()), postgresConfig(),
+                new BatchProcessorMetrics(meterRegistry));
+    }
+
+    @AfterEach
+    void closeRegistry() {
+        meterRegistry.close();
     }
 
     @AfterAll
@@ -79,6 +91,10 @@ class PostgresWriterTest {
         assertThat(count("traffic_aggregates")).isEqualTo(3L);
         assertThat(value("SELECT SUM(in_bytes) FROM traffic_aggregates")).isEqualTo(600L);
         assertThat(value("SELECT SUM(record_count) FROM traffic_aggregates")).isEqualTo(6L);
+        assertThat(meterRegistry.get("batch.processor.output.rows").tag("cube", "traffic").counter().count())
+                .isEqualTo(3.0);
+        assertThat(meterRegistry.get("batch.processor.stage.duration")
+                .tag("stage", "postgres_write_traffic").timer().count()).isEqualTo(1L);
     }
 
     @Test

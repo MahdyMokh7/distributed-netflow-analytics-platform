@@ -14,6 +14,12 @@ public class BatchExecutor  implements Serializable {
 
     public int[] executeWithRetry(Supplier<int[]> operation, String tableName,
                                   int maxRetries, long initialDelayMs, long maxDelayMs) {
+        return executeWithRetry(operation, tableName, maxRetries, initialDelayMs, maxDelayMs, () -> { });
+    }
+
+    public int[] executeWithRetry(Supplier<int[]> operation, String tableName,
+                                  int maxRetries, long initialDelayMs, long maxDelayMs,
+                                  Runnable retryAction) {
         int attempts = 0;
         Exception lastException = null;
 
@@ -28,6 +34,7 @@ public class BatchExecutor  implements Serializable {
                 attempts++;
 
                 if (shouldRetry(attempts, maxRetries)) {
+                    retryAction.run();
                     long delay = calculateRetryDelay(attempts, initialDelayMs, maxDelayMs);
                     log.warn(
                             "Batch execution failed for table: {} (attempt {}/{}), retrying in {}ms",

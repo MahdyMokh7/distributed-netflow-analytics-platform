@@ -53,6 +53,9 @@ terminal.log
 /rest-api/docs/
 /rest-api/code-extracter.py
 
+/realtime/docs/
+/realtime/code-extracter.py
+
 /docs/plan
 
 # Multi-module generated files

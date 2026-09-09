@@ -31,6 +31,7 @@ When tests require external services:
 * Tests may reset or clean the service state between scenarios, but should **not repeatedly recreate the container**.
 * Stop containers through the test suite/module shutdown lifecycle.
 * Each infrastructure service should have a well-defined reusable **test extension/configuration class**.
+* Use extension this  is very important . i should see the imported extension classes in the integration tests or any test that use the container.
 
 ## 4. Test Parallelism
 

@@ -63,7 +63,7 @@ class RealtimeIngestionIT {
             DockerImageName.parse("apache/kafka-native:3.8.0"));
 
     private static final GenericContainer<?> STARROCKS = new GenericContainer<>(
-            DockerImageName.parse("starrocks/allin1-ubuntu:3.4-latest"))
+            DockerImageName.parse("starrocks/allin1-ubuntu:4.0.12"))
             .withExposedPorts(FE_HTTP_PORT, BE_HTTP_PORT, MYSQL_PORT)
             .waitingFor(Wait.forHttp("/api/health")
                     .forPort(FE_HTTP_PORT)

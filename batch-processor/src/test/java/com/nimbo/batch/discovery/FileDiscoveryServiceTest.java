@@ -4,11 +4,13 @@ import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.dao.BatchStateDao;
 import com.nimbo.batch.model.BatchStateRecord;
+import com.nimbo.batch.metrics.BatchProcessorMetrics;
 import com.nimbo.batch.util.TestPostgresExtension;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.jdbi.v3.core.Jdbi;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +37,8 @@ class FileDiscoveryServiceTest {
     private BatchStateDao stateDao;
     private BatchConfig batchConfig;
     private FileDiscoveryService service;
+    private BatchProcessorMetrics metrics;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -50,7 +54,9 @@ class FileDiscoveryServiceTest {
         HdfsConfig hdfsConfig = new HdfsConfig();
         hdfsConfig.setUri("file://");
         hdfsConfig.setParquetPath(directory.toString());
-        service = new FileDiscoveryService(fileSystem, hdfsConfig, batchConfig, stateDao);
+        meterRegistry = new SimpleMeterRegistry();
+        metrics = new BatchProcessorMetrics(meterRegistry);
+        service = new FileDiscoveryService(fileSystem, hdfsConfig, batchConfig, stateDao, metrics);
     }
 
     @AfterEach
@@ -117,6 +123,9 @@ class FileDiscoveryServiceTest {
         // Then: both names are stored and neither file is discovered again
         assertThat(stateDao.getProcessedFileNames()).containsExactlyInAnyOrder(first.getName(), second.getName());
         assertThat(service.discoverNewFiles(UUID.fromString("10000000-0000-0000-0000-000000000005"))).isEmpty();
+        assertThat(meterRegistry.get("batch.processor.files.processed").counter().count()).isEqualTo(2.0);
+        assertThat(meterRegistry.get("batch.processor.last.processed.file.timestamp.seconds").gauge().value())
+                .isEqualTo(Instant.parse("2026-09-07T14:10:00Z").getEpochSecond());
     }
 
     @Test
@@ -125,7 +134,7 @@ class FileDiscoveryServiceTest {
         HdfsConfig missingConfig = new HdfsConfig();
         missingConfig.setUri("file://");
         missingConfig.setParquetPath(directory.resolve("missing").toString());
-        FileDiscoveryService missingService = new FileDiscoveryService(fileSystem, missingConfig, batchConfig, stateDao);
+        FileDiscoveryService missingService = new FileDiscoveryService(fileSystem, missingConfig, batchConfig, stateDao, metrics);
 
         // When: hierarchical discovery attempts to list the missing root
         Throwable failure = org.assertj.core.api.Assertions.catchThrowable(
