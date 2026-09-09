@@ -100,3 +100,5 @@ terminal.log
 ./logs/
 **/logs/
 *.log
+
+*.kilo
