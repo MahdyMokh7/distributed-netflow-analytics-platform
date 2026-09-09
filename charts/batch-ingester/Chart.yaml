@@ -1,0 +1,6 @@
+apiVersion: v2
+name: batch-ingester
+description: Helm chart for the nimbo-nimbyte batch-ingester module
+type: application
+version: 0.1.0
+appVersion: "1.0"

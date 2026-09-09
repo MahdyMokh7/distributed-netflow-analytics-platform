@@ -1,0 +1,62 @@
+replicaCount: 1
+
+image:
+  repository: zoraq.inside.sahab.ir:9462/nimbo-nimbyte-batch-processor
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+containerPort: 18081
+springProfile: prod
+
+terminationGracePeriodSeconds: 60
+
+service:
+  type: ClusterIP
+  port: 18081
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+probes:
+  startup:
+    path: /actuator/health/liveness
+    timeoutSeconds: 3
+    failureThreshold: 60
+    periodSeconds: 5
+  readiness:
+    path: /actuator/health/readiness
+    timeoutSeconds: 3
+    failureThreshold: 3
+    periodSeconds: 5
+  liveness:
+    path: /actuator/health/liveness
+    timeoutSeconds: 3
+    failureThreshold: 3
+    periodSeconds: 10
+
+secret:
+  enabled: false
+  data:
+    DB_USERNAME: "CHANGE_ME"
+    DB_PASSWORD: "CHANGE_ME"
+
+# IMPORTANT — read before deploying:
+# spark.driver-host was hardcoded to node3's IP (10.10.61.53) in the old config, because the
+# app ran directly on that host. In Kubernetes the pod gets a new, ephemeral pod IP on every
+# restart, so a hardcoded driver-host will break as soon as the pod is rescheduled. This chart
+# injects the pod's real IP via the Downward API into DRIVER_HOST, and the config below
+# references that env var instead of a fixed IP.
+# You'll also need to confirm your Spark workers (which run directly on the hosts, outside the
+# cluster) can actually route to pod IPs (10.244.x.x, the Calico overlay range) — if they can't,
+# you'll need to test this specifically, and may need hostNetwork: true on this pod as a fallback.
+extraEnv:
+  - name: DRIVER_HOST
+    valueFrom:
+      fieldRef:
+        fieldPath: status.podIP
+

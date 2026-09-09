@@ -1,0 +1,42 @@
+replicaCount: 1
+
+image:
+  repository: zoraq.inside.sahab.ir:9462/nimbo-nimbyte-batch-ingester
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+containerPort: 18080
+springProfile: prod
+healthPath: /actuator/health
+
+terminationGracePeriodSeconds: 40
+
+service:
+  type: ClusterIP
+  port: 18080
+
+probes:
+  startup:
+    path: /actuator/health/liveness
+    timeoutSeconds: 3
+    failureThreshold: 30
+    periodSeconds: 5
+  readiness:
+    path: /actuator/health/readiness
+    timeoutSeconds: 3
+    failureThreshold: 3
+    periodSeconds: 5
+  liveness:
+    path: /actuator/health/liveness
+    timeoutSeconds: 3
+    failureThreshold: 3
+    periodSeconds: 10
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+

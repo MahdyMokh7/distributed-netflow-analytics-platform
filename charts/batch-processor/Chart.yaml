@@ -1,0 +1,6 @@
+apiVersion: v2
+name: batch-processor
+description: Helm chart for the nimbo-nimbyte batch-processor module
+type: application
+version: 0.1.0
+appVersion: "1.0"

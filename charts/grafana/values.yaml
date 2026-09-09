@@ -1,0 +1,27 @@
+image:
+  repository: zoraq.inside.sahab.ir:9462/grafana
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+containerPort: 3000
+
+secret:
+  adminUser: admin
+  adminPassword: admin
+
+prometheus:
+  url: http://prometheus:9090     # in-cluster Service DNS name, from the prometheus chart
+  datasourceUid: afx57iu9wr0n4a   # MUST match the uid already baked into your dashboard JSON panels
+
+service:
+  type: NodePort
+  port: 3000
+  nodePort: 30300
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

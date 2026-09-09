@@ -1,0 +1,85 @@
+spring:
+  task:
+    scheduling:
+      shutdown:
+        await-termination: true
+        await-termination-period: 45s
+
+  lifecycle:
+    timeout-per-shutdown-phase: 5s
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    locations: classpath:db.migration
+
+  application:
+    name: batch-processor
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState
+
+spark:
+  master: spark://spark-master:7077
+  app-name: nimbo-batch-processor
+  executor-memory: 2g
+  executor-cores: 2
+  num-executors: 2
+  driver-memory: 1g
+  shuffle-partitions: 12
+  adaptive-enabled: true
+  adaptive-coalesce-partitions-enabled: true
+  serializer: org.apache.spark.serializer.KryoSerializer
+  ui-enabled: true
+  io-mode-default: NIO
+  driver-host: ${DRIVER_HOST}
+  driver-bind-address: 0.0.0.0
+
+hdfs:
+  uri: hdfs://team1
+  parquet-path: /netflow/parquetFiles/
+
+output:
+  mode: both
+
+postgres:
+  host: postgresql-master.team1.svc.cluster.local
+  port: 5432
+  database: nimbo_db
+  username: ${DB_USERNAME}
+  password: ${DB_PASSWORD}
+  batch-size: 500
+
+  pool:
+    size: 20
+    connection-timeout: 10000
+    pool-name: nimbo-batch-pg-pool
+
+  retry:
+    max-attempts: 5
+    initial-delay-ms: 2000
+    max-delay-ms: 30000
+
+batch:
+  schedule: "0 */3 * * * ?"
+  window-duration: "1 hour"
+  enabled: true
+  max-files-per-batch: 5
+
+server:
+  shutdown: graceful

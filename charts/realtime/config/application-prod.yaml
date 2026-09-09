@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: nimbo-realtime
+  datasource:
+    url: jdbc:mysql://10.10.61.53:9030/nimbo
+    username: ${STARROCKS_USERNAME}
+    password: ${STARROCKS_PASSWORD}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+server:
+  port: 18082
+realtime:
+  kafka:
+    bootstrap-servers: 10.10.61.51:9092
+    topic: netflow
+    consumer-group: netflow-starrocks-writer5
+    client-id: starrocks-writer
+    auto-offset-reset: earliest
+    max-poll-records: 20000
+    poll-timeout-ms: 1000
+    consumer-count: 3
+    max-partition-fetch-bytes: 4194304
+    session-timeout-ms: 30000
+    heartbeat-interval-ms: 3000
+    max-poll-interval-ms: 900000
+  starrocks:
+    stream-load-backends:
+      - http://10.10.61.51:8040
+      - http://10.10.61.52:8040
+      - http://10.10.61.53:8040
+      - http://10.10.61.54:8040
+    database: nimbo
+    table: netflow_realtime_v3
+    username: ${STARROCKS_USERNAME}
+    password: ${STARROCKS_PASSWORD}
+    merge-commit-enabled: true
+    merge-commit-async: false
+    merge-commit-interval-ms: 1000
+    merge-commit-parallel: 3
+    max-in-flight-requests: 9
+    retry-backoff-ms: 1000
+    max-batch-size-rows: 100000
+    max-batch-time-ms: 1500
