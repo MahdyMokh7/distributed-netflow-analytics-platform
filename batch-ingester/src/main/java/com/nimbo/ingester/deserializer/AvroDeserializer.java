@@ -23,6 +23,10 @@ public class AvroDeserializer {
     }
 
     public GenericRecord deserialize(byte[] data) {
+        if (data == null) {
+            throw new DeserializationException("Avro payload must not be null");
+        }
+
         try {
             BinaryDecoder decoder = decoderFactory.binaryDecoder(data, null);
             return reader.read(null, decoder);

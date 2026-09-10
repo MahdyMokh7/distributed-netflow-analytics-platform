@@ -45,9 +45,9 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.junit.jupiter.api.*;
 import static org.awaitility.Awaitility.await;
 import static java.time.Duration.ofSeconds;
-import com.nimbo.extensions.HdfsExtension;
-import com.nimbo.extensions.KafkaExtension;
-import org.junit.jupiter.api.extension.ExtendWith;
+import com.nimbo.support.HdfsContainerExtension;
+import com.nimbo.support.KafkaContainerExtension;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -57,11 +57,13 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@ExtendWith({
-        KafkaExtension.class,
-        HdfsExtension.class
-})
 class NetflowHDFSWriterPipelineIT {
+
+    @RegisterExtension
+    static final KafkaContainerExtension KAFKA = new KafkaContainerExtension();
+
+    @RegisterExtension
+    static final HdfsContainerExtension HDFS = new HdfsContainerExtension();
 
     private String topic;
     private String dlqTopic;
@@ -208,7 +210,7 @@ class NetflowHDFSWriterPipelineIT {
 
     private KafkaProperties buildKafkaProperties() {
         KafkaProperties properties = new KafkaProperties();
-        properties.setBootstrapServers(KafkaExtension.getBootstrapServers());
+        properties.setBootstrapServers(KAFKA.bootstrapServers());
         properties.setTopic(topic);
         properties.setDlqTopic(dlqTopic);
         properties.setConsumerGroup("netflow-consumer-it-" + UUID.randomUUID());
@@ -227,7 +229,7 @@ class NetflowHDFSWriterPipelineIT {
         Properties adminProps = new Properties();
         adminProps.put(
                 org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-                KafkaExtension.getBootstrapServers());
+                KAFKA.bootstrapServers());
 
         try (AdminClient admin = AdminClient.create(adminProps)) {
             admin.createTopics(List.of(
@@ -239,7 +241,7 @@ class NetflowHDFSWriterPipelineIT {
 
     private KafkaProducer<byte[], byte[]> createProducer() {
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaExtension.getBootstrapServers());
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.bootstrapServers());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         return new KafkaProducer<>(props);
@@ -247,7 +249,7 @@ class NetflowHDFSWriterPipelineIT {
 
     private KafkaConsumer<byte[], byte[]> createConsumer(String groupId) {
         Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaExtension.getBootstrapServers());
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.bootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
@@ -265,7 +267,7 @@ class NetflowHDFSWriterPipelineIT {
     }
 
     private Configuration createHadoopConfiguration() {
-        return HdfsExtension.getConfiguration();
+        return HDFS.configuration();
     }
 
     private NetFlowStorage createNetFlowStorage(FileSystem fs) {

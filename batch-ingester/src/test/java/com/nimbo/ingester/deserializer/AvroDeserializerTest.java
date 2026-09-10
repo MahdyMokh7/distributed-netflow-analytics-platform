@@ -1,82 +1,68 @@
 package com.nimbo.ingester.deserializer;
 
 import com.nimbo.ingester.exception.DeserializationException;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
+import com.nimbo.support.NetFlowTestData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.DatumWriter;
-import org.apache.avro.io.Encoder;
-import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@DisplayName("AvroDeserializer Tests")
 class AvroDeserializerTest {
 
-    private static final String SCHEMA_JSON = """
-            {
-                "type": "record",
-                "name": "TestRecord",
-                "fields": [
-                    {"name": "id", "type": "string"},
-                    {"name": "value", "type": "long"}
-                ]
-            }
-            """;
-
-    private Schema schema;
+    private NetFlowTestData testData;
     private AvroDeserializer deserializer;
 
     @BeforeEach
     void setUp() {
-        schema = new Schema.Parser().parse(SCHEMA_JSON);
-        deserializer = new AvroDeserializer(schema);
+        testData = new NetFlowTestData();
+        deserializer = new AvroDeserializer(testData.sourceSchema());
     }
 
     @Test
-    @DisplayName("Should deserialize valid Avro data successfully")
-    void shouldDeserializeValidAvroData() throws IOException {
-        GenericRecord expected = new GenericData.Record(schema);
-        expected.put("id", "test-123");
-        expected.put("value", 42L);
+    void givenCompleteBinaryNetFlow_whenDeserialized_thenEveryRepresentativeValueSurvives() {
+        // Given: a complete record encoded with the production Avro schema
+        GenericRecord expected = testData.validRecord("172.16.1.10", "172.16.1.20", 24_000L);
+        byte[] encoded = testData.serialize(expected);
 
-        byte[] data = serializeRecord(expected);
+        // When: production deserialization reads the binary payload
+        GenericRecord actual = deserializer.deserialize(encoded);
 
-        GenericRecord actual = deserializer.deserialize(data);
-
-        assertThat(actual).isNotNull();
-        assertThat(actual.get("id").toString()).isEqualTo("test-123");
-        assertThat(actual.get("value")).isEqualTo(42L);
+        // Then: identifying and numeric values match the encoded record
+        assertThat(actual.get("IPV4_SRC_ADDR").toString()).isEqualTo("172.16.1.10");
+        assertThat(actual.get("IPV4_DST_ADDR").toString()).isEqualTo("172.16.1.20");
+        assertThat(actual.get("IN_BYTES")).isEqualTo(24_000L);
+        assertThat(actual.get("OUT_BYTES")).isEqualTo(12_000L);
+        assertThat(actual.get("L4_SRC_PORT")).isEqualTo(443);
     }
 
     @Test
-    @DisplayName("Should throw DeserializationException when data is null")
-    void shouldThrowExceptionWhenDataIsNull() {
-        assertThatThrownBy(() -> deserializer.deserialize(null))
-                .isInstanceOf(DeserializationException.class);
+    void givenMalformedBinaryPayload_whenDeserialized_thenDomainFailurePreservesCause() {
+        // Given: deterministic bytes that cannot represent the production record
+        byte[] malformed = {1, 2, 3, 4};
+
+        // When: production deserialization attempts to decode the payload
+        var invocation = org.assertj.core.api.Assertions.catchThrowable(() -> deserializer.deserialize(malformed));
+
+        // Then: callers receive the domain exception with its decoding cause
+        assertThat(invocation)
+                .isInstanceOf(DeserializationException.class)
+                .hasMessage("Failed to deserialize Avro record")
+                .hasCauseInstanceOf(Exception.class);
     }
 
     @Test
-    @DisplayName("Should return correct schema")
-    void shouldReturnCorrectSchema() {
-        assertThat(deserializer.getSchema()).isSameAs(schema);
-        assertThat(deserializer.getSchema().getFullName()).isEqualTo("TestRecord");
-    }
+    void givenNullPayload_whenDeserialized_thenExplicitDomainFailureIsReturned() {
+        // Given: a null Kafka record payload
+        byte[] payload = null;
 
-    private byte[] serializeRecord(GenericRecord record) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        Encoder encoder = EncoderFactory.get().binaryEncoder(out, null);
-        DatumWriter<GenericRecord> writer = new GenericDatumWriter<>(schema);
-        writer.write(record, encoder);
-        encoder.flush();
-        return out.toByteArray();
+        // When: production deserialization receives the null payload
+        var invocation = org.assertj.core.api.Assertions.catchThrowable(() -> deserializer.deserialize(payload));
+
+        // Then: callers receive an intentional null-payload domain failure
+        assertThat(invocation)
+                .isInstanceOf(DeserializationException.class)
+                .hasMessage("Avro payload must not be null")
+                .hasNoCause();
     }
 }

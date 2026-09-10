@@ -1,4 +1,4 @@
-package com.nimbo.batch.test.support;
+package com.nimbo.batch.support;
 
 import org.flywaydb.core.Flyway;
 import org.jdbi.v3.core.Jdbi;

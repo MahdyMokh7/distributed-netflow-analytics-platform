@@ -1,8 +1,8 @@
 package com.nimbo.batch.processor;
 
-import com.nimbo.batch.test.support.PostgresContainerExtension;
-import com.nimbo.batch.test.support.ProcessorTestFixture;
-import com.nimbo.batch.test.support.SparkSessionExtension;
+import com.nimbo.batch.support.PostgresContainerExtension;
+import com.nimbo.batch.support.ProcessorTestFixture;
+import com.nimbo.batch.support.SparkSessionExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;

@@ -2,12 +2,12 @@ package com.nimbo.batch.integration;
 
 import com.nimbo.batch.BatchProcessorApplication;
 import com.nimbo.batch.discovery.FileDiscoveryService;
-import com.nimbo.batch.test.support.BatchProcessorTestProperties;
-import com.nimbo.batch.test.support.LocalFileSystemTestConfiguration;
+import com.nimbo.batch.support.BatchProcessorTestProperties;
+import com.nimbo.batch.support.LocalFileSystemTestConfiguration;
 import com.nimbo.batch.job.BatchJobRunner;
 import com.nimbo.batch.model.*;
-import com.nimbo.batch.test.support.NetFlowParquetTestData;
-import com.nimbo.batch.test.support.PostgresContainerExtension;
+import com.nimbo.batch.support.NetFlowParquetTestData;
+import com.nimbo.batch.support.PostgresContainerExtension;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.SparkSession;
