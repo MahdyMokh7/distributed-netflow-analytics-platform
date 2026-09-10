@@ -5,7 +5,7 @@ import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.dao.BatchStateDao;
 import com.nimbo.batch.model.BatchStateRecord;
 import com.nimbo.batch.metrics.BatchProcessorMetrics;
-import com.nimbo.batch.util.TestPostgresExtension;
+import com.nimbo.batch.test.support.PostgresContainerExtension;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -25,10 +25,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class FileDiscoveryServiceTest {
+class FileDiscoveryServiceIT {
 
     @RegisterExtension
-    static final TestPostgresExtension POSTGRES = new TestPostgresExtension();
+    static final PostgresContainerExtension POSTGRES = new PostgresContainerExtension();
 
     @TempDir
     java.nio.file.Path directory;
@@ -44,10 +44,7 @@ class FileDiscoveryServiceTest {
     void setUp() throws IOException {
         fileSystem = FileSystem.getLocal(new Configuration());
         Jdbi jdbi = POSTGRES.jdbi();
-        jdbi.useHandle(handle -> {
-            handle.execute("CREATE TABLE IF NOT EXISTS batch_processor_state (file_name VARCHAR PRIMARY KEY, file_timestamp TIMESTAMP NOT NULL, batch_id UUID NOT NULL, processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
-            handle.execute("TRUNCATE batch_processor_state");
-        });
+        jdbi.useHandle(handle -> handle.execute("TRUNCATE batch_processor_state"));
         stateDao = jdbi.onDemand(BatchStateDao.class);
         batchConfig = new BatchConfig();
         batchConfig.setMaxFilesPerBatch(3);

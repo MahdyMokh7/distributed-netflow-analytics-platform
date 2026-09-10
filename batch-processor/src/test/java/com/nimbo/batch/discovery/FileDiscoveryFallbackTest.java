@@ -1,9 +1,8 @@
-package com.nimbo.batch.integration;
+package com.nimbo.batch.discovery;
 
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.dao.BatchStateDao;
-import com.nimbo.batch.discovery.FileDiscoveryService;
 import com.nimbo.batch.metrics.BatchProcessorMetrics;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -23,7 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class BatchProcessorFallbackTest {
+class FileDiscoveryFallbackTest {
 
     @TempDir
     java.nio.file.Path fallbackTempDir;

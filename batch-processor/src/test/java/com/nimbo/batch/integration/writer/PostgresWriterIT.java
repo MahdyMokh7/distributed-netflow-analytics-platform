@@ -3,7 +3,8 @@ package com.nimbo.batch.writer;
 import com.nimbo.batch.config.ExecutorPoolConfig;
 import com.nimbo.batch.config.PostgresConfig;
 import com.nimbo.batch.metrics.BatchProcessorMetrics;
-import com.nimbo.batch.util.TestPostgresExtension;
+import com.nimbo.batch.test.support.PostgresContainerExtension;
+import com.nimbo.batch.test.support.SparkSessionExtension;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -12,12 +13,9 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.jdbi.v3.core.Jdbi;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.sql.Timestamp;
@@ -27,54 +25,34 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class PostgresWriterTest {
+class PostgresWriterIT {
 
     @RegisterExtension
-    static final TestPostgresExtension POSTGRES = new TestPostgresExtension();
+    static final PostgresContainerExtension POSTGRES = new PostgresContainerExtension();
+
+    @RegisterExtension
+    static final SparkSessionExtension SPARK = new SparkSessionExtension();
 
     private SparkSession spark;
     private Jdbi jdbi;
     private PostgresWriter writer;
     private SimpleMeterRegistry meterRegistry;
 
-    @BeforeAll
-    void startInfrastructure() {
-        spark = SparkSession.builder()
-                .master("local[2]")
-                .appName(getClass().getSimpleName())
-                .config("spark.ui.enabled", "false")
-                .config("spark.sql.shuffle.partitions", "2")
-                .config("spark.sql.session.timeZone", "UTC")
-                .getOrCreate();
-        jdbi = POSTGRES.jdbi();
-        jdbi.useHandle(handle -> {
-            handle.execute("CREATE TABLE IF NOT EXISTS traffic_aggregates (src_ip VARCHAR NOT NULL, window_start TIMESTAMP NOT NULL, window_end TIMESTAMP NOT NULL, in_bytes BIGINT NOT NULL, out_bytes BIGINT NOT NULL, in_packets BIGINT NOT NULL, out_packets BIGINT NOT NULL, record_count BIGINT NOT NULL, batch_id UUID NOT NULL, ingested_at TIMESTAMP NOT NULL, PRIMARY KEY (src_ip, window_start, batch_id))");
-            handle.execute("CREATE TABLE IF NOT EXISTS connection_aggregates (id VARCHAR NOT NULL, src_ip VARCHAR NOT NULL, dst_ip VARCHAR NOT NULL, window_start TIMESTAMP NOT NULL, window_end TIMESTAMP NOT NULL, in_bytes BIGINT NOT NULL, out_bytes BIGINT NOT NULL, in_packets BIGINT NOT NULL, out_packets BIGINT NOT NULL, batch_id UUID NOT NULL, ingested_at TIMESTAMP NOT NULL, PRIMARY KEY (id, window_start, batch_id))");
-            handle.execute("CREATE TABLE IF NOT EXISTS protocol_usage_aggregates (l7_protocol DOUBLE PRECISION NOT NULL, window_start TIMESTAMP NOT NULL, window_end TIMESTAMP NOT NULL, in_bytes BIGINT NOT NULL, out_bytes BIGINT NOT NULL, in_packets BIGINT NOT NULL, out_packets BIGINT NOT NULL, connection_count BIGINT NOT NULL, batch_id UUID NOT NULL, ingested_at TIMESTAMP NOT NULL, PRIMARY KEY (l7_protocol, window_start, batch_id))");
-            handle.execute("CREATE TABLE IF NOT EXISTS ip_bandwidth_aggregates (ip VARCHAR NOT NULL, window_start TIMESTAMP NOT NULL, window_end TIMESTAMP NOT NULL, inbound_bytes BIGINT NOT NULL, outbound_bytes BIGINT NOT NULL, inbound_packets BIGINT NOT NULL, outbound_packets BIGINT NOT NULL, batch_id UUID NOT NULL, ingested_at TIMESTAMP NOT NULL, PRIMARY KEY (ip, window_start, batch_id))");
-        });
-    }
-
     @BeforeEach
     void resetDatabase() {
+        spark = SPARK.spark();
+        jdbi = POSTGRES.jdbi();
         jdbi.useHandle(handle -> handle.execute("TRUNCATE traffic_aggregates, connection_aggregates, protocol_usage_aggregates, ip_bandwidth_aggregates"));
         meterRegistry = new SimpleMeterRegistry();
+        PostgresConfig postgresConfig = postgresConfig();
         writer = new PostgresWriter(new TableRowMapper(), new BatchExecutor(),
-                new JdbiDaoFactory(postgresConfig(), executorPoolConfig()), postgresConfig(),
+                new JdbiDaoFactory(postgresConfig, executorPoolConfig()), postgresConfig,
                 new BatchProcessorMetrics(meterRegistry));
     }
 
     @AfterEach
     void closeRegistry() {
         meterRegistry.close();
-    }
-
-    @AfterAll
-    void stopSpark() {
-        spark.stop();
-        SparkSession.clearActiveSession();
-        SparkSession.clearDefaultSession();
     }
 
     @Test
@@ -133,7 +111,7 @@ class PostgresWriterTest {
         PostgresConfig config = new PostgresConfig();
         config.setHost(POSTGRES.host());
         config.setPort(POSTGRES.port());
-        config.setDatabase(POSTGRES.database());
+        config.setDatabase(POSTGRES.databaseName());
         config.setUsername(POSTGRES.username());
         config.setPassword(POSTGRES.password());
         config.setBatchSize(2);

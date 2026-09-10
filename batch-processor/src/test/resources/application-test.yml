@@ -7,7 +7,6 @@ spring:
     baseline-on-migrate: true
     validate-on-migrate: true
     locations: classpath:db.migration
-    # Disable Flyway's own data source for tests (we use Testcontainers)
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:test_db}
     user: ${POSTGRES_USER:test_user}
     password: ${POSTGRES_PASSWORD:test_pass}
@@ -38,7 +37,6 @@ spark:
   executor-extra-java-options: "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED --add-opens=java.base/sun.net.util=ALL-UNNAMED"
 
 hdfs:
-  # Overridden in test to use local filesystem with @TempDir
   uri: file://${java.io.tmpdir}/nimbo-test/parquet
   parquet-path: /
 
@@ -72,7 +70,7 @@ postgres:
     max-delay-ms: 2000
 
 batch:
-  schedule: "0 */5 * * * ?"
+  schedule: "-"
   window-duration: "1 hour"
   enabled: true
   max-files-per-batch: 5
@@ -80,20 +78,13 @@ batch:
 test:
   parquet:
     records-per-file: 200
-    files-per-partition: 2
-    total-partitions: 3
     base-timestamp: 2026-08-27T10:00:00Z
     known-ips:
       - "192.168.1.100"
       - "192.168.1.101"
       - "10.0.0.1"
       - "10.0.0.2"
-    known-protocols:
-      - 6   # TCP
-      - 17  # UDP
-      - 1   # ICMP
     full-batch-files: 5
     incremental-first-batch: 3
     incremental-additional: 2
     max-files-test-total: 10
-    fallback-files: 3

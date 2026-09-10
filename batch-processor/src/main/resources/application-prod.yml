@@ -6,7 +6,7 @@ spring:
     locations: classpath:db.migration
 
 server:
-  port: ${SERVER_PORT:18081}
+  port: ${SERVER_PORT:18082}
 
 spark:
   master: spark://10.10.61.71:7077
@@ -16,6 +16,7 @@ spark:
   num-executors: 3
   max-cores: 6
   shuffle-partitions: 12
+  session-time-zone: UTC
   adaptive-enabled: true
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer
@@ -60,7 +61,7 @@ postgres:
     max-delay-ms: 30000
 
 batch:
-  schedule: "0 */10 * * * ?"
+  schedule: "0 */5 * * * ?"
   window-duration: "1 hour"
   enabled: true
-  max-files-per-batch: 10
+  max-files-per-batch: 5
