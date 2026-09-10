@@ -1353,7 +1353,7 @@ realtime:
       - http://10.10.61.53:8040
       - http://10.10.61.54:8040
     database: ${STARROCKS_DATABASE:nimbo}
-    table: ${STARROCKS_TABLE:netflow_realtime_v3}
+    table: ${STARROCKS_TABLE:netflow_realtime}
     username: ${STARROCKS_USERNAME:root}
     password: ${STARROCKS_PASSWORD:s@hWater}
     merge-commit-enabled: ${STARROCKS_MERGE_COMMIT_ENABLED:true}

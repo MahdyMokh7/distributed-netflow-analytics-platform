@@ -140,7 +140,7 @@ nimbo:
     username: ${STARROCKS_QUERY_USERNAME:root}
     password: ${STARROCKS_QUERY_PASSWORD:s@hWater}
     database: ${STARROCKS_QUERY_DATABASE:nimbo}
-    table: ${STARROCKS_QUERY_TABLE:netflow_realtime_v3}
+    table: ${STARROCKS_QUERY_TABLE:netflow_realtime}
 
     maximum-pool-size: ${STARROCKS_QUERY_POOL_SIZE:10}
     query-timeout-seconds: ${STARROCKS_QUERY_TIMEOUT_SECONDS:30}

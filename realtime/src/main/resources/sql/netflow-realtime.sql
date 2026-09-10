@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS nimbo.netflow_realtime_v3
+CREATE TABLE IF NOT EXISTS nimbo.netflow_realtime
 (
 
     ipv4_src_addr VARCHAR(15) NOT NULL,
