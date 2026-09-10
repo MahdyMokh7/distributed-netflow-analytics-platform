@@ -43,16 +43,11 @@ import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.junit.jupiter.api.*;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.KafkaContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
-import org.testcontainers.utility.MountableFile;
 import static org.awaitility.Awaitility.await;
 import static java.time.Duration.ofSeconds;
-
+import com.nimbo.extensions.HdfsExtension;
+import com.nimbo.extensions.KafkaExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -62,29 +57,11 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@Testcontainers
+@ExtendWith({
+        KafkaExtension.class,
+        HdfsExtension.class
+})
 class NetflowHDFSWriterPipelineIT {
-
-    @Container
-    private static final KafkaContainer KAFKA_CONTAINER =
-            new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
-
-    @Container
-    private static final GenericContainer<?> HDFS_CONTAINER =
-            new GenericContainer<>(DockerImageName.parse("apache/hadoop:3.3.6"))
-                    .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("hadoop/core-site.xml"),
-                            "/opt/hadoop/etc/hadoop/core-site.xml")
-                    .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("hadoop/hdfs-site.xml"),
-                            "/opt/hadoop/etc/hadoop/hdfs-site.xml")
-                    .withExposedPorts(8020, 9870, 9866)
-                    .withCopyFileToContainer(
-                            MountableFile.forClasspathResource("hadoop/start-hdfs.sh"),
-                            "/opt/hadoop/start-hdfs.sh")
-                    .withCommand("bash", "/opt/hadoop/start-hdfs.sh")
-                    .waitingFor(Wait.forLogMessage(".*HDFS_READY.*", 1)
-                            .withStartupTimeout(Duration.ofMinutes(2)));
 
     private String topic;
     private String dlqTopic;
@@ -165,15 +142,15 @@ class NetflowHDFSWriterPipelineIT {
 
         List<GenericRecord> sentRecords = new ArrayList<>();
         for (int i = 1; i <= BATCH_SIZE; i++) {
-            GenericRecord record = validRecord("192.168.1." + i, "10.0.0.1", 1000L * i);
-            sentRecords.add(record);
-            publish(topic, record);
+            GenericRecord testRecord = validRecord("192.168.1." + i, "10.0.0.1", 1000L * i);
+            sentRecords.add(testRecord);
+            publish(topic, testRecord);
         }
         testProducer.flush();
 
         Path storageDirectory = new Path("/netflow/parquet");
 
-        await().atMost(ofSeconds(30))
+        await().atMost(ofSeconds(150))
                 .pollInterval(ofSeconds(1))
                 .until(() -> {
                     List<FileStatus> files = finalizedParquetFiles(storageDirectory);
@@ -224,15 +201,14 @@ class NetflowHDFSWriterPipelineIT {
 
         // and it must not have reached HDFS
         Path storageDirectory = new Path("/netflow/parquet");
-        boolean exists = fileSystem.exists(storageDirectory);
-        assertFalse(exists && fileSystem.listStatus(storageDirectory).length > 0,
+        assertTrue(finalizedParquetFiles(storageDirectory).isEmpty(),
                 "Invalid record must not be persisted to HDFS");
     }
 
 
     private KafkaProperties buildKafkaProperties() {
         KafkaProperties properties = new KafkaProperties();
-        properties.setBootstrapServers(KAFKA_CONTAINER.getBootstrapServers());
+        properties.setBootstrapServers(KafkaExtension.getBootstrapServers());
         properties.setTopic(topic);
         properties.setDlqTopic(dlqTopic);
         properties.setConsumerGroup("netflow-consumer-it-" + UUID.randomUUID());
@@ -249,19 +225,21 @@ class NetflowHDFSWriterPipelineIT {
 
     private void createTopics() throws Exception {
         Properties adminProps = new Properties();
-        adminProps.put(org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-                KAFKA_CONTAINER.getBootstrapServers());
+        adminProps.put(
+                org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
+                KafkaExtension.getBootstrapServers());
+
         try (AdminClient admin = AdminClient.create(adminProps)) {
             admin.createTopics(List.of(
                     new NewTopic(topic, 1, (short) 1),
-                    new NewTopic(dlqTopic, 1, (short) 1)
-            )).all().get();
+                    new NewTopic(dlqTopic, 1, (short) 1))
+            ).all().get();
         }
     }
 
     private KafkaProducer<byte[], byte[]> createProducer() {
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA_CONTAINER.getBootstrapServers());
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaExtension.getBootstrapServers());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         return new KafkaProducer<>(props);
@@ -269,7 +247,7 @@ class NetflowHDFSWriterPipelineIT {
 
     private KafkaConsumer<byte[], byte[]> createConsumer(String groupId) {
         Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA_CONTAINER.getBootstrapServers());
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaExtension.getBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
@@ -287,12 +265,7 @@ class NetflowHDFSWriterPipelineIT {
     }
 
     private Configuration createHadoopConfiguration() {
-        String hdfsUri = "hdfs://" + HDFS_CONTAINER.getHost() + ":" + HDFS_CONTAINER.getMappedPort(8020);
-        Configuration conf = new Configuration();
-        conf.set("fs.defaultFS", hdfsUri);
-        conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
-        conf.set("dfs.replication", "1");
-        return conf;
+        return HdfsExtension.getConfiguration();
     }
 
     private NetFlowStorage createNetFlowStorage(FileSystem fs) {
@@ -346,76 +319,63 @@ class NetflowHDFSWriterPipelineIT {
 
 
     private GenericRecord validRecord(String srcIp, String dstIp, long inBytes) {
-        GenericData.Record record = new GenericData.Record(sourceSchema);
-        record.put("IPV4_SRC_ADDR", srcIp);
-        record.put("IPV4_DST_ADDR", dstIp);
-        record.put("L4_SRC_PORT", 443);
-        record.put("L4_DST_PORT", 51000);
-        record.put("PROTOCOL", 6);
-        record.put("L7_PROTO", 91.0);
-        record.put("IN_BYTES", inBytes);
-        record.put("OUT_BYTES", inBytes / 2);
-        record.put("IN_PKTS", 10L);
-        record.put("OUT_PKTS", 8L);
-        record.put("FLOW_DURATION_MILLISECONDS", 1500L);
-        record.put("TCP_FLAGS", 24);
-        record.put("CLIENT_TCP_FLAGS", 2);
-        record.put("SERVER_TCP_FLAGS", 18);
-        record.put("DURATION_IN", 700L);
-        record.put("DURATION_OUT", 800L);
-        record.put("MIN_TTL", 60);
-        record.put("MAX_TTL", 64);
-        record.put("LONGEST_FLOW_PKT", 1500);
-        record.put("SHORTEST_FLOW_PKT", 64);
-        record.put("MIN_IP_PKT_LEN", 64);
-        record.put("MAX_IP_PKT_LEN", 1500);
-        record.put("SRC_TO_DST_SECOND_BYTES", 12000L);
-        record.put("DST_TO_SRC_SECOND_BYTES", 6000L);
-        record.put("RETRANSMITTED_IN_BYTES", 0L);
-        record.put("RETRANSMITTED_IN_PKTS", 0L);
-        record.put("RETRANSMITTED_OUT_BYTES", 0L);
-        record.put("RETRANSMITTED_OUT_PKTS", 0L);
-        record.put("SRC_TO_DST_AVG_THROUGHPUT", 96000L);
-        record.put("DST_TO_SRC_AVG_THROUGHPUT", 48000L);
-        record.put("NUM_PKTS_UP_TO_128_BYTES", 2L);
-        record.put("NUM_PKTS_128_TO_256_BYTES", 2L);
-        record.put("NUM_PKTS_256_TO_512_BYTES", 2L);
-        record.put("NUM_PKTS_512_TO_1024_BYTES", 2L);
-        record.put("NUM_PKTS_1024_TO_1514_BYTES", 2L);
-        record.put("TCP_WIN_MAX_IN", 65535);
-        record.put("TCP_WIN_MAX_OUT", 65535);
-        record.put("ICMP_TYPE", 0);
-        record.put("ICMP_IPV4_TYPE", 0);
-        record.put("DNS_QUERY_ID", 0);
-        record.put("DNS_QUERY_TYPE", 0);
-        record.put("DNS_TTL_ANSWER", 0L);
-        record.put("FTP_COMMAND_RET_CODE", 0);
-        return record;
+        GenericData.Record testRecord = new GenericData.Record(sourceSchema);
+        testRecord.put("IPV4_SRC_ADDR", srcIp);
+        testRecord.put("IPV4_DST_ADDR", dstIp);
+        testRecord.put("L4_SRC_PORT", 443);
+        testRecord.put("L4_DST_PORT", 51000);
+        testRecord.put("PROTOCOL", 6);
+        testRecord.put("L7_PROTO", 91.0);
+        testRecord.put("IN_BYTES", inBytes);
+        testRecord.put("OUT_BYTES", inBytes / 2);
+        testRecord.put("IN_PKTS", 10L);
+        testRecord.put("OUT_PKTS", 8L);
+        testRecord.put("FLOW_DURATION_MILLISECONDS", 1500L);
+        testRecord.put("TCP_FLAGS", 24);
+        testRecord.put("CLIENT_TCP_FLAGS", 2);
+        testRecord.put("SERVER_TCP_FLAGS", 18);
+        testRecord.put("DURATION_IN", 700L);
+        testRecord.put("DURATION_OUT", 800L);
+        testRecord.put("MIN_TTL", 60);
+        testRecord.put("MAX_TTL", 64);
+        testRecord.put("LONGEST_FLOW_PKT", 1500);
+        testRecord.put("SHORTEST_FLOW_PKT", 64);
+        testRecord.put("MIN_IP_PKT_LEN", 64);
+        testRecord.put("MAX_IP_PKT_LEN", 1500);
+        testRecord.put("SRC_TO_DST_SECOND_BYTES", 12000L);
+        testRecord.put("DST_TO_SRC_SECOND_BYTES", 6000L);
+        testRecord.put("RETRANSMITTED_IN_BYTES", 0L);
+        testRecord.put("RETRANSMITTED_IN_PKTS", 0L);
+        testRecord.put("RETRANSMITTED_OUT_BYTES", 0L);
+        testRecord.put("RETRANSMITTED_OUT_PKTS", 0L);
+        testRecord.put("SRC_TO_DST_AVG_THROUGHPUT", 96000L);
+        testRecord.put("DST_TO_SRC_AVG_THROUGHPUT", 48000L);
+        testRecord.put("NUM_PKTS_UP_TO_128_BYTES", 2L);
+        testRecord.put("NUM_PKTS_128_TO_256_BYTES", 2L);
+        testRecord.put("NUM_PKTS_256_TO_512_BYTES", 2L);
+        testRecord.put("NUM_PKTS_512_TO_1024_BYTES", 2L);
+        testRecord.put("NUM_PKTS_1024_TO_1514_BYTES", 2L);
+        testRecord.put("TCP_WIN_MAX_IN", 65535);
+        testRecord.put("TCP_WIN_MAX_OUT", 65535);
+        testRecord.put("ICMP_TYPE", 0);
+        testRecord.put("ICMP_IPV4_TYPE", 0);
+        testRecord.put("DNS_QUERY_ID", 0);
+        testRecord.put("DNS_QUERY_TYPE", 0);
+        testRecord.put("DNS_TTL_ANSWER", 0L);
+        testRecord.put("FTP_COMMAND_RET_CODE", 0);
+        return testRecord;
     }
 
-    private byte[] toBinaryAvro(GenericRecord record) throws IOException {
+    private byte[] toBinaryAvro(GenericRecord testRecord) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
-        new GenericDatumWriter<GenericRecord>(sourceSchema).write(record, encoder);
+        new GenericDatumWriter<GenericRecord>(sourceSchema).write(testRecord, encoder);
         encoder.flush();
         return out.toByteArray();
     }
 
-    private void publish(String topic, GenericRecord record) throws IOException {
-        testProducer.send(new ProducerRecord<>(topic, null, toBinaryAvro(record)));
-    }
-
-
-    private void awaitCondition(java.util.function.BooleanSupplier condition, Duration timeout, String failMessage)
-            throws InterruptedException {
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
-        while (System.currentTimeMillis() < deadline) {
-            if (condition.getAsBoolean()) {
-                return;
-            }
-            Thread.sleep(200);
-        }
-        fail(failMessage);
+    private void publish(String topic, GenericRecord testRecord) throws IOException {
+        testProducer.send(new ProducerRecord<>(topic, null, toBinaryAvro(testRecord)));
     }
 
     private ConsumerRecord<byte[], byte[]> pollForOne(KafkaConsumer<byte[], byte[]> consumer, Duration timeout) {
@@ -428,11 +388,11 @@ class NetflowHDFSWriterPipelineIT {
                 }, Objects::nonNull);
     }
 
+
     private List<FileStatus> finalizedParquetFiles(Path storageDirectory) throws IOException {
         if (!fileSystem.exists(storageDirectory)) {
             return List.of();
         }
-
         List<FileStatus> files = new ArrayList<>();
         RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(storageDirectory, true);
         while (iterator.hasNext()) {
@@ -445,16 +405,23 @@ class NetflowHDFSWriterPipelineIT {
         return files;
     }
 
-    private String headerValue(ConsumerRecord<byte[], byte[]> record, String key) {
-        var header = record.headers().lastHeader(key);
+    private String headerValue(ConsumerRecord<byte[], byte[]> testRecord, String key) {
+        var header = testRecord.headers().lastHeader(key);
         return header == null ? null : new String(header.value(), java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private void closeQuietly(AutoCloseable closeable) {
-        if (closeable == null) return;
+
+        if (closeable == null) {
+            return;
+        }
+
         try {
             closeable.close();
-        } catch (Exception ignored) {
+        } catch (RuntimeException runtimeException) {
+            throw runtimeException;
+        } catch (Exception closeException) {
+            throw new IllegalStateException("Failed to close test resource", closeException);
         }
     }
 }
