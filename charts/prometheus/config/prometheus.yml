@@ -1,0 +1,231 @@
+global:
+  scrape_interval: 30s
+
+scrape_configs:
+
+  # NODE EXPORTERS
+  - job_name: node-exporters
+    static_configs:
+      - targets:
+        - '10.10.61.51:9100'
+        labels:
+          node: node1
+          instance: node1
+      - targets:
+        - '10.10.61.52:9100'
+        labels:
+          node: node2
+          instance: node2
+      - targets:
+        - '10.10.61.53:9100'
+        labels:
+          node: node3
+          instance: node3
+      - targets:
+        - '10.10.61.54:9100'
+        labels:
+          node: node4
+          instance: node4
+
+  - job_name: rest-api
+    metrics_path: /api/actuator/prometheus
+    static_configs:
+      - targets:
+        - 'rest-api:18083'
+        labels:
+          instance: rest-api
+
+  - job_name: batch-ingester
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+        - 'batch-ingester:18080'
+        labels:
+          instance: batch-ingester
+
+  - job_name: batch-processor
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+        - 'batch-processor:18081'
+        labels:
+          instance: batch-processor
+
+  - job_name: realtime
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+        - 'realtime:18082'
+        labels:
+          instance: realtime
+
+  # KAFKA
+  - job_name: kafka-brokers
+    static_configs:
+      - targets:
+        - '10.10.61.51:7071'
+        labels:
+          node: node1
+          instance: kafka-broker-1
+      - targets:
+        - '10.10.61.52:7071'
+        labels:
+          node: node2
+          instance: kafka-broker-2
+      - targets:
+        - '10.10.61.53:7071'
+        labels:
+          node: node3
+          instance: kafka-broker-3
+      - targets:
+        - '10.10.61.54:7071'
+        labels:
+          node: node4
+          instance: kafka-broker-4
+
+  - job_name: kafka-controllers
+    static_configs:
+      - targets:
+        - '10.10.61.51:19096'
+        labels:
+          node: node1
+          instance: kafka-controller-1
+      - targets:
+        - '10.10.61.52:19096'
+        labels:
+          node: node2
+          instance: kafka-controller-2
+      - targets:
+        - '10.10.61.53:19096'
+        labels:
+          node: node3
+          instance: kafka-controller-3
+      - targets:
+        - '10.10.61.54:19096'
+        labels:
+          node: node4
+          instance: kafka-controller-4
+
+  # SPARK
+  - job_name: spark-master
+    metrics_path: /metrics/master/prometheus/
+    static_configs:
+      - targets:
+        - '10.10.61.71:9200'
+        labels:
+          instance: master
+
+  - job_name: spark-workers
+    metrics_path: /metrics/prometheus/
+    static_configs:
+      - targets:
+        - '10.10.61.51:7074'
+        labels:
+          node: node1
+          instance: spark-worker-1
+      - targets:
+        - '10.10.61.52:7074'
+        labels:
+          node: node2
+          instance: spark-worker-2
+      - targets:
+        - '10.10.61.53:7074'
+        labels:
+          node: node3
+          instance: spark-worker-3
+      - targets:
+        - '10.10.61.54:7074'
+        labels:
+          node: node4
+          instance: spark-worker-4
+
+  # STARROCKS
+  - job_name: starrocks-fe
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+        - '10.10.61.51:8030'
+        labels:
+          node: node1
+          instance: starrocks-fe-1
+      - targets:
+        - '10.10.61.52:8030'
+        labels:
+          node: node2
+          instance: starrocks-fe-2
+      - targets:
+        - '10.10.61.53:8030'
+        labels:
+          node: node3
+          instance: starrocks-fe-3
+      - targets:
+        - '10.10.61.54:8030'
+        labels:
+          node: node4
+          instance: starrocks-fe-4
+
+  - job_name: starrocks-be
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+        - '10.10.61.51:8040'
+        labels:
+          node: node1
+          instance: starrocks-be-1
+      - targets:
+        - '10.10.61.52:8040'
+        labels:
+          node: node2
+          instance: starrocks-be-2
+      - targets:
+        - '10.10.61.53:8040'
+        labels:
+          node: node3
+          instance: starrocks-be-3
+      - targets:
+        - '10.10.61.54:8040'
+        labels:
+          node: node4
+          instance: starrocks-be-4
+
+  # HDFS
+  - job_name: hdfs-namenodes
+    static_configs:
+      - targets:
+        - '10.10.61.51:18020'
+        labels:
+          node: node1
+          instance: hdfs-namenode-1
+      - targets:
+        - '10.10.61.52:18020'
+        labels:
+          node: node2
+          instance: hdfs-namenode-2
+      - targets:
+        - '10.10.61.53:18020'
+        labels:
+          node: node3
+          instance: hdfs-namenode-3
+
+  - job_name: hdfs-datanodes
+    static_configs:
+      - targets:
+        - '10.10.61.51:19866'
+        labels:
+          node: node1
+          instance: hdfs-datanode-1
+      - targets:
+        - '10.10.61.52:19866'
+        labels:
+          node: node2
+          instance: hdfs-datanode-2
+      - targets:
+        - '10.10.61.53:19866'
+        labels:
+          node: node3
+          instance: hdfs-datanode-3
+      - targets:
+        - '10.10.61.54:19866'
+        labels:
+          node: node4
+          instance: hdfs-datanode-4

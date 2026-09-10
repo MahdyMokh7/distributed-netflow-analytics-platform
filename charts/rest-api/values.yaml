@@ -1,0 +1,48 @@
+replicaCount: 2   # stateless HTTP, safe and desirable to scale horizontally
+
+image:
+  repository: zoraq.inside.sahab.ir:9462/nimbo-nimbyte-rest-api
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+containerPort: 18083
+springProfile: prod
+terminationGracePeriodSeconds: 30
+
+service:
+  type: NodePort
+  port: 18083
+  nodePort: 30083
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+probes:
+  startup:
+    path: /api/actuator/health
+    timeoutSeconds: 3
+    failureThreshold: 30
+    periodSeconds: 5
+  readiness:
+    path: /api/actuator/health
+    timeoutSeconds: 3
+    failureThreshold: 3
+    periodSeconds: 5
+  liveness:
+    path: /api/actuator/health
+    timeoutSeconds: 3
+    failureThreshold: 3
+    periodSeconds: 10
+
+secret:
+  enabled: false
+  data:
+    DB_USERNAME: "CHANGE_ME"
+    DB_PASSWORD: "CHANGE_ME"
+    STARROCKS_QUERY_USERNAME: "CHANGE_ME"
+    STARROCKS_QUERY_PASSWORD: "CHANGE_ME"

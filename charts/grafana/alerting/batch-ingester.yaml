@@ -1,0 +1,136 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: Batch Ingester
+    folder: Nimbyte
+    interval: 1m
+
+    rules:
+      - uid: cfxtfb1qs7m68a
+        title: Batch Ingester Down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: afx57iu9wr0n4a
+            model:
+              editorMode: code
+              expr: up{job="batch-ingester"}
+              instant: true
+              intervalMs: 1000
+              legendFormat: __auto
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          description: |-
+            Batch Ingester has not been reachable for 5 minutes.
+            Instance: {{ $labels.instance }}
+          summary: Batch Ingester is down on {{ $labels.instance }}
+        labels:
+          module: batch-ingester
+          service: batch-ingester
+          severity: critical
+        isPaused: false
+        notification_settings:
+          receiver: empty
+      - uid: afxtfrdoobw8we
+        title: Batch Ingester Kafka Lag High
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: afx57iu9wr0n4a
+            model:
+              editorMode: code
+              expr: |-
+                kafka_consumer_fetch_manager_records_lag{
+                  job="batch-ingester",
+                  topic="netflow"
+                }
+              instant: true
+              intervalMs: 1000
+              legendFormat: P{{partition}}
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1.5e+07
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          description: |-
+            Kafka consumer lag exceeded threshold.
+            
+            Topic:
+            {{ $labels.topic }}
+            
+            Partition:
+            {{ $labels.partition }}
+          summary: Batch Ingester Kafka lag is high on partition {{ $labels.partition }}
+        labels:
+          module: batch-ingester
+          service: kafka-consumer
+          severity: warning
+          topic: netflow
+        isPaused: false
+        notification_settings:
+          receiver: empty

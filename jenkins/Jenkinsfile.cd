@@ -1,133 +1,15 @@
-def deployModule(moduleName, host, user, pass, port) {
-    withEnv([
-            "MODULE_HOST=${host}",
-            "MODULE_USER=${user}",
-            "MODULE_PASS=${pass}",
-            "MODULE_PORT=${port}",
-            "MODULE_NAME=${moduleName}"
-    ]) {
+def helmDeploy(moduleName) {
+    withEnv(["MODULE_NAME=${moduleName}"]) {
         sh '''
             set -eu
-            export SSHPASS="${MODULE_PASS}"
-            echo "Deploying ${MODULE_NAME} to ${MODULE_HOST}:${MODULE_PORT}..."
+            echo "Deploying ${MODULE_NAME} via Helm..."
 
-            sshpass -e ssh \
-              -o StrictHostKeyChecking=no \
-              "${MODULE_USER}@${MODULE_HOST}" \
-              "
-                set -e
-
-                printf '%s\\n' '${NEXUS_PASSWORD}' | \
-                  docker login '${NEXUS_PULL_REGISTRY}' \
-                    --username '${NEXUS_USERNAME}' \
-                    --password-stdin
-
-                docker pull \
-                  ${NEXUS_PULL_REGISTRY}/${IMAGE_PREFIX}-${MODULE_NAME}:${IMAGE_TAG}
-
-                echo 'Stopping existing ${MODULE_NAME} container...'
-                docker stop --timeout 30 ${MODULE_NAME} 2>/dev/null || true
-                docker rm ${MODULE_NAME} 2>/dev/null || true
-
-                docker run -d \
-                  --name ${MODULE_NAME} \
-                  --network host \
-                  --restart unless-stopped \
-                  --stop-timeout 30 \
-                  -e SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE} \
-                  -e SERVER_PORT=${MODULE_PORT} \
-                  ${NEXUS_PULL_REGISTRY}/${IMAGE_PREFIX}-${MODULE_NAME}:${IMAGE_TAG}
-              "
-        '''
-    }
-}
-
-def healthCheck(moduleName, host, user, pass, port) {
-    withEnv([
-            "MODULE_HOST=${host}",
-            "MODULE_USER=${user}",
-            "MODULE_PASS=${pass}",
-            "MODULE_PORT=${port}",
-            "MODULE_NAME=${moduleName}"
-    ]) {
-        sh '''
-            set -eu
-            export SSHPASS="${MODULE_PASS}"
-            echo "Checking ${MODULE_NAME} on ${MODULE_HOST}:${MODULE_PORT}..."
-            sshpass -e ssh \
-                -o StrictHostKeyChecking=no \
-                "${MODULE_USER}@${MODULE_HOST}" \
-                "
-                    for i in \\$(seq 1 60); do
-                        if curl -fsS http://localhost:${MODULE_PORT}/actuator/health >/dev/null; then
-                            echo '${MODULE_NAME} is healthy'
-                            exit 0
-                        fi
-                        sleep 2
-                    done
-                    echo '${MODULE_NAME} health check failed'
-                    docker logs --tail 100 ${MODULE_NAME} || true
-                    exit 1
-                "
-        '''
-    }
-}
-
-
-def deployLocal(moduleName, port) {
-    withEnv([
-            "MODULE_PORT=${port}",
-            "MODULE_NAME=${moduleName}"
-    ]) {
-        sh '''
-            set -eu
-            echo "Deploying ${MODULE_NAME} locally on this agent, port ${MODULE_PORT}..."
-
-            printf '%s\\n' "${NEXUS_PASSWORD}" | \
-              docker login "${NEXUS_PULL_REGISTRY}" \
-                --username "${NEXUS_USERNAME}" \
-                --password-stdin
-
-            docker pull \
-              ${NEXUS_PULL_REGISTRY}/${IMAGE_PREFIX}-${MODULE_NAME}:${IMAGE_TAG}
-
-            echo "Stopping existing ${MODULE_NAME} container..."
-            docker stop --timeout 30 ${MODULE_NAME} 2>/dev/null || true
-            docker rm ${MODULE_NAME} 2>/dev/null || true
-
-            docker run -d \
-              --name ${MODULE_NAME} \
-              --network host \
-              --restart unless-stopped \
-              --stop-timeout 30 \
-              -e SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE} \
-              -e SERVER_PORT=${MODULE_PORT} \
-              ${NEXUS_PULL_REGISTRY}/${IMAGE_PREFIX}-${MODULE_NAME}:${IMAGE_TAG}
-        '''
-    }
-}
-
-def healthCheckLocal(moduleName, port, contextPath = '') {
-    withEnv([
-            "MODULE_PORT=${port}",
-            "MODULE_NAME=${moduleName}",
-            "CONTEXT_PATH=${contextPath}"
-    ]) {
-        sh '''
-            set -eu
-            echo "Checking ${MODULE_NAME} locally on port ${MODULE_PORT}${CONTEXT_PATH}..."
-
-            for i in $(seq 1 60); do
-                if curl -fsS http://localhost:${MODULE_PORT}${CONTEXT_PATH}/actuator/health >/dev/null; then
-                    echo "${MODULE_NAME} is healthy"
-                    exit 0
-                fi
-                sleep 2
-            done
-
-            echo "${MODULE_NAME} health check failed"
-            docker logs --tail 100 ${MODULE_NAME} || true
-            exit 1
+            helm upgrade --install "${MODULE_NAME}" "charts/${MODULE_NAME}" \
+              --namespace "${KUBE_NAMESPACE}" \
+              --set image.repository="${NEXUS_PULL_REGISTRY}/${IMAGE_PREFIX}-${MODULE_NAME}" \
+              --set image.tag="${IMAGE_TAG}" \
+              --wait \
+              --timeout 5m
         '''
     }
 }
@@ -154,22 +36,7 @@ pipeline {
         string(name: 'NEXUS_USERNAME', defaultValue: 'nimbo1', description: 'Nexus username')
         password(name: 'NEXUS_PASSWORD', defaultValue: 'gvFUU0Fxma95w9', description: 'Nexus password')
 
-        string(name: 'MODULE1_HOST', defaultValue: '10.10.61.52', description: 'batch-ingester server IP')
-        string(name: 'MODULE1_USER', defaultValue: 'team1', description: 'SSH user for batch-ingester server')
-        password(name: 'MODULE1_PASSWORD', defaultValue: 'team1', description: 'SSH password for batch-ingester')
-        string(name: 'MODULE1_PORT', defaultValue: '18080', description: 'Host port for batch-ingester')
-
-        string(name: 'MODULE2_HOST', defaultValue: '10.10.61.53', description: 'batch-processor server IP')
-        string(name: 'MODULE2_USER', defaultValue: 'team1', description: 'SSH user for batch-processor server')
-        password(name: 'MODULE2_PASSWORD', defaultValue: 'team1', description: 'SSH password for batch-processor')
-        string(name: 'MODULE2_PORT', defaultValue: '18081', description: 'Host port for batch-processor')
-
-        string(name: 'MODULE3_HOST', defaultValue: '10.10.61.54', description: 'realtime-service server IP')
-        string(name: 'MODULE3_USER', defaultValue: 'team1', description: 'SSH user for realtime-service server')
-        password(name: 'MODULE3_PASSWORD', defaultValue: 'team1', description: 'SSH password for realtime-service')
-        string(name: 'MODULE3_PORT', defaultValue: '18082', description: 'Host port for realtime-service')
-
-        string(name: 'REST_API_PORT', defaultValue: '18083', description: 'Host port for rest-api (runs on the Jenkins agent itself)')
+        string(name: 'KUBE_NAMESPACE', defaultValue: 'team1', description: 'Kubernetes namespace to deploy into')
     }
 
     environment {
@@ -178,6 +45,7 @@ pipeline {
         NEXUS_PULL_REGISTRY = "${params.NEXUS_HOST}:${params.NEXUS_GROUP_PORT}"
         IMAGE_PREFIX = 'nimbo-nimbyte'
         SPRING_PROFILES_ACTIVE = 'prod'
+        KUBE_NAMESPACE = "${params.KUBE_NAMESPACE}"
         MAVEN_OPTS = '''
             -Xmx1024m
             -Djavax.net.ssl.trustStore=/certs/cacerts
@@ -292,53 +160,22 @@ pipeline {
             }
         }
 
-        stage('Deploy to Target Servers') {
+        stage('Deploy to Kubernetes') {
+
             agent {
                 label 'nimbo-nimbyte'
             }
-            steps {
-                script {
-                    parallel(
-                            'Deploy batch-ingester': {
-                                deployModule('batch-ingester', params.MODULE1_HOST, params.MODULE1_USER,
-                                        params.MODULE1_PASSWORD, params.MODULE1_PORT)
-                            },
-                            'Deploy batch-processor': {
-                                deployModule('batch-processor', params.MODULE2_HOST, params.MODULE2_USER,
-                                        params.MODULE2_PASSWORD, params.MODULE2_PORT)
-                            },
-                            'Deploy realtime-service': {
-                                deployModule('realtime', params.MODULE3_HOST, params.MODULE3_USER,
-                                        params.MODULE3_PASSWORD, params.MODULE3_PORT)
-                            },
-                            'Deploy rest-api': {
-                                deployLocal('rest-api', params.REST_API_PORT)
-                            }
-                    )
-                }
-            }
-        }
 
-        stage('Health Check') {
-            agent { label 'nimbo-nimbyte' }
             steps {
+                checkout scm
                 script {
+                    sh 'kubectl config current-context'
+
                     parallel(
-                            'batch-ingester health': {
-                                healthCheck('batch-ingester', params.MODULE1_HOST, params.MODULE1_USER,
-                                        params.MODULE1_PASSWORD, params.MODULE1_PORT)
-                            },
-                            'batch-processor health': {
-                                healthCheck('batch-processor', params.MODULE2_HOST, params.MODULE2_USER,
-                                        params.MODULE2_PASSWORD, params.MODULE2_PORT)
-                            },
-                            'realtime-service health': {
-                                healthCheck('realtime', params.MODULE3_HOST, params.MODULE3_USER,
-                                        params.MODULE3_PASSWORD, params.MODULE3_PORT)
-                            },
-                            'rest-api health': {
-                                healthCheckLocal('rest-api', params.REST_API_PORT, '/api')
-                            }
+                            'Deploy batch-ingester': { helmDeploy('batch-ingester') },
+                            'Deploy batch-processor': { helmDeploy('batch-processor') },
+                            'Deploy realtime': { helmDeploy('realtime') },
+                            'Deploy rest-api': { helmDeploy('rest-api') }
                     )
                 }
             }
