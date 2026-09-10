@@ -7,7 +7,6 @@ import com.nimbo.realtime.metrics.RealtimeMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.springframework.stereotype.Component;
 
 import java.util.ArrayDeque;
 import java.util.Deque;

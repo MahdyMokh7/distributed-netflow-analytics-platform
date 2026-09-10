@@ -25,11 +25,12 @@ management:
 server:
   port: ${SERVER_PORT:8082}
 
+  
 realtime:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092}
     topic: ${KAFKA_TOPIC:netflow}
-    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-starrocks-writer5}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-starrocks-writer}
     client-id: ${KAFKA_CLIENT_ID:starrocks-writer}
     auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
     max-poll-records: ${KAFKA_MAX_POLL_RECORDS:20000}
@@ -47,7 +48,7 @@ realtime:
       - http://10.10.61.53:8040
       - http://10.10.61.54:8040
     database: ${STARROCKS_DATABASE:nimbo}
-    table: ${STARROCKS_TABLE:netflow_realtime_v3}
+    table: ${STARROCKS_TABLE:netflow_realtime}
     username: ${STARROCKS_USERNAME:root}
     password: ${STARROCKS_PASSWORD:s@hWater}
     merge-commit-enabled: ${STARROCKS_MERGE_COMMIT_ENABLED:true}
@@ -58,3 +59,4 @@ realtime:
     retry-backoff-ms: ${STARROCKS_RETRY_BACKOFF_MS:1000}
     max-batch-size-rows: ${STARROCKS_MAX_BATCH_SIZE_ROWS:100000}
     max-batch-time-ms: ${STARROCKS_MAX_BATCH_TIME_MS:1500}
+
