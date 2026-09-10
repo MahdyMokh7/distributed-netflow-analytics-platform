@@ -1,8 +1,8 @@
 package com.nimbo.batch.processor;
 
-import com.nimbo.batch.test.support.PostgresContainerExtension;
-import com.nimbo.batch.test.support.ProcessorTestFixture;
-import com.nimbo.batch.test.support.SparkSessionExtension;
+import com.nimbo.batch.support.PostgresContainerExtension;
+import com.nimbo.batch.support.ProcessorTestFixture;
+import com.nimbo.batch.support.SparkSessionExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -39,6 +39,8 @@ class ConnectionProcessorIT {
 
         // Then: the IP pair is merged with exact metrics and a stable identifier
         assertThat(fixture.countRows("connection_aggregates")).isEqualTo(3);
+        assertThat(fixture.queryLong("SELECT COUNT(*) FROM connection_aggregates WHERE src_ip = '10.0.0.1' AND dst_ip = '10.0.0.2'"))
+                .isEqualTo(1L);
         assertThat(fixture.queryLong("SELECT in_bytes FROM connection_aggregates WHERE src_ip = '10.0.0.1' AND dst_ip = '10.0.0.2'"))
                 .isEqualTo(400L);
         assertThat(fixture.queryLong("SELECT out_bytes FROM connection_aggregates WHERE src_ip = '10.0.0.1' AND dst_ip = '10.0.0.2'"))

@@ -1,4 +1,4 @@
-package com.nimbo.batch.test.support;
+package com.nimbo.batch.support;
 
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.extension.BeforeAllCallback;

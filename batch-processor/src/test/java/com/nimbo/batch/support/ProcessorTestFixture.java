@@ -1,4 +1,4 @@
-package com.nimbo.batch.test.support;
+package com.nimbo.batch.support;
 
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.ExecutorPoolConfig;

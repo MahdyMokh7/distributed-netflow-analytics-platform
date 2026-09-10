@@ -5,7 +5,7 @@ import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.dao.BatchStateDao;
 import com.nimbo.batch.model.BatchStateRecord;
 import com.nimbo.batch.metrics.BatchProcessorMetrics;
-import com.nimbo.batch.test.support.PostgresContainerExtension;
+import com.nimbo.batch.support.PostgresContainerExtension;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;

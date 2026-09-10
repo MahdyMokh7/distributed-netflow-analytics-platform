@@ -1,5 +1,6 @@
 package com.nimbo.ingester.config;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
@@ -50,5 +51,10 @@ public class KafkaProperties {
 
     @Min(1)
     private int consumerInstances = 1;
+
+    @AssertTrue(message = "heartbeatIntervalMs must be less than sessionTimeoutMs")
+    public boolean isHeartbeatIntervalBelowSessionTimeout() {
+        return heartbeatIntervalMs < sessionTimeoutMs;
+    }
 
 }
