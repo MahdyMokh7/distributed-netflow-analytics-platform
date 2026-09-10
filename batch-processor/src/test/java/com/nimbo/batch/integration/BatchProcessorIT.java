@@ -2,19 +2,19 @@ package com.nimbo.batch.integration;
 
 import com.nimbo.batch.BatchProcessorApplication;
 import com.nimbo.batch.discovery.FileDiscoveryService;
-import com.nimbo.batch.integration.config.TestFileSystemConfig;
-import com.nimbo.batch.integration.config.TestParquetProperties;
-import com.nimbo.batch.integration.config.TestPostgresProperties;
+import com.nimbo.batch.test.support.BatchProcessorTestProperties;
+import com.nimbo.batch.test.support.LocalFileSystemTestConfiguration;
 import com.nimbo.batch.job.BatchJobRunner;
 import com.nimbo.batch.model.*;
-import com.nimbo.batch.integration.util.TestDataGenerator;
-import lombok.extern.slf4j.Slf4j;
+import com.nimbo.batch.test.support.NetFlowParquetTestData;
+import com.nimbo.batch.test.support.PostgresContainerExtension;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.SparkSession;
 import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -23,9 +23,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -35,22 +32,14 @@ import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Slf4j
 @SpringBootTest(classes = BatchProcessorApplication.class)
-@EnableConfigurationProperties({TestParquetProperties.class, TestPostgresProperties.class})
-@Testcontainers
+@EnableConfigurationProperties(BatchProcessorTestProperties.class)
 @ActiveProfiles("test")
-@Import(TestFileSystemConfig.class)
-public class BatchProcessorModuleTest {
+@Import(LocalFileSystemTestConfiguration.class)
+class BatchProcessorIT {
 
-    @Autowired
-    private TestPostgresProperties postgresProperties;
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16.2-alpine")
-            .withDatabaseName("test_db")
-            .withUsername("test_user")
-            .withPassword("test_pass");
+    @RegisterExtension
+    static final PostgresContainerExtension POSTGRES = new PostgresContainerExtension();
 
     @Autowired
     private BatchJobRunner batchJobRunner;
@@ -68,7 +57,7 @@ public class BatchProcessorModuleTest {
     private FileDiscoveryService fileDiscoveryService;
 
     @Autowired
-    private TestParquetProperties testProperties;
+    private BatchProcessorTestProperties testProperties;
 
     @TempDir
     static java.nio.file.Path tempDir;
@@ -81,15 +70,15 @@ public class BatchProcessorModuleTest {
         registry.add("hdfs.uri", () -> hdfsUri);
         registry.add("hdfs.parquet-path", () -> "/");
 
-        registry.add("spring.flyway.url", postgres::getJdbcUrl);
-        registry.add("spring.flyway.user", postgres::getUsername);
-        registry.add("spring.flyway.password", postgres::getPassword);
+        registry.add("spring.flyway.url", POSTGRES::jdbcUrl);
+        registry.add("spring.flyway.user", POSTGRES::username);
+        registry.add("spring.flyway.password", POSTGRES::password);
 
-        registry.add("postgres.host", postgres::getHost);
-        registry.add("postgres.port", () -> postgres.getMappedPort(5432).toString());
-        registry.add("postgres.database", postgres::getDatabaseName);
-        registry.add("postgres.username", postgres::getUsername);
-        registry.add("postgres.password", postgres::getPassword);
+        registry.add("postgres.host", POSTGRES::host);
+        registry.add("postgres.port", () -> Integer.toString(POSTGRES.port()));
+        registry.add("postgres.database", POSTGRES::databaseName);
+        registry.add("postgres.username", POSTGRES::username);
+        registry.add("postgres.password", POSTGRES::password);
     }
 
     @BeforeEach
@@ -109,14 +98,17 @@ public class BatchProcessorModuleTest {
     }
 
     @Test
-    void testFullBatchRun_success() {
+    void givenPartitionedParquetFiles_whenBatchRuns_thenAllCubesAndFileStateArePersisted() {
+        // Given: deterministic partitioned Parquet files
         Instant base = testProperties.getBaseTimestamp();
         int numFiles = testProperties.getFullBatchFiles();
         int recordsPerFile = testProperties.getRecordsPerFile();
-        TestDataGenerator.writeFiles(spark, parquetRoot, numFiles, recordsPerFile, base);
+        NetFlowParquetTestData.writeFiles(spark, parquetRoot, numFiles, recordsPerFile, base);
 
+        // When: the complete Spring batch job runs
         batchJobRunner.runBatchJob();
 
+        // Then: every cube and processed-file state contain the expected results
         List<TrafficAggregate> traffic = jdbi.withHandle(handle ->
                 handle.createQuery("SELECT * FROM traffic_aggregates ORDER BY src_ip, window_start")
                         .mapToBean(TrafficAggregate.class)
@@ -176,18 +168,22 @@ public class BatchProcessorModuleTest {
     }
 
     @Test
-    void testIncrementalProcessing_skipProcessedFiles() {
+    void givenProcessedAndNewFiles_whenBatchRunsAgain_thenOnlyNewFilesAreCommitted() {
+        // Given: an initial committed batch followed by deterministic new files
         Instant base = testProperties.getBaseTimestamp();
         int firstBatchFiles = testProperties.getIncrementalFirstBatch();
         int recordsPerFile = testProperties.getRecordsPerFile() / 2;
-        TestDataGenerator.writeFiles(spark, parquetRoot, firstBatchFiles, recordsPerFile, base);
+        NetFlowParquetTestData.writeFiles(spark, parquetRoot, firstBatchFiles, recordsPerFile, base);
         batchJobRunner.runBatchJob();
 
         int additionalFiles = testProperties.getIncrementalAdditional();
         Instant newBase = base.plusSeconds(120);
-        TestDataGenerator.writeFiles(spark, parquetRoot, additionalFiles, recordsPerFile, newBase);
+        NetFlowParquetTestData.writeFiles(spark, parquetRoot, additionalFiles, recordsPerFile, newBase);
+
+        // When: the batch job discovers the combined directory again
         batchJobRunner.runBatchJob();
 
+        // Then: each original and additional file is recorded exactly once
         long totalProcessed = jdbi.withHandle(handle ->
                 handle.createQuery("SELECT COUNT(*) FROM batch_processor_state")
                         .mapTo(Long.class)
@@ -204,14 +200,17 @@ public class BatchProcessorModuleTest {
     }
 
     @Test
-    void testMaxFilesPerBatch() {
+    void givenMoreFilesThanTheConfiguredMaximum_whenBatchRuns_thenOnlyOneBoundedBatchIsCommitted() {
+        // Given: more deterministic files than one batch accepts
         Instant base = testProperties.getBaseTimestamp();
         int totalFiles = testProperties.getMaxFilesTestTotal();
         int recordsPerFile = testProperties.getRecordsPerFile() / 4;
-        TestDataGenerator.writeFiles(spark, parquetRoot, totalFiles, recordsPerFile, base);
+        NetFlowParquetTestData.writeFiles(spark, parquetRoot, totalFiles, recordsPerFile, base);
 
+        // When: one complete batch job runs
         batchJobRunner.runBatchJob();
 
+        // Then: processed state is limited to the configured batch size
         long processed = jdbi.withHandle(handle ->
                 handle.createQuery("SELECT COUNT(*) FROM batch_processor_state")
                         .mapTo(Long.class)
@@ -221,9 +220,15 @@ public class BatchProcessorModuleTest {
     }
 
     @Test
-    void testEmptyDataset() {
+    void givenNoParquetFiles_whenBatchRuns_thenNoCubeOrFileStateIsCreated() throws IOException {
+        // Given: an empty partition root
+        fileSystem.delete(parquetRoot, true);
+        fileSystem.mkdirs(parquetRoot);
+
+        // When: the complete batch job runs
         batchJobRunner.runBatchJob();
 
+        // Then: file state and cube tables remain empty
         long processed = jdbi.withHandle(handle ->
                 handle.createQuery("SELECT COUNT(*) FROM batch_processor_state")
                         .mapTo(Long.class)
@@ -243,7 +248,7 @@ public class BatchProcessorModuleTest {
         // Use maps to simulate Spark's grouping
         // Key: src_ip + window_start (truncated to hour)
         Map<String, TrafficAggregate> trafficMap = new HashMap<>();
-        // Key: src_ip + dst_ip + src_port + dst_port + protocol + window_start
+        // Key: src_ip + dst_ip + window_start
         Map<String, ConnectionAggregate> connectionMap = new HashMap<>();
         // Key: l7_protocol + window_start
         Map<String, ProtocolAggregate> protocolMap = new HashMap<>();
@@ -252,7 +257,7 @@ public class BatchProcessorModuleTest {
 
         for (int fileIdx = 0; fileIdx < numFiles; fileIdx++) {
             int partition = fileIdx % 3;
-            List<org.apache.spark.sql.Row> rows = TestDataGenerator.generateRowsForFile(fileIdx, recordsPerFile, base, partition);
+            List<org.apache.spark.sql.Row> rows = NetFlowParquetTestData.generateRowsForFile(fileIdx, recordsPerFile, base, partition);
             for (org.apache.spark.sql.Row row : rows) {
                 String srcIp = row.getString(0);
                 String dstIp = row.getString(1);

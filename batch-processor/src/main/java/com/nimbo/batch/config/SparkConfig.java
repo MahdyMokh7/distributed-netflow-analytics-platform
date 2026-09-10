@@ -20,6 +20,7 @@ public class SparkConfig {
     private int numExecutors;
     private int maxCores;
     private int shufflePartitions;
+    private String sessionTimeZone;
     private String driverMemory;
 
     private Boolean adaptiveEnabled;
@@ -45,6 +46,7 @@ public class SparkConfig {
         setIfPositive(builder, "spark.executor.instances", numExecutors);
         setIfPositive(builder, "spark.cores.max", maxCores);
         setIfPositive(builder, "spark.sql.shuffle.partitions", shufflePartitions);
+        setIfPresent(builder, "spark.sql.session.timeZone", sessionTimeZone);
 
         setIfPresent(builder, "spark.sql.adaptive.enabled", adaptiveEnabled);
         setIfPresent(builder, "spark.sql.adaptive.coalescePartitions.enabled", adaptiveCoalescePartitionsEnabled);
