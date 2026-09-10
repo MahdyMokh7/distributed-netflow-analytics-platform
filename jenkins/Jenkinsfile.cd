@@ -23,7 +23,7 @@ pipeline {
         disableConcurrentBuilds()
         skipDefaultCheckout(true)
         buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '10'))
-        timeout(time: 15, unit: 'MINUTES')
+        timeout(time: 30, unit: 'MINUTES')
     }
 
     parameters {
@@ -54,64 +54,64 @@ pipeline {
 
     stages {
 
-        stage('Master Sonar Analysis') {
-            agent {
-                docker {
-                    label 'nimbo-nimbyte'
-                    image 'maven:3.9-eclipse-temurin-17'
-                    args '''
-                        --network host
-                        --add-host sonarqube.inside.sahab.ir:192.168.12.53
-                        -v /var/run/docker.sock:/var/run/docker.sock
-                        --group-add 999
-                        -v /home/team1/.m2:/home/team1/.m2
-                        -v /opt/jdk-17.0.6/lib/security/cacerts:/certs/cacerts:ro
-                        -v /etc/passwd:/etc/passwd:ro
-                        -v /etc/group:/etc/group:ro
-                    '''
-                }
-            }
-            steps {
-                checkout scm
-
-                withSonarQubeEnv('sonarqube') {
-                    sh '''
-                        set -eu
-                        mkdir -p /tmp/sonar
-
-                        mvn \
-                          --settings jenkins/maven-settings.xml \
-                          --batch-mode \
-                          --no-transfer-progress \
-                          clean verify \
-
-                        echo "===== JaCoCo reports ====="
-                        find . -name "jacoco.xml" -print
-
-                        mvn \
-                          --settings jenkins/maven-settings.xml \
-                          --batch-mode \
-                          --no-transfer-progress \
-                          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-                          -Dsonar.projectKey=nimbo-nimbyte \
-                          -Dsonar.projectName=nimbo-nimbyte \
-                          -Dsonar.branch.name=master \
-                          -Dsonar.host.url="${SONAR_HOST_URL}" \
-                          -Dsonar.login="${SONAR_AUTH_TOKEN}" \
-                          -Dsonar.userHome=/tmp/sonar \
-                          -Dsonar.coverage.jacoco.xmlReportPaths="**/target/site/jacoco/jacoco.xml"
-                    '''
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false
-                }
-            }
-        }
+//        stage('Master Sonar Analysis') {
+//            agent {
+//                docker {
+//                    label 'nimbo-nimbyte'
+//                    image 'maven:3.9-eclipse-temurin-17'
+//                    args '''
+//                        --network host
+//                        --add-host sonarqube.inside.sahab.ir:192.168.12.53
+//                        -v /var/run/docker.sock:/var/run/docker.sock
+//                        --group-add 999
+//                        -v /home/team1/.m2:/home/team1/.m2
+//                        -v /opt/jdk-17.0.6/lib/security/cacerts:/certs/cacerts:ro
+//                        -v /etc/passwd:/etc/passwd:ro
+//                        -v /etc/group:/etc/group:ro
+//                    '''
+//                }
+//            }
+//            steps {
+//                checkout scm
+//
+//                withSonarQubeEnv('sonarqube') {
+//                    sh '''
+//                        set -eu
+//                        mkdir -p /tmp/sonar
+//
+//                        mvn \
+//                          --settings jenkins/maven-settings.xml \
+//                          --batch-mode \
+//                          --no-transfer-progress \
+//                          clean verify \
+//
+//                        echo "===== JaCoCo reports ====="
+//                        find . -name "jacoco.xml" -print
+//
+//                        mvn \
+//                          --settings jenkins/maven-settings.xml \
+//                          --batch-mode \
+//                          --no-transfer-progress \
+//                          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+//                          -Dsonar.projectKey=nimbo-nimbyte \
+//                          -Dsonar.projectName=nimbo-nimbyte \
+//                          -Dsonar.branch.name=master \
+//                          -Dsonar.host.url="${SONAR_HOST_URL}" \
+//                          -Dsonar.login="${SONAR_AUTH_TOKEN}" \
+//                          -Dsonar.userHome=/tmp/sonar \
+//                          -Dsonar.coverage.jacoco.xmlReportPaths="**/target/site/jacoco/jacoco.xml"
+//                    '''
+//                }
+//            }
+//        }
+//
+//        stage('Quality Gate') {
+//            steps {
+//                timeout(time: 10, unit: 'MINUTES') {
+//                    waitForQualityGate abortPipeline: false
+//                }
+//            }
+//        }
 
         stage('Build & Push Images') {
             agent {

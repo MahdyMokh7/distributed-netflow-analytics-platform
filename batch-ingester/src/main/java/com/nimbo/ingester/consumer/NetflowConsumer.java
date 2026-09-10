@@ -19,6 +19,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 
 import java.time.Duration;
 import java.util.*;
@@ -127,7 +128,9 @@ public class NetflowConsumer {
 
             Map<TopicPartitionKey, Long> offsetsToCommit = processRecords(records);
             commitOffsets(offsetsToCommit);
-
+        }
+        catch (WakeupException e) {
+                log.info("Consumer {} shutting down", instanceId);
         } catch (KafkaException e) {
             log.error("Instance #{}: Kafka error during polling or offset commit", instanceId, e);
             throw new KafkaConsumerException("Kafka polling failed for consumer instance #" + instanceId, e);
@@ -232,10 +235,10 @@ public class NetflowConsumer {
         } catch (StorageException | KafkaException | IllegalStateException e) {
             log.error("Instance #{}: Error flushing during shutdown", instanceId, e);
         }
-
+        kafkaConsumer.wakeup();
         if (consumerThread != null) {
             try {
-                consumerThread.interrupt();
+//                consumerThread.interrupt();
                 consumerThread.join(5000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
