@@ -4,7 +4,7 @@ spring:
   profiles:
     active: prod
   datasource:
-    url: jdbc:postgresql://10.10.61.70:5432/nimbo
+    url: jdbc:postgresql://10.10.61.70:5432/nimbo_db
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver

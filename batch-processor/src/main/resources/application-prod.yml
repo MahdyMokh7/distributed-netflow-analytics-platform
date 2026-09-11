@@ -6,15 +6,16 @@ spring:
     locations: classpath:db.migration
 
 server:
-  port: ${SERVER_PORT:18082}
+  port: ${SERVER_PORT:18081}
 
 spark:
   master: spark://10.10.61.71:7077
   app-name: nimbo-batch-processor
   executor-memory: 1g
-  executor-cores: 2
-  num-executors: 3
-  max-cores: 6
+  executor-cores: 1
+  num-executors: 4
+  max-cores: 4
+  files-max-partition-bytes: 64m
   shuffle-partitions: 12
   session-time-zone: UTC
   adaptive-enabled: true
@@ -61,7 +62,7 @@ postgres:
     max-delay-ms: 30000
 
 batch:
-  schedule: "0 */5 * * * ?"
+  schedule: "0 */10 * * * ?"
   window-duration: "1 hour"
   enabled: true
-  max-files-per-batch: 5
+  max-files-per-batch: 2

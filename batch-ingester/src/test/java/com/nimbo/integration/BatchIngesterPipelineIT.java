@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
 class BatchIngesterPipelineIT {
@@ -83,8 +84,15 @@ class BatchIngesterPipelineIT {
             // Then: exact records, processing timestamps, metrics, and next offset are durable
             assertThat(persisted).hasSize(3);
             assertThat(persisted)
-                    .extracting(record -> record.get("IPV4_SRC_ADDR").toString())
-                    .containsExactly("192.168.1.1", "192.168.1.2", "192.168.1.3");
+                    .extracting(
+                            record -> record.get("IPV4_SRC_ADDR").toString(),
+                            record -> record.get("IPV4_DST_ADDR").toString(),
+                            record -> record.get("IN_BYTES"),
+                            record -> record.get("OUT_BYTES"))
+                    .containsExactly(
+                            tuple("192.168.1.1", "10.0.0.1", 1_000L, 500L),
+                            tuple("192.168.1.2", "10.0.0.1", 2_000L, 1_000L),
+                            tuple("192.168.1.3", "10.0.0.1", 3_000L, 1_500L));
             assertThat(persisted).allSatisfy(record -> assertThat(record.get("PROCESSING_TIME")).isNotNull());
             assertThat(finalizedFiles(pipeline.fileSystem(), basePath).get(0).getName()).doesNotStartWith(".");
             assertThat(KAFKA.committedOffset(group, topic, 0)).isEqualTo(3L);

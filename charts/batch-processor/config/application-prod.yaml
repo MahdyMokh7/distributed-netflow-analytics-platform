@@ -37,11 +37,13 @@ management:
 spark:
   master: spark://spark-master:7077
   app-name: nimbo-batch-processor
-  executor-memory: 2g
-  executor-cores: 2
-  num-executors: 2
-  driver-memory: 1g
+  executor-memory: 1g
+  executor-cores: 1
+  num-executors: 4
+  max-cores: 4
+  files-max-partition-bytes: 64m
   shuffle-partitions: 12
+  session-time-zone: UTC
   adaptive-enabled: true
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer
@@ -49,6 +51,9 @@ spark:
   io-mode-default: NIO
   driver-host: ${DRIVER_HOST}
   driver-bind-address: 0.0.0.0
+  speculation: false
+  jars-path: ${SPARK_JARS_PATH}
+  executor-extra-java-options: "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED --add-opens=java.base/sun.net.util=ALL-UNNAMED"
 
 hdfs:
   uri: hdfs://team1
@@ -63,12 +68,19 @@ postgres:
   database: nimbo_db
   username: ${DB_USERNAME}
   password: ${DB_PASSWORD}
-  batch-size: 500
+  batch-size: 5000
 
-  pool:
-    size: 20
+  driver-pool:
+    size: 4
     connection-timeout: 10000
     pool-name: nimbo-batch-pg-pool
+
+  executor-pool:
+    max-pool-size: ${EXECUTOR_POOL_SIZE:2}
+    connection-timeout-ms: ${EXECUTOR_CONNECTION_TIMEOUT:5000}
+    idle-timeout-ms: ${EXECUTOR_IDLE_TIMEOUT:60000}
+    max-lifetime-ms: ${EXECUTOR_MAX_LIFETIME:180000}
+    pool-name: ${EXECUTOR_POOL_NAME:JdbiExecutorPool}
 
   retry:
     max-attempts: 5
@@ -76,10 +88,10 @@ postgres:
     max-delay-ms: 30000
 
 batch:
-  schedule: "0 */3 * * * ?"
+  schedule: "0 */10 * * * ?"
   window-duration: "1 hour"
   enabled: true
-  max-files-per-batch: 5
+  max-files-per-batch: 2
 
 server:
   shutdown: graceful

@@ -74,7 +74,7 @@
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -267,6 +267,10 @@
                 </configuration>
                 <executions>
                     <execution>
+                        <id>default</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
                         <id>spark-assembly</id>
                         <phase>package</phase>
                         <goals>
@@ -359,7 +363,27 @@
 
                     <container>
                         <mainClass>com.nimbo.batch.BatchProcessorApplication</mainClass>
+                        <environment>
+                            <SPARK_JARS_PATH>/opt/nimbo/spark/${project.artifactId}-${project.version}-spark.jar</SPARK_JARS_PATH>
+                        </environment>
+                        <jvmFlags>
+                            <jvmFlag>--add-opens=java.base/java.nio=ALL-UNNAMED</jvmFlag>
+                            <jvmFlag>--add-opens=java.base/java.lang.invoke=ALL-UNNAMED</jvmFlag>
+                            <jvmFlag>--add-opens=java.base/java.util=ALL-UNNAMED</jvmFlag>
+                        </jvmFlags>
                     </container>
+
+                    <extraDirectories>
+                        <paths>
+                            <path>
+                                <from>${project.build.directory}</from>
+                                <into>/opt/nimbo/spark</into>
+                                <includes>
+                                    <include>${project.artifactId}-${project.version}-spark.jar</include>
+                                </includes>
+                            </path>
+                        </paths>
+                    </extraDirectories>
                 </configuration>
             </plugin>
         </plugins>

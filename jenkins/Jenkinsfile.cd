@@ -146,7 +146,18 @@ pipeline {
                       --settings jenkins/maven-settings.xml \
                       --batch-mode \
                       --no-transfer-progress \
-                      clean compile jib:build \
+                      clean package \
+                      -DskipTests
+
+                    SPARK_JAR_COUNT="$(find batch-processor/target -maxdepth 1 -type f -name 'batch-processor-*-spark.jar' | wc -l)"
+                    test "${SPARK_JAR_COUNT}" -eq 1
+                    test -s "$(find batch-processor/target -maxdepth 1 -type f -name 'batch-processor-*-spark.jar')"
+
+                    mvn \
+                      --settings jenkins/maven-settings.xml \
+                      --batch-mode \
+                      --no-transfer-progress \
+                      jib:build \
                       -DskipTests \
                       -Djib.allowInsecureRegistries=true \
                       -Djib.image.tag="${IMAGE_TAG}" \

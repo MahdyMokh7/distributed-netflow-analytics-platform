@@ -168,13 +168,6 @@ class NetFlowStorageTest {
     }
 
     @Test
-    @DisplayName("Should return empty map when accumulator is empty")
-    void shouldReturnEmptyMapWhenNothingWasAccepted() {
-        Map<TopicPartitionKey, Long> result = storage.flush();
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
     void shouldNotCreateFilesWhenFlushingEmptyStorage() throws Exception {
 
         Map<TopicPartitionKey, Long> result = storage.flush();

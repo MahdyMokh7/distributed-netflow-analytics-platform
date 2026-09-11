@@ -130,7 +130,7 @@ public class BatchJobRunner {
 
         return spark.read()
                 .parquet(paths)
-                .persist(StorageLevel.MEMORY_AND_DISK());
+                .persist(StorageLevel.DISK_ONLY());
     }
 
     private boolean hasValidRecords(long sourceRecordCount, List<Path> files, UUID batchId) {

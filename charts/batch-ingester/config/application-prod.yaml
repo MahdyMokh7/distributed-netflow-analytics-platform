@@ -43,7 +43,7 @@ ingester:
     bootstrap-servers: 10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092
     topic: netflow
     dlq-topic: netflow-dlq
-    consumer-group: netflow-consumer-deploy-test
+    consumer-group: netflow-consumer-deploy-final
     consumer-instances: 3
     enable-auto-commit: false
     poll-timeout-ms: 1000
@@ -55,7 +55,7 @@ ingester:
 storage:
   hdfs:
     uri: hdfs://team1
-    base-path: /netflow/parquetFiles-deply-test
+    base-path: /netflow/parquetFiles
     nameservice: team1
     nodes:
       team1-node3: 10.10.61.53:8020
