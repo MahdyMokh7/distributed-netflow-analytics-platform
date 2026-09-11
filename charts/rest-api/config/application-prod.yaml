@@ -122,7 +122,7 @@ nimbo:
     username: ${STARROCKS_QUERY_USERNAME}
     password: ${STARROCKS_QUERY_PASSWORD}
     database: nimbo
-    table: netflow_realtime_v3
+    table: netflow_realtime
     maximum-pool-size: 10
     query-timeout-seconds: 30
     max-rows: 1000

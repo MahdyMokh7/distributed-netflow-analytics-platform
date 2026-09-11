@@ -23,7 +23,7 @@ realtime:
   kafka:
     bootstrap-servers: 10.10.61.51:9092
     topic: netflow
-    consumer-group: netflow-starrocks-writer5
+    consumer-group: netflow-starrocks-writer
     client-id: starrocks-writer
     auto-offset-reset: earliest
     max-poll-records: 20000
@@ -40,7 +40,7 @@ realtime:
       - http://10.10.61.53:8040
       - http://10.10.61.54:8040
     database: nimbo
-    table: netflow_realtime_v3
+    table: netflow_realtime
     username: ${STARROCKS_USERNAME}
     password: ${STARROCKS_PASSWORD}
     merge-commit-enabled: true
