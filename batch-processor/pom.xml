@@ -196,6 +196,13 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <forceCreation>true</forceCreation>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <release>${java.version}</release>
@@ -266,10 +273,6 @@
                     <createDependencyReducedPom>false</createDependencyReducedPom>
                 </configuration>
                 <executions>
-                    <execution>
-                        <id>default</id>
-                        <phase>none</phase>
-                    </execution>
                     <execution>
                         <id>spark-assembly</id>
                         <phase>package</phase>

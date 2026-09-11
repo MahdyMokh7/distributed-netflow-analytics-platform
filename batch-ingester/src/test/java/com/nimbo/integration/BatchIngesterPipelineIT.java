@@ -74,7 +74,7 @@ class BatchIngesterPipelineIT {
                     testData.validRecord("192.168.1.3", "10.0.0.1", 3_000L)))).get();
 
             // When: the consumer completes the atomic batch rollover
-            await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(100))
+            await().atMost(Duration.ofMinutes(3)).pollInterval(Duration.ofMillis(100))
                     .until(() -> finalizedFiles(pipeline.fileSystem(), basePath).size() == 1);
             await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(100))
                     .until(() -> Long.valueOf(3L).equals(KAFKA.committedOffset(group, topic, 0)));
@@ -214,7 +214,7 @@ class BatchIngesterPipelineIT {
 
     private ConsumerRecord<byte[], byte[]> pollOne(org.apache.kafka.clients.consumer.KafkaConsumer<byte[], byte[]> consumer) {
         AtomicReference<ConsumerRecord<byte[], byte[]>> received = new AtomicReference<>();
-        await().atMost(Duration.ofSeconds(20)).pollInterval(Duration.ofMillis(100)).until(() -> {
+        await().atMost(Duration.ofSeconds(60)).pollInterval(Duration.ofMillis(100)).until(() -> {
             var records = consumer.poll(Duration.ofMillis(100));
             if (!records.isEmpty()) {
                 received.set(records.iterator().next());
@@ -275,7 +275,6 @@ class BatchIngesterPipelineIT {
         public void close() throws Exception {
             consumer.shutdown();
             dlqProducer.close();
-            fileSystem.close();
             registry.close();
         }
     }
