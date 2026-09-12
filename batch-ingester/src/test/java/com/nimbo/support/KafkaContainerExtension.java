@@ -70,7 +70,7 @@ public final class KafkaContainerExtension implements BeforeAllCallback {
         properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10_000);
         properties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 3_000);
-        properties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 60_000);
+        properties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 300_000);
         return new KafkaConsumer<>(properties);
     }
 

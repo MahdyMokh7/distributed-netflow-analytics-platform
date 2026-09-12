@@ -182,10 +182,13 @@ public final class NetFlowStorage {
         BatchPolicy.FlushReason reason = batchAccumulator.flushReason();
 
         Timer.Sample sample = metrics.startRolloverTimer();
+
+        log.info("Closing parquet writer for {}", currentTempPath);
         parquetFileWriter.closeWriter(currentWriter);
         writerOpen = false;
 
         fileStorage.commitAtomic(currentTempPath, currentFinalPath);
+        log.info("Committed parquet file {}", currentFinalPath);
 
         metrics.stopRolloverTimer(instanceId, sample);
         metrics.rollover(instanceId, reason, recordCount, sizeBytes);
