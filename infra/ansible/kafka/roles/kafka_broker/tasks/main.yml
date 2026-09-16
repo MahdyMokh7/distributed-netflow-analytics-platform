@@ -1,0 +1,12 @@
+---
+- name: Create broker directories
+  ansible.builtin.import_tasks: directories.yml
+
+- name: Configure broker
+  ansible.builtin.import_tasks: config.yml
+
+- name: Prepare broker storage
+  ansible.builtin.import_tasks: storage.yml
+
+- name: Install and start broker service
+  ansible.builtin.import_tasks: service.yml

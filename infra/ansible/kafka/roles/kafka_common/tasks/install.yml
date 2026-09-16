@@ -1,0 +1,26 @@
+- name: Download Kafka binary tarball
+  ansible.builtin.get_url:
+    url: "{{ kafka_download_url }}"
+    dest: "/tmp/kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tgz"
+    checksum: "{{ kafka_download_checksum }}"
+    mode: "0644"
+
+- name: Extract Kafka tarball
+  ansible.builtin.unarchive:
+    src: "/tmp/kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tgz"
+    dest: "/opt"
+    remote_src: true
+    creates: "/opt/kafka_{{ kafka_scala_version }}-{{ kafka_version }}"
+
+- name: Symlink versioned dir to /opt/kafka
+  ansible.builtin.file:
+    src: "/opt/kafka_{{ kafka_scala_version }}-{{ kafka_version }}"
+    dest: "{{ kafka_install_dir }}"
+    state: link
+
+- name: Download JMX Prometheus javaagent jar
+  ansible.builtin.get_url:
+    url: "{{ jmx_exporter_download_url }}"
+    dest: "{{ kafka_install_dir }}/libs/jmx_prometheus_javaagent.jar"
+    checksum: "{{ jmx_exporter_download_checksum }}"
+    mode: "0644"

@@ -1,0 +1,16 @@
+---
+- name: Deploy Kafka controllers
+  hosts: kafka_controller_nodes
+  become: true
+  serial: 1
+  roles:
+    - kafka_common
+    - kafka_controller
+
+- name: Deploy Kafka brokers
+  hosts: kafka_nodes
+  become: true
+  serial: 1
+  roles:
+    - kafka_common
+    - kafka_broker

@@ -1,0 +1,15 @@
+---
+- name: Validate Kafka prerequisites
+  ansible.builtin.import_tasks: validate.yml
+
+- name: Install Java
+  ansible.builtin.import_tasks: java.yml
+
+- name: Create Kafka user and group
+  ansible.builtin.import_tasks: user.yml
+
+- name: Install Kafka binaries
+  ansible.builtin.import_tasks: install.yml
+
+- name: Fix Kafka permissions
+  ansible.builtin.import_tasks: permissions.yml

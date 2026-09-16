@@ -1,0 +1,7 @@
+---
+- name: Own the whole install dir by the kafka user
+  ansible.builtin.file:
+    path: "/opt/kafka_{{ kafka_scala_version }}-{{ kafka_version }}"
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    recurse: true

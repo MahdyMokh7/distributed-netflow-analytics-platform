@@ -1,0 +1,19 @@
+---
+- name: Render controller.properties
+  ansible.builtin.template:
+    src: controller.properties.j2
+    dest: "{{ kafka_install_dir }}/config/controller.properties"
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: "0640"
+  notify: restart kafka-controller
+
+
+- name: Render JMX exporter config for controller
+  ansible.builtin.template:
+    src: jmx-exporter-controller.yml.j2
+    dest: "{{ kafka_install_dir }}/config/jmx-exporter-controller.yml"
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: "0640"
+  notify: restart kafka-controller

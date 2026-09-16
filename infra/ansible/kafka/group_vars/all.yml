@@ -1,0 +1,49 @@
+---
+
+kafka_cluster_id: "Os2h_2loS1-CiwFAg9PTxg"
+
+kafka_version: "4.2.1"
+kafka_scala_version: "2.13"
+
+internal_store_base_url: "https://store.inside.sahab.ir/repository/Raw-Hosted-Nebula/dist"
+kafka_download_url: "{{ internal_store_base_url }}/kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tgz"
+
+jmx_exporter_version: "0.17.2"
+jmx_exporter_download_url: "{{ internal_store_base_url }}/jmx_prometheus_javaagent-{{ jmx_exporter_version }}.jar"
+
+kafka_download_checksum:
+  "sha512:f643e31266268e920aa98ead9a061026c98dac2886932ad468565ba59bcb7fb4f98a4c4f62727367e1bd87515f3b016e6f6ccccad8b12bdef8b091b0fb577170"
+
+jmx_exporter_download_checksum: "sha256:1279040261ee47b834bd21488f42e6dc765d4bd95442a66f586bec238a081293"
+
+kafka_install_dir: "/opt/kafka"
+kafka_user: "kafka"
+kafka_group: "kafka"
+
+ansible_become_pass: "{{ lookup('env', 'ANSIBLE_BECOME_PASS') }}"
+
+# ---- Data ----
+kafka_data_root: "/mnt/disk1"
+kafka_broker_log_dir: "{{ kafka_data_root }}/kafka-broker-logs"
+kafka_controller_log_dir: "{{ kafka_data_root }}/kafka-controller-logs"
+
+# ---- Networking ----
+kafka_broker_port: 9092
+kafka_controller_port: 9093
+kafka_broker_jmx_port: 7071
+kafka_controller_jmx_port: 19096
+
+kafka_default_replication_factor: 3
+kafka_min_insync_replicas: 2
+kafka_num_partitions: 3
+
+# ---- Quorum voters, built once from inventory ----
+# Renders like: ,2@10.10.61.52:9093,3@10.10.61.53:9093,4@10.10.61.54:9093
+kafka_quorum_voters: >-
+  {{ groups['kafka_controller_nodes']
+     | map('extract', hostvars)
+     | map(attribute='controller_id')
+     | zip(groups['kafka_controller_nodes'] | map('extract', hostvars) | map(attribute='ansible_host'))
+     | map('join', '@')
+     | map('regex_replace', '$', ':' ~ kafka_controller_port)
+     | join(',') }}
