@@ -1,0 +1,166 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ include "spark.fullname" . }}-worker
+  labels:
+    {{- include "spark.labels" . | nindent 4 }}
+    component: worker
+
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      {{- include "spark.selectorLabels" . | nindent 6 }}
+      component: worker
+
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "spark.labels" . | nindent 8 }}
+        component: worker
+
+    spec:
+
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+
+      {{- if .Values.affinity.workers.enabled }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: component
+                    operator: In
+                    values:
+                      - worker
+              topologyKey: kubernetes.io/hostname
+      {{- end }}
+
+      {{- if .Values.worker.storage.initializePermissions }}
+      initContainers:
+        - name: initialize-spark-storage
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            runAsUser: 0
+          command:
+            - sh
+            - -c
+            - install -d -o spark -g spark -m 0750 {{ .Values.worker.storage.mountPath }} {{ .Values.worker.storage.localDirectory }}
+          volumeMounts:
+            - name: spark-work
+              mountPath: {{ .Values.worker.storage.mountPath }}
+      {{- end }}
+
+      containers:
+        - name: spark-worker
+
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          command:
+            - /opt/spark/sbin/start-worker.sh
+
+          args:
+            - spark://{{ include "spark.fullname" . }}-master:{{ .Values.service.master.rpcPort }}
+
+
+          ports:
+            - name: worker-web-ui
+              containerPort: {{ .Values.service.worker.uiPort }}
+
+            - name: worker-rpc
+              containerPort: {{ .Values.worker.rpcPort }}
+
+
+          env:
+            - name: SPARK_NO_DAEMONIZE
+              value: "true"
+
+            - name: SPARK_WORKER_PORT
+              value: "{{ .Values.worker.rpcPort }}"
+
+            - name: SPARK_WORKER_CORES
+              value: "{{ .Values.worker.cores }}"
+
+            - name: SPARK_WORKER_MEMORY
+              value: "{{ .Values.worker.memory }}"
+
+            - name: SPARK_WORKER_DIR
+              value: {{ .Values.worker.storage.mountPath }}
+
+            - name: SPARK_LOCAL_DIRS
+              value: {{ .Values.worker.storage.localDirectory }}
+
+
+          startupProbe:
+            httpGet:
+              path: /
+              port: worker-web-ui
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: worker-web-ui
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: worker-web-ui
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+
+          volumeMounts:
+            - name: spark-work
+              mountPath: {{ .Values.worker.storage.mountPath }}
+
+            - name: spark-config
+              mountPath: /opt/spark/conf/spark-defaults.conf
+              subPath: spark-defaults.conf
+            - name: spark-config
+              mountPath: /opt/spark/conf/core-site.xml
+              subPath: core-site.xml
+            - name: spark-config
+              mountPath: /opt/spark/conf/hdfs-site.xml
+              subPath: hdfs-site.xml
+            {{- if .Values.metrics.enabled }}
+            - name: spark-config
+              mountPath: /opt/spark/conf/metrics.properties
+              subPath: metrics.properties
+            {{- end }}
+
+
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+
+
+      volumes:
+
+        - name: spark-work
+          hostPath:
+            path: {{ .Values.worker.storage.hostPath }}
+            type: DirectoryOrCreate
+
+
+        - name: spark-config
+          configMap:
+            name: {{ include "spark.fullname" . }}-config

@@ -33,6 +33,18 @@ spec:
               value: {{ .Values.springProfile | quote }}
             - name: SERVER_PORT
               value: {{ .Values.containerPort | quote }}
+            - name: HDFS_URI
+              value: {{ required "hdfs.uri is required" .Values.hdfs.uri | quote }}
+            - name: EXECUTOR_POOL_SIZE
+              value: {{ required "postgres.executorPool.maxPoolSize is required" .Values.postgres.executorPool.maxPoolSize | quote }}
+            - name: EXECUTOR_CONNECTION_TIMEOUT
+              value: {{ required "postgres.executorPool.connectionTimeoutMs is required" .Values.postgres.executorPool.connectionTimeoutMs | quote }}
+            - name: EXECUTOR_IDLE_TIMEOUT
+              value: {{ required "postgres.executorPool.idleTimeoutMs is required" .Values.postgres.executorPool.idleTimeoutMs | quote }}
+            - name: EXECUTOR_MAX_LIFETIME
+              value: {{ required "postgres.executorPool.maxLifetimeMs is required" .Values.postgres.executorPool.maxLifetimeMs | quote }}
+            - name: EXECUTOR_POOL_NAME
+              value: {{ required "postgres.executorPool.poolName is required" .Values.postgres.executorPool.poolName | quote }}
             - name: SPRING_CONFIG_ADDITIONAL_LOCATION
               value: "file:/config/application-prod.yaml"
             {{- with .Values.extraEnv }}
@@ -45,7 +57,7 @@ spec:
           {{- else }}
           envFrom:
             - secretRef:
-                name: rest-api-secret
+                name: {{ required "secret.existingName is required when secret.enabled is false" .Values.secret.existingName }}
           {{- end }}
           volumeMounts:
             - name: config

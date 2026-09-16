@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ include "spark.fullname" . }}-history-server
+  labels:
+    {{- include "spark.labels" . | nindent 4 }}
+    component: history-server
+
+spec:
+  replicas: {{ .Values.historyServer.replicas }}
+
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      {{- include "spark.selectorLabels" . | nindent 6 }}
+      component: history-server
+
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "spark.labels" . | nindent 8 }}
+        component: history-server
+
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      containers:
+        - name: spark-history-server
+
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          command:
+            - /opt/spark/sbin/start-history-server.sh
+
+          ports:
+            - name: web-ui
+              containerPort: {{ .Values.service.historyServer.port }}
+
+          env:
+            - name: SPARK_NO_DAEMONIZE
+              value: "true"
+
+            - name: SPARK_HISTORY_OPTS
+              value: >
+                -Dspark.history.fs.logDirectory={{ .Values.spark.eventLog.directory }}
+
+          startupProbe:
+            httpGet:
+              path: /
+              port: web-ui
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: web-ui
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: web-ui
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            {{- toYaml .Values.historyServer.resources | nindent 12 }}
+
+          volumeMounts:
+
+            - name: spark-config
+              mountPath: /opt/spark/conf/spark-defaults.conf
+              subPath: spark-defaults.conf
+            - name: spark-config
+              mountPath: /opt/spark/conf/core-site.xml
+              subPath: core-site.xml
+            - name: spark-config
+              mountPath: /opt/spark/conf/hdfs-site.xml
+              subPath: hdfs-site.xml
+
+      volumes:
+
+        - name: spark-config
+          configMap:
+            name: {{ include "spark.fullname" . }}-config

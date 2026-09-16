@@ -44,6 +44,8 @@ spark:
   files-max-partition-bytes: 64m
   shuffle-partitions: 12
   session-time-zone: UTC
+  event-log-enabled: true
+  event-log-directory: ${HDFS_URI}/spark-history
   adaptive-enabled: true
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer
@@ -56,14 +58,14 @@ spark:
   executor-extra-java-options: "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED --add-opens=java.base/sun.net.util=ALL-UNNAMED"
 
 hdfs:
-  uri: ${HDFS_URI:hdfs://10.10.61.53:8020}
+  uri: ${HDFS_URI}
   parquet-path: /netflow/parquetFiles/
 
 output:
   mode: both
 
 postgres:
-  host: postgresql-master.team1.svc.cluster.local
+  host: postgresql-postgresql-master
   port: 5432
   database: nimbo_db
   username: ${DB_USERNAME}
@@ -76,11 +78,11 @@ postgres:
     pool-name: nimbo-batch-pg-pool
 
   executor-pool:
-    max-pool-size: ${EXECUTOR_POOL_SIZE:2}
-    connection-timeout-ms: ${EXECUTOR_CONNECTION_TIMEOUT:5000}
-    idle-timeout-ms: ${EXECUTOR_IDLE_TIMEOUT:60000}
-    max-lifetime-ms: ${EXECUTOR_MAX_LIFETIME:180000}
-    pool-name: ${EXECUTOR_POOL_NAME:JdbiExecutorPool}
+    max-pool-size: ${EXECUTOR_POOL_SIZE}
+    connection-timeout-ms: ${EXECUTOR_CONNECTION_TIMEOUT}
+    idle-timeout-ms: ${EXECUTOR_IDLE_TIMEOUT}
+    max-lifetime-ms: ${EXECUTOR_MAX_LIFETIME}
+    pool-name: ${EXECUTOR_POOL_NAME}
 
   retry:
     max-attempts: 5

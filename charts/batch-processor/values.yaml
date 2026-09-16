@@ -14,6 +14,17 @@ service:
   type: ClusterIP
   port: 18081
 
+hdfs:
+  uri: hdfs://10.10.61.53:8020
+
+postgres:
+  executorPool:
+    maxPoolSize: 2
+    connectionTimeoutMs: 5000
+    idleTimeoutMs: 60000
+    maxLifetimeMs: 180000
+    poolName: JdbiExecutorPool
+
 resources:
   requests:
     cpu: 500m
@@ -41,6 +52,7 @@ probes:
 
 secret:
   enabled: false
+  existingName: rest-api-secret
   data:
     DB_USERNAME: "CHANGE_ME"
     DB_PASSWORD: "CHANGE_ME"
@@ -59,4 +71,3 @@ extraEnv:
     valueFrom:
       fieldRef:
         fieldPath: status.podIP
-

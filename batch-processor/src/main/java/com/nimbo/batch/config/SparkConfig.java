@@ -23,6 +23,8 @@ public class SparkConfig {
     private String filesMaxPartitionBytes;
     private String sessionTimeZone;
     private String driverMemory;
+    private Boolean eventLogEnabled;
+    private String eventLogDirectory;
 
     private Boolean adaptiveEnabled;
     private Boolean adaptiveCoalescePartitionsEnabled;
@@ -49,6 +51,8 @@ public class SparkConfig {
         setIfPositive(builder, "spark.sql.shuffle.partitions", shufflePartitions);
         setIfPresent(builder, "spark.sql.files.maxPartitionBytes", filesMaxPartitionBytes);
         setIfPresent(builder, "spark.sql.session.timeZone", sessionTimeZone);
+        setIfPresent(builder, "spark.eventLog.enabled", eventLogEnabled);
+        setIfPresent(builder, "spark.eventLog.dir", eventLogDirectory);
 
         setIfPresent(builder, "spark.sql.adaptive.enabled", adaptiveEnabled);
         setIfPresent(builder, "spark.sql.adaptive.coalescePartitions.enabled", adaptiveCoalescePartitionsEnabled);

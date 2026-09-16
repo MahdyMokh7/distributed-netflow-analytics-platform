@@ -2,10 +2,16 @@ package com.nimbo.batch.config;
 
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SparkConfigTest {
+
+    @TempDir
+    Path eventLogDirectory;
 
     @Test
     void givenProductionTuning_whenSparkStarts_thenResourceLimitsAndSqlSettingsAreApplied() {
@@ -19,6 +25,8 @@ class SparkConfigTest {
         config.setNumExecutors(2);
         config.setMaxCores(4);
         config.setFilesMaxPartitionBytes("64m");
+        config.setEventLogEnabled(true);
+        config.setEventLogDirectory(eventLogDirectory.toUri().toString());
         config.setUiEnabled(false);
 
         // When: the production Spark configuration creates a session
@@ -32,6 +40,9 @@ class SparkConfigTest {
             assertThat(spark.sparkContext().getConf().getInt("spark.executor.cores", 0)).isEqualTo(2);
             assertThat(spark.sparkContext().getConf().getInt("spark.executor.instances", 0)).isEqualTo(2);
             assertThat(spark.sparkContext().getConf().getInt("spark.cores.max", 0)).isEqualTo(4);
+            assertThat(spark.sparkContext().getConf().getBoolean("spark.eventLog.enabled", false)).isTrue();
+            assertThat(spark.sparkContext().getConf().get("spark.eventLog.dir"))
+                    .isEqualTo(eventLogDirectory.toUri().toString());
         } finally {
             spark.stop();
             SparkSession.clearActiveSession();

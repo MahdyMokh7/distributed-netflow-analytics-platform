@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "spark.fullname" . }}-config
+  labels:
+    {{- include "spark.labels" . | nindent 4 }}
+
+data:
+  spark-defaults.conf: |
+    spark.serializer {{ .Values.spark.serializer }}
+
+    spark.sql.shuffle.partitions {{ .Values.spark.shufflePartitions }}
+    spark.sql.adaptive.enabled {{ .Values.spark.adaptiveEnabled }}
+
+    spark.eventLog.enabled {{ .Values.spark.eventLog.enabled }}
+    spark.eventLog.dir {{ .Values.spark.eventLog.directory }}
+
+    spark.local.dir {{ .Values.worker.storage.localDirectory }}
+
+    spark.worker.cleanup.enabled {{ .Values.spark.workerCleanup.enabled }}
+    spark.worker.cleanup.interval {{ .Values.spark.workerCleanup.intervalSeconds }}
+    spark.worker.cleanup.appDataTtl {{ .Values.spark.workerCleanup.appDataTtlSeconds }}
+
+    spark.shuffle.compress {{ .Values.spark.shuffleCompress }}
+    spark.io.compression.codec {{ .Values.spark.ioCompressionCodec }}
+
+    spark.driver.bindAddress {{ .Values.spark.driverBindAddress }}
+
+    spark.sql.session.timeZone {{ .Values.spark.timezone }}
+
+  {{- if .Values.metrics.enabled }}
+  metrics.properties: |
+    *.sink.prometheusServlet.class=org.apache.spark.metrics.sink.PrometheusServlet
+    *.sink.prometheusServlet.path={{ .Values.metrics.prometheus.path }}
+    master.sink.prometheusServlet.path={{ .Values.metrics.prometheus.masterPath }}
+    applications.sink.prometheusServlet.path={{ .Values.metrics.prometheus.applicationsPath }}
+    {{- if .Values.metrics.prometheus.jvmSourceEnabled }}
+    master.source.jvm.class=org.apache.spark.metrics.source.JvmSource
+    worker.source.jvm.class=org.apache.spark.metrics.source.JvmSource
+    {{- end }}
+  {{- end }}
+
+  core-site.xml: |
+    <?xml version="1.0"?>
+    <configuration>
+      <property>
+        <name>fs.defaultFS</name>
+        <value>{{ .Values.hadoop.defaultFs }}</value>
+      </property>
+    </configuration>
+
+  hdfs-site.xml: |
+    <?xml version="1.0"?>
+    <configuration>
+      <property>
+        <name>dfs.nameservices</name>
+        <value>{{ .Values.hadoop.nameservice }}</value>
+      </property>
+      <property>
+        <name>dfs.ha.namenodes.{{ .Values.hadoop.nameservice }}</name>
+        <value>{{ keys .Values.hadoop.namenodes | sortAlpha | join "," }}</value>
+      </property>
+      {{- range $name, $address := .Values.hadoop.namenodes }}
+      <property>
+        <name>dfs.namenode.rpc-address.{{ $.Values.hadoop.nameservice }}.{{ $name }}</name>
+        <value>{{ $address }}</value>
+      </property>
+      {{- end }}
+      <property>
+        <name>dfs.client.failover.proxy.provider.{{ .Values.hadoop.nameservice }}</name>
+        <value>{{ .Values.hadoop.failoverProxyProvider }}</value>
+      </property>
+      <property>
+        <name>dfs.client.failover.random.order</name>
+        <value>false</value>
+      </property>
+    </configuration>

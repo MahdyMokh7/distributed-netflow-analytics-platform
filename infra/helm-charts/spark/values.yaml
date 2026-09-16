@@ -1,0 +1,117 @@
+image:
+  repository: zoraq.inside.sahab.ir:9462/nimbyte-spark
+  tag: "4.1.1-1"
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: spark
+
+master:
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+worker:
+  replicaCount: 4
+  cores: 4
+  memory: 6g
+  rpcPort: 7078
+
+  resources:
+    requests:
+      cpu: "2"
+      memory: 4Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+
+  storage:
+    hostPath: /mnt/disk1/spark/work
+    mountPath: /opt/spark/work
+    localDirectory: /opt/spark/work/local
+    initializePermissions: true
+
+historyServer:
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+spark:
+  shufflePartitions: 50
+  serializer: org.apache.spark.serializer.KryoSerializer
+  timezone: UTC
+  adaptiveEnabled: true
+  shuffleCompress: true
+  ioCompressionCodec: lz4
+  driverBindAddress: 0.0.0.0
+
+  workerCleanup:
+    enabled: true
+    intervalSeconds: 86400
+    appDataTtlSeconds: 604800
+
+  eventLog:
+    enabled: true
+    directory: hdfs://team1/spark-history
+
+hadoop:
+  defaultFs: hdfs://team1
+  nameservice: team1
+  namenodes:
+    team1-node1: 10.10.61.51:8020
+    team1-node2: 10.10.61.52:8020
+    team1-node3: 10.10.61.53:8020
+  failoverProxyProvider: org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider
+
+metrics:
+  enabled: true
+  prometheus:
+    path: /metrics/prometheus
+    masterPath: /metrics/master/prometheus
+    applicationsPath: /metrics/applications/prometheus
+    jvmSourceEnabled: true
+
+service:
+  master:
+    type: ClusterIP
+    rpcPort: 7077
+    uiPort: 8080
+    externalUi:
+      enabled: true
+      type: LoadBalancer
+      port: 80
+      loadBalancerIP: 10.10.61.71
+      annotations: {}
+      loadBalancerSourceRanges: []
+  worker:
+    type: ClusterIP
+    uiPort: 8081
+    headless: true
+  historyServer:
+    type: ClusterIP
+    port: 18080
+    externalUi:
+      enabled: true
+      type: LoadBalancer
+      port: 80
+      loadBalancerIP: 10.10.61.72
+      annotations: {}
+      loadBalancerSourceRanges: []
+
+terminationGracePeriodSeconds: 60
+
+affinity:
+  workers:
+    enabled: true

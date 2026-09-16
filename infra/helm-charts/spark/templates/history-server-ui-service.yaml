@@ -1,0 +1,34 @@
+{{- if .Values.service.historyServer.externalUi.enabled }}
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: {{ include "spark.fullname" . }}-history-server-ui
+  labels:
+    {{- include "spark.labels" . | nindent 4 }}
+    component: history-server
+  {{- with .Values.service.historyServer.externalUi.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+spec:
+  type: {{ .Values.service.historyServer.externalUi.type }}
+  {{- with .Values.service.historyServer.externalUi.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  {{- with .Values.service.historyServer.externalUi.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  ports:
+    - name: web-ui
+      port: {{ .Values.service.historyServer.externalUi.port }}
+      targetPort: web-ui
+      protocol: TCP
+
+  selector:
+    {{- include "spark.selectorLabels" . | nindent 4 }}
+    component: history-server
+{{- end }}

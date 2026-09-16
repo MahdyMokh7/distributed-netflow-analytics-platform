@@ -1,0 +1,34 @@
+{{- if .Values.service.master.externalUi.enabled }}
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: {{ include "spark.fullname" . }}-master-ui
+  labels:
+    {{- include "spark.labels" . | nindent 4 }}
+    component: master
+  {{- with .Values.service.master.externalUi.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+spec:
+  type: {{ .Values.service.master.externalUi.type }}
+  {{- with .Values.service.master.externalUi.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  {{- with .Values.service.master.externalUi.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  ports:
+    - name: web-ui
+      port: {{ .Values.service.master.externalUi.port }}
+      targetPort: web-ui
+      protocol: TCP
+
+  selector:
+    {{- include "spark.selectorLabels" . | nindent 4 }}
+    component: master
+{{- end }}
