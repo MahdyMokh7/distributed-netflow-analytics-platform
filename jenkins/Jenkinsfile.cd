@@ -118,6 +118,7 @@ pipeline {
                 docker {
                     label 'nimbo-nimbyte'
                     image 'maven:3.9-eclipse-temurin-17'
+                    customWorkspace '/mnt/disk1/jenkins-agent/nimbo-nimbyte-release-build'
                     args '''
                         --network host
                         -v /opt/jdk-17.0.6/lib/security/cacerts:/certs/cacerts:ro
