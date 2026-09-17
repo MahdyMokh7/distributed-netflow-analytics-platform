@@ -61,6 +61,9 @@ terminal.log
 
 /docs/plan
 
+exporter.py
+temp.txt
+
 # Multi-module generated files
 
 # Maven build output for all modules
@@ -105,3 +108,5 @@ terminal.log
 *.log
 
 *.kilo
+.codex
+.agents
