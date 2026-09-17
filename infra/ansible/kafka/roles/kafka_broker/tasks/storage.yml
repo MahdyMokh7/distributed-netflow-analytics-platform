@@ -1,0 +1,16 @@
+---
+- name: Check whether broker storage is already formatted
+  ansible.builtin.stat:
+    path: "{{ kafka_broker_log_dir }}/meta.properties"
+  register: broker_meta
+
+
+- name: Format broker storage (only once, same cluster-wide id as controllers)
+  ansible.builtin.command:
+    cmd: >
+      {{ kafka_install_dir }}/bin/kafka-storage.sh format
+      -t {{ kafka_cluster_id }}
+      -c {{ kafka_install_dir }}/config/server.properties
+  become: true
+  become_user: "{{ kafka_user }}"
+  when: not broker_meta.stat.exists

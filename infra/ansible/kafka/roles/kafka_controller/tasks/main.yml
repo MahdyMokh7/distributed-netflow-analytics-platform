@@ -1,0 +1,12 @@
+---
+- name: Create controller directories
+  ansible.builtin.import_tasks: directories.yml
+
+- name: Configure controller
+  ansible.builtin.import_tasks: config.yml
+
+- name: Prepare controller storage
+  ansible.builtin.import_tasks: storage.yml
+
+- name: Install and start controller service
+  ansible.builtin.import_tasks: service.yml

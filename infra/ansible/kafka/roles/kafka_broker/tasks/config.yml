@@ -1,0 +1,19 @@
+---
+- name: Render server.properties
+  ansible.builtin.template:
+    src: server.properties.j2
+    dest: "{{ kafka_install_dir }}/config/server.properties"
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: "0640"
+  notify: restart kafka-broker
+
+
+- name: Render JMX exporter config for broker
+  ansible.builtin.template:
+    src: jmx-exporter-broker.yml.j2
+    dest: "{{ kafka_install_dir }}/config/jmx-exporter-broker.yml"
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: "0640"
+  notify: restart kafka-broker

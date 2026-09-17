@@ -1,0 +1,6 @@
+---
+- name: restart kafka-controller
+  ansible.builtin.systemd:
+    name: kafka-controller
+    state: restarted
+    daemon_reload: true

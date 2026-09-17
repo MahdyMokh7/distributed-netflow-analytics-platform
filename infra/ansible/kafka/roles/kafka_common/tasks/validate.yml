@@ -1,0 +1,7 @@
+---
+- name: Fail fast if cluster id is missing
+  ansible.builtin.assert:
+    that:
+      - kafka_cluster_id is defined
+      - kafka_cluster_id | length > 0
+    fail_msg: "kafka_cluster_id in group_vars/all.yml is not set."

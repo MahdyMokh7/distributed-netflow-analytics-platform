@@ -1,0 +1,8 @@
+---
+- name: Create broker data dir
+  ansible.builtin.file:
+    path: "{{ kafka_broker_log_dir }}"
+    state: directory
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: "0750"

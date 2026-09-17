@@ -1,0 +1,11 @@
+# Managed by Ansible
+process.roles=controller
+node.id={{ controller_id }}
+
+listeners=CONTROLLER://0.0.0.0:{{ kafka_controller_port }}
+controller.listener.names=CONTROLLER
+listener.security.protocol.map=CONTROLLER:PLAINTEXT
+
+controller.quorum.voters={{ kafka_quorum_voters }}
+
+log.dirs={{ kafka_controller_log_dir }}

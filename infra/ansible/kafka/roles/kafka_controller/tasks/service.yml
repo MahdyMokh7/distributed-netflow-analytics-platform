@@ -1,0 +1,14 @@
+---
+- name: Install systemd unit for controller
+  ansible.builtin.template:
+    src: kafka-controller.service.j2
+    dest: /etc/systemd/system/kafka-controller.service
+    mode: "0644"
+  notify: restart kafka-controller
+
+
+- name: Enable and start kafka-controller
+  ansible.builtin.systemd:
+    name: kafka-controller
+    enabled: true
+    state: started

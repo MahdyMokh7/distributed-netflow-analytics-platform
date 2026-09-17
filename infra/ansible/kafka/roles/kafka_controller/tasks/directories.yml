@@ -1,0 +1,10 @@
+---
+- name: Create controller data directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: "0750"
+  loop:
+    - "{{ kafka_controller_log_dir }}"

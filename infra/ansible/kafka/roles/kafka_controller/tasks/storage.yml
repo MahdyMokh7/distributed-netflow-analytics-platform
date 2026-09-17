@@ -1,0 +1,15 @@
+---
+- name: Check whether controller storage is already formatted
+  ansible.builtin.stat:
+    path: "{{ kafka_controller_log_dir }}/meta.properties"
+  register: controller_meta
+
+
+- name: Format controller storage (only once, cluster-wide id)
+  ansible.builtin.command:
+    cmd: >
+      {{ kafka_install_dir }}/bin/kafka-storage.sh format
+      -t {{ kafka_cluster_id }}
+      -c {{ kafka_install_dir }}/config/controller.properties
+  become_user: "{{ kafka_user }}"
+  when: not controller_meta.stat.exists

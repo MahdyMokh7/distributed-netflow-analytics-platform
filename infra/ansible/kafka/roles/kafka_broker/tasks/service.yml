@@ -1,0 +1,14 @@
+---
+- name: Install systemd unit for broker
+  ansible.builtin.template:
+    src: kafka-broker.service.j2
+    dest: /etc/systemd/system/kafka-broker.service
+    mode: "0644"
+  notify: restart kafka-broker
+
+
+- name: Enable and start kafka-broker
+  ansible.builtin.systemd:
+    name: kafka-broker
+    enabled: true
+    state: started

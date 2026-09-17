@@ -1,0 +1,17 @@
+[Unit]
+Description=Kafka Broker (KRaft)
+After=network.target kafka-controller.service
+Wants=kafka-controller.service
+
+[Service]
+Type=simple
+User={{ kafka_user }}
+Group={{ kafka_group }}
+Environment="KAFKA_OPTS=-javaagent:{{ kafka_install_dir }}/libs/jmx_prometheus_javaagent.jar={{ kafka_broker_jmx_port }}:{{ kafka_install_dir }}/config/jmx-exporter-broker.yml"
+ExecStart={{ kafka_install_dir }}/bin/kafka-server-start.sh {{ kafka_install_dir }}/config/server.properties
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=100000
+
+[Install]
+WantedBy=multi-user.target
