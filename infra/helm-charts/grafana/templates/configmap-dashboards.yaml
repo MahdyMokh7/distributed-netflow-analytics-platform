@@ -4,6 +4,6 @@ metadata:
   name: grafana-dashboards
 data:
 {{- range $path, $bytes := .Files.Glob "dashboards/*.json" }}
-  {{ base $path | regexReplaceAll "[^A-Za-z0-9._-]" "_" }}: |
+  {{ regexReplaceAll "[^A-Za-z0-9._-]" (base $path) "_" }}: |
 {{ $.Files.Get $path | indent 4 }}
 {{- end }}

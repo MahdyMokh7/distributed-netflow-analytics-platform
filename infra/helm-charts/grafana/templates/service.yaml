@@ -6,10 +6,10 @@ metadata:
     app: grafana
 spec:
   type: {{ .Values.service.type }}
+  loadBalancerIP: {{ .Values.service.loadBalancerIP }}
   ports:
     - port: {{ .Values.service.port }}
       targetPort: {{ .Values.containerPort }}
-      nodePort: {{ .Values.service.nodePort }}
       protocol: TCP
       name: http
   selector:

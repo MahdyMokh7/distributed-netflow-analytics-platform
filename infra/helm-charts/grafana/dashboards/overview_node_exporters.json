@@ -23,7 +23,7 @@
   "liveNow": false,
   "panels": [
     {
-      "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "description": "Shows whether each Node Exporter target is reachable by Prometheus.",
       "fieldConfig": {
         "defaults": {
@@ -44,13 +44,13 @@
       },
       "pluginVersion": "13.2.1",
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" }, "editorMode": "code", "expr": "up{job=\"node-exporters\"}", "legendFormat": "{{node}}", "range": true, "refId": "A" }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "up{job=\"node-exporters\"}", "legendFormat": "{{node}}", "range": true, "refId": "A" }
       ],
       "title": "Node Status",
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "description": "CPU utilization of each server over time.",
       "fieldConfig": {
         "defaults": {
@@ -75,7 +75,7 @@
       },
       "pluginVersion": "13.2.1",
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" }, "editorMode": "code",
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code",
           "expr": "100 - (\n  avg by (node) (\n    rate(\n      node_cpu_seconds_total{\n        job=\"node-exporters\",\n        mode=\"idle\"\n      }[5m]\n    )\n  ) * 100\n)",
           "interval": "", "legendFormat": "{{node}}", "range": true, "refId": "A" }
       ],
@@ -83,7 +83,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "description": "Percentage of memory currently in use on each server.",
       "fieldConfig": {
         "defaults": {
@@ -108,7 +108,7 @@
       },
       "pluginVersion": "13.2.1",
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" }, "editorMode": "code", "exemplar": false,
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "exemplar": false,
           "expr": "100 * (\n  1 -\n  node_memory_MemAvailable_bytes{job=\"node-exporters\"}\n  /\n  node_memory_MemTotal_bytes{job=\"node-exporters\"}\n)",
           "instant": false, "legendFormat": "{{node}}", "range": true, "refId": "A" }
       ],
@@ -116,7 +116,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "description": "Network traffic received by each server.",
       "fieldConfig": {
         "defaults": {
@@ -140,7 +140,7 @@
       },
       "pluginVersion": "13.2.1",
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" }, "editorMode": "code", "exemplar": false,
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "exemplar": false,
           "expr": "sum by (node) (\n  rate(\n    node_network_receive_bytes_total{\n      job=\"node-exporters\",\n      device=\"eth1\"\n    }[5m]\n  )\n)",
           "legendFormat": "{{node}}", "range": true, "refId": "A" }
       ],
@@ -148,7 +148,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "description": "Network traffic transmitted by each server.",
       "fieldConfig": {
         "defaults": {
@@ -172,7 +172,7 @@
       },
       "pluginVersion": "13.2.1",
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" }, "editorMode": "code",
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code",
           "expr": "sum by (node) (\n  rate(\n    node_network_transmit_bytes_total{\n      job=\"node-exporters\",\n      device=\"eth1\"\n    }[5m]\n  )\n)",
           "legendFormat": "{{node}}", "range": true, "refId": "A" }
       ],
@@ -180,7 +180,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "description": "Disk read and write throughput for each server.",
       "fieldConfig": {
         "defaults": {
@@ -204,10 +204,10 @@
       },
       "pluginVersion": "13.2.1",
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" }, "editorMode": "code",
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code",
           "expr": "rate(\n  node_disk_read_bytes_total{\n    job=\"node-exporters\",\n    device!~\"loop.*|ram.*\"\n  }[5m]\n)",
           "legendFormat": "Read - {{node}} - {{device}}", "range": true, "refId": "A" },
-        { "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" }, "editorMode": "code",
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code",
           "expr": "rate(\n  node_disk_written_bytes_total{\n    job=\"node-exporters\",\n    device!~\"loop.*|ram.*\"\n  }[5m]\n)",
           "instant": false, "legendFormat": "Write - {{node}} - {{device}}", "range": true, "refId": "B" }
       ],
@@ -215,7 +215,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "description": "Percentage of the root filesystem (/) currently in use on each server.",
       "fieldConfig": {
         "defaults": {
@@ -234,7 +234,7 @@
       },
       "pluginVersion": "13.2.1",
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" }, "editorMode": "code",
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code",
           "expr": "100 * (\n  1 -\n  node_filesystem_avail_bytes{\n    job=\"node-exporters\",\n    mountpoint=\"/\",\n    fstype!~\"tmpfs|overlay\"\n  }\n  /\n  node_filesystem_size_bytes{\n    job=\"node-exporters\",\n    mountpoint=\"/\",\n    fstype!~\"tmpfs|overlay\"\n  }\n)",
           "legendFormat": "{{node}}", "range": true, "refId": "A" }
       ],
@@ -242,7 +242,7 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "description": "Percentage of the /mnt/disk1 data filesystem currently in use on each server.",
       "fieldConfig": {
         "defaults": {
@@ -261,7 +261,7 @@
       },
       "pluginVersion": "13.2.1",
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "afx57iu9wr0n4a" }, "editorMode": "code",
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code",
           "expr": "100 * (\n  1 -\n  node_filesystem_avail_bytes{\n    job=\"node-exporters\",\n    mountpoint=\"/mnt/disk1\",\n    fstype!~\"tmpfs|overlay\"\n  }\n  /\n  node_filesystem_size_bytes{\n    job=\"node-exporters\",\n    mountpoint=\"/mnt/disk1\",\n    fstype!~\"tmpfs|overlay\"\n  }\n)",
           "legendFormat": "{{node}}", "range": true, "refId": "A" }
       ],

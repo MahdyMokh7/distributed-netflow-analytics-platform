@@ -1,0 +1,36 @@
+replicaCount: 1
+
+image:
+  repository: zoraq.inside.sahab.ir:9462/grafana
+  tag: "13.2.1"
+  pullPolicy: IfNotPresent
+
+containerPort: 3000
+
+adminSecret:
+  name: grafana-admin-secret
+
+prometheus:
+  url: http://prometheus:9090
+  datasourceUid: prometheus
+
+starrocks:
+  enabled: false
+  host: 10.10.61.53
+  port: 9030
+  database: nimbo
+  datasourceUid: starrocks
+  secretName: grafana-starrocks-secret
+
+service:
+  type: LoadBalancer
+  port: 3000
+  loadBalancerIP: 10.10.61.74
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

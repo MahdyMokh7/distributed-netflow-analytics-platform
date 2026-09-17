@@ -14,10 +14,10 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: afx57iu9wr0n4a
+            datasourceUid: prometheus
             model:
               editorMode: code
-              expr: up{job="batch-ingester"}
+              expr: 1 - min(up{job="batch-ingester"}) or vector(1)
               instant: true
               intervalMs: 1000
               legendFormat: __auto
@@ -31,8 +31,8 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 1
-                    type: lt
+                      - 0
+                    type: gt
                   operator:
                     type: and
                   query:
@@ -50,21 +50,17 @@ groups:
               maxDataPoints: 43200
               refId: C
               type: threshold
-        noDataState: NoData
+        noDataState: Alerting
         execErrState: Error
         for: 5m
         annotations:
-          description: |-
-            Batch Ingester has not been reachable for 5 minutes.
-            Instance: {{ $labels.instance }}
-          summary: Batch Ingester is down on {{ $labels.instance }}
+          description: Batch Ingester has no scrape target or its metrics endpoint has been unreachable for 5 minutes.
+          summary: Batch Ingester metrics endpoint is unavailable
         labels:
           module: batch-ingester
           service: batch-ingester
           severity: critical
         isPaused: false
-        notification_settings:
-          receiver: empty
       - uid: afxtfrdoobw8we
         title: Batch Ingester Kafka Lag High
         condition: C
@@ -73,7 +69,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: afx57iu9wr0n4a
+            datasourceUid: prometheus
             model:
               editorMode: code
               expr: |-
@@ -132,5 +128,3 @@ groups:
           severity: warning
           topic: netflow
         isPaused: false
-        notification_settings:
-          receiver: empty

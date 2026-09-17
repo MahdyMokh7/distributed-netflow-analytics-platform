@@ -2,21 +2,7 @@
   "apiVersion": "dashboard.grafana.app/v2",
   "kind": "Dashboard",
   "metadata": {
-    "name": "adq9dd4",
-    "namespace": "default",
-    "uid": "2f2d5eda-76d9-4421-b201-0e0d6ac76149",
-    "resourceVersion": "1789047284495017",
-    "generation": 13,
-    "creationTimestamp": "2026-09-04T06:09:36Z",
-    "labels": {
-      "grafana.app/deprecatedInternalID": "1582315432767488"
-    },
-    "annotations": {
-      "grafana.app/createdBy": "user:cfx568io3l88wc",
-      "grafana.app/saved-from-ui": "Grafana v13.2.1 (56cd3e9288)",
-      "grafana.app/updatedBy": "user:cfx568io3l88wc",
-      "grafana.app/updatedTimestamp": "2026-09-10T13:34:44Z"
-    }
+    "name": "adn7wsd"
   },
   "spec": {
     "annotations": [
@@ -41,15 +27,14 @@
       }
     ],
     "cursorSync": "Off",
-    "description": "Monitors the availability and basic health of core infrastructure components, including Kafka, StarRocks, Spark, and HDFS, with a lightweight view of overall resource usage.",
     "editable": true,
     "elements": {
       "panel-1": {
         "kind": "Panel",
         "spec": {
           "id": 1,
-          "title": "Kafka Brokers",
-          "description": "Availability of Kafka broker monitoring endpoints.",
+          "title": "Batch Ingester Health",
+          "description": "Whether Prometheus can currently scrape the Batch Ingester application.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -63,12 +48,12 @@
                       "group": "prometheus",
                       "version": "v0",
                       "datasource": {
-                        "name": "afx57iu9wr0n4a"
+                        "name": "prometheus"
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "up{job=\"kafka-brokers\"}",
-                        "legendFormat": "{{node}}",
+                        "expr": "up{job=\"batch-ingester\"}",
+                        "legendFormat": "__auto",
                         "range": true
                       }
                     },
@@ -87,112 +72,10 @@
             "version": "13.2.1",
             "spec": {
               "options": {
-                "colorMode": "value",
+                "colorMode": "background",
                 "graphMode": "area",
                 "justifyMode": "auto",
-                "orientation": "horizontal",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Down",
-                          "color": "dark-red",
-                          "index": 1
-                        },
-                        "1": {
-                          "text": "Up",
-                          "color": "semi-dark-green",
-                          "index": 0
-                        }
-                      }
-                    }
-                  ],
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": 0,
-                        "color": "green"
-                      },
-                      {
-                        "value": 80,
-                        "color": "red"
-                      }
-                    ]
-                  },
-                  "color": {
-                    "mode": "thresholds",
-                    "fixedColor": "#ad46ff"
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
-      "panel-10": {
-        "kind": "Panel",
-        "spec": {
-          "id": 10,
-          "title": "StarRocks Frontends",
-          "description": "Availability of StarRocks Frontend nodes.",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "datasource": {
-                        "name": "afx57iu9wr0n4a"
-                      },
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "up{job=\"starrocks-fe\"}",
-                        "legendFormat": "{{node}}",
-                        "range": true
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "stat",
-            "version": "13.2.1",
-            "spec": {
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "horizontal",
+                "orientation": "auto",
                 "percentChangeColorMode": "standard",
                 "reduceOptions": {
                   "calcs": [
@@ -252,8 +135,8 @@
         "kind": "Panel",
         "spec": {
           "id": 11,
-          "title": "StarRocks Backends",
-          "description": "Availability of StarRocks Backend nodes.",
+          "title": "Invalid / DLQ Records",
+          "description": "Number of invalid Netflow records sent to the dead-letter queue, grouped by validation reason.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -267,12 +150,12 @@
                       "group": "prometheus",
                       "version": "v0",
                       "datasource": {
-                        "name": "afx57iu9wr0n4a"
+                        "name": "prometheus"
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "up{job=\"starrocks-be\"}",
-                        "legendFormat": "{{node}}",
+                        "expr": "sum by (reason) (\n  ingester_dlq_records_total{\n    job=\"batch-ingester\"\n  }\n)",
+                        "legendFormat": "{{reason}}",
                         "range": true
                       }
                     },
@@ -287,45 +170,33 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "stat",
+            "group": "barchart",
             "version": "13.2.1",
             "spec": {
               "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "horizontal",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
+                "barRadius": 0,
+                "barWidth": 0.97,
+                "fullHighlight": false,
+                "groupWidth": 0.7,
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
                 },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
+                "orientation": "auto",
+                "showValue": "auto",
+                "stacking": "none",
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                },
+                "xTickLabelRotation": 0,
+                "xTickLabelSpacing": 0
               },
               "fieldConfig": {
                 "defaults": {
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Down",
-                          "color": "dark-red",
-                          "index": 1
-                        },
-                        "1": {
-                          "text": "Up",
-                          "color": "semi-dark-green",
-                          "index": 0
-                        }
-                      }
-                    }
-                  ],
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -340,8 +211,28 @@
                     ]
                   },
                   "color": {
-                    "mode": "thresholds",
-                    "fixedColor": "#ad46ff"
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "fillOpacity": 80,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "lineWidth": 1,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
                   }
                 },
                 "overrides": []
@@ -354,8 +245,8 @@
         "kind": "Panel",
         "spec": {
           "id": 12,
-          "title": "Spark Master",
-          "description": "Availability of the Spark Master monitoring endpoint.",
+          "title": "Total Rollovers",
+          "description": "Total number of successful batch rollovers performed by the Batch Ingester.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -369,505 +260,11 @@
                       "group": "prometheus",
                       "version": "v0",
                       "datasource": {
-                        "name": "afx57iu9wr0n4a"
+                        "name": "prometheus"
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "up{job=\"spark-master\"}",
-                        "legendFormat": "{{instance}}",
-                        "range": true
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "stat",
-            "version": "13.2.1",
-            "spec": {
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "horizontal",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Down",
-                          "color": "dark-red",
-                          "index": 1
-                        },
-                        "1": {
-                          "text": "Up",
-                          "color": "semi-dark-green",
-                          "index": 0
-                        }
-                      }
-                    }
-                  ],
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": 0,
-                        "color": "green"
-                      },
-                      {
-                        "value": 80,
-                        "color": "red"
-                      }
-                    ]
-                  },
-                  "color": {
-                    "mode": "thresholds",
-                    "fixedColor": "#ad46ff"
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
-      "panel-14": {
-        "kind": "Panel",
-        "spec": {
-          "id": 14,
-          "title": "Spark Workers",
-          "description": "Availability of Spark Worker nodes.",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "datasource": {
-                        "name": "afx57iu9wr0n4a"
-                      },
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "up{job=\"spark-workers\"}",
-                        "legendFormat": "{{node}}",
-                        "range": true
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "stat",
-            "version": "13.2.1",
-            "spec": {
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "horizontal",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Down",
-                          "color": "dark-red",
-                          "index": 1
-                        },
-                        "1": {
-                          "text": "Up",
-                          "color": "semi-dark-green",
-                          "index": 0
-                        }
-                      }
-                    }
-                  ],
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": 0,
-                        "color": "green"
-                      },
-                      {
-                        "value": 80,
-                        "color": "red"
-                      }
-                    ]
-                  },
-                  "color": {
-                    "mode": "thresholds",
-                    "fixedColor": "#ad46ff"
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
-      "panel-15": {
-        "kind": "Panel",
-        "spec": {
-          "id": 15,
-          "title": "HDFS NameNodes",
-          "description": "Availability of HDFS NameNode monitoring endpoints.",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "datasource": {
-                        "name": "afx57iu9wr0n4a"
-                      },
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "up{job=\"hdfs-namenodes\"}",
-                        "legendFormat": "{{node}}",
-                        "range": true
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "stat",
-            "version": "13.2.1",
-            "spec": {
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "horizontal",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Down",
-                          "color": "dark-red",
-                          "index": 1
-                        },
-                        "1": {
-                          "text": "Up",
-                          "color": "semi-dark-green",
-                          "index": 0
-                        }
-                      }
-                    }
-                  ],
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": 0,
-                        "color": "green"
-                      },
-                      {
-                        "value": 80,
-                        "color": "red"
-                      }
-                    ]
-                  },
-                  "color": {
-                    "mode": "thresholds",
-                    "fixedColor": "#ad46ff"
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
-      "panel-16": {
-        "kind": "Panel",
-        "spec": {
-          "id": 16,
-          "title": "HDFS DataNodes",
-          "description": "Availability of HDFS DataNode monitoring endpoints.",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "datasource": {
-                        "name": "afx57iu9wr0n4a"
-                      },
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "up{job=\"hdfs-datanodes\"}",
-                        "legendFormat": "{{node}}",
-                        "range": true
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "stat",
-            "version": "13.2.1",
-            "spec": {
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "horizontal",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "mappings": [
-                    {
-                      "type": "value",
-                      "options": {
-                        "0": {
-                          "text": "Down",
-                          "color": "dark-red",
-                          "index": 1
-                        },
-                        "1": {
-                          "text": "Up",
-                          "color": "semi-dark-green",
-                          "index": 0
-                        }
-                      }
-                    }
-                  ],
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": 0,
-                        "color": "green"
-                      },
-                      {
-                        "value": 80,
-                        "color": "red"
-                      }
-                    ]
-                  },
-                  "color": {
-                    "mode": "thresholds",
-                    "fixedColor": "#ad46ff"
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
-      "panel-17": {
-        "kind": "Panel",
-        "spec": {
-          "id": 17,
-          "title": "Netflow Records In / sec",
-          "description": "",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "datasource": {
-                        "name": "afx57iu9wr0n4a"
-                      },
-                      "spec": {
-                        "editorMode": "code",
-                        "exemplar": false,
-                        "expr": "sum(\n  rate(\n    kafka_server_brokertopicmetrics_messagesin_total{\n      topic=\"netflow\"\n    }[5m]\n  )\n)",
-                        "instant": false,
-                        "interval": "",
-                        "legendFormat": "Netflow",
-                        "range": true
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "stat",
-            "version": "13.2.1",
-            "spec": {
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "horizontal",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "value_and_name",
-                "wideLayout": true
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "recps",
-                  "decimals": 0,
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": 0,
-                        "color": "green"
-                      }
-                    ]
-                  },
-                  "color": {
-                    "mode": "fixed",
-                    "fixedColor": "blue"
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
-      "panel-18": {
-        "kind": "Panel",
-        "spec": {
-          "id": 18,
-          "title": "Queries / sec",
-          "description": "",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "datasource": {
-                        "name": "afx57iu9wr0n4a"
-                      },
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "sum(\n  rate(\n    starrocks_fe_query_success[5m]\n  )\n)",
+                        "expr": "sum(\n  ingester_rollover_total{\n    job=\"batch-ingester\"\n  }\n)",
                         "legendFormat": "__auto",
                         "range": true
                       }
@@ -883,21 +280,15 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "gauge",
+            "group": "stat",
             "version": "13.2.1",
             "spec": {
               "options": {
-                "barShape": "flat",
-                "barWidthFactor": 0.54,
-                "effects": {
-                  "barGlow": false,
-                  "centerGlow": false,
-                  "gradient": true
-                },
-                "endpointMarker": "point",
-                "minVizHeight": 75,
-                "minVizWidth": 75,
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                   "calcs": [
                     "lastNotNull"
@@ -905,126 +296,18 @@
                   "fields": "",
                   "values": false
                 },
-                "segmentCount": 1,
-                "segmentSpacing": 0.3,
-                "shape": "gauge",
-                "showThresholdLabels": false,
-                "showThresholdMarkers": true,
-                "sizing": "auto",
-                "sparkline": true,
-                "textMode": "auto"
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "reqps",
                   "thresholds": {
-                    "mode": "percentage",
+                    "mode": "absolute",
                     "steps": [
                       {
                         "value": 0,
                         "color": "green"
-                      },
-                      {
-                        "value": 60,
-                        "color": "#EAB839"
-                      },
-                      {
-                        "value": 80,
-                        "color": "red"
-                      }
-                    ]
-                  },
-                  "color": {
-                    "mode": "continuous-GrYlRd"
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
-      "panel-19": {
-        "kind": "Panel",
-        "spec": {
-          "id": 19,
-          "title": "Data Disk Used",
-          "description": "",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "datasource": {
-                        "name": "afx57iu9wr0n4a"
-                      },
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "100 *\n(\n  sum by (instance) (\n    starrocks_be_disks_data_used_capacity{\n      path=\"/mnt/disk1/starrocks_be\"\n    }\n  )\n  /\n  sum by (instance) (\n    starrocks_be_disks_total_capacity{\n      path=\"/mnt/disk1/starrocks_be\"\n    }\n  )\n)",
-                        "legendFormat": "{{node}}",
-                        "range": true
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "bargauge",
-            "version": "13.2.1",
-            "spec": {
-              "options": {
-                "displayMode": "basic",
-                "legend": {
-                  "calcs": [],
-                  "displayMode": "list",
-                  "placement": "bottom",
-                  "showLegend": false
-                },
-                "maxVizHeight": 300,
-                "minVizHeight": 16,
-                "minVizWidth": 8,
-                "namePlacement": "auto",
-                "orientation": "horizontal",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showUnfilled": true,
-                "sizing": "auto",
-                "valueMode": "color"
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "percent",
-                  "min": 0,
-                  "max": 100,
-                  "thresholds": {
-                    "mode": "percentage",
-                    "steps": [
-                      {
-                        "value": 0,
-                        "color": "green"
-                      },
-                      {
-                        "value": 60,
-                        "color": "orange"
                       },
                       {
                         "value": 80,
@@ -1042,12 +325,12 @@
           }
         }
       },
-      "panel-20": {
+      "panel-13": {
         "kind": "Panel",
         "spec": {
-          "id": 20,
-          "title": "Filesystem Usage %",
-          "description": "",
+          "id": 13,
+          "title": "Rollovers by Reason",
+          "description": "Number of batch rollovers during the selected dashboard time range, grouped by the policy that triggered the rollover.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1061,12 +344,125 @@
                       "group": "prometheus",
                       "version": "v0",
                       "datasource": {
-                        "name": "afx57iu9wr0n4a"
+                        "name": "prometheus"
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "hadoop_namenode_percent_used",
-                        "legendFormat": "{{node}}",
+                        "exemplar": false,
+                        "expr": "sum by (reason) (\n  increase(\n    ingester_rollover_total{job=\"batch-ingester\"}[1h]\n  )\n)",
+                        "instant": true,
+                        "legendFormat": "{{reason}}",
+                        "range": false
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "barchart",
+            "version": "13.2.1",
+            "spec": {
+              "options": {
+                "barRadius": 0,
+                "barWidth": 0.9,
+                "fullHighlight": false,
+                "groupWidth": 0.8,
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "orientation": "vertical",
+                "showValue": "auto",
+                "stacking": "none",
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                },
+                "xField": "Value",
+                "xTickLabelRotation": 0,
+                "xTickLabelSpacing": 100
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "continuous-viridis"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "fillOpacity": 100,
+                    "gradientMode": "hue",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "lineWidth": 1,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-14": {
+        "kind": "Panel",
+        "spec": {
+          "id": 14,
+          "title": "Rollover Duration",
+          "description": "Average time required to flush a batch during the selected interval.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(\n  rate(\n    ingester_rollover_duration_seconds_sum{\n      job=\"batch-ingester\"\n    }[10m]\n  )\n)\n/\nsum(\n  rate(\n    ingester_rollover_duration_seconds_count{\n      job=\"batch-ingester\"\n    }[10m]\n  )\n)",
+                        "legendFormat": "Rollover Duration",
                         "range": true
                       }
                     },
@@ -1081,48 +477,31 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "bargauge",
+            "group": "timeseries",
             "version": "13.2.1",
             "spec": {
               "options": {
-                "displayMode": "basic",
                 "legend": {
                   "calcs": [],
                   "displayMode": "list",
                   "placement": "bottom",
-                  "showLegend": false
+                  "showLegend": true
                 },
-                "maxVizHeight": 300,
-                "minVizHeight": 16,
-                "minVizWidth": 8,
-                "namePlacement": "auto",
-                "orientation": "horizontal",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showUnfilled": true,
-                "sizing": "auto",
-                "valueMode": "color"
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "percent",
-                  "min": 0,
-                  "max": 100,
+                  "unit": "s",
                   "thresholds": {
-                    "mode": "percentage",
+                    "mode": "absolute",
                     "steps": [
                       {
                         "value": 0,
                         "color": "green"
-                      },
-                      {
-                        "value": 60,
-                        "color": "orange"
                       },
                       {
                         "value": 80,
@@ -1131,7 +510,45 @@
                     ]
                   },
                   "color": {
-                    "mode": "thresholds"
+                    "mode": "palette-classic",
+                    "seriesBy": "last"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
                   }
                 },
                 "overrides": []
@@ -1140,11 +557,11 @@
           }
         }
       },
-      "panel-21": {
+      "panel-15": {
         "kind": "Panel",
         "spec": {
-          "id": 21,
-          "title": "HDFS Storage Used %",
+          "id": 15,
+          "title": "Last Rollover Size",
           "description": "",
           "links": [],
           "data": {
@@ -1159,12 +576,149 @@
                       "group": "prometheus",
                       "version": "v0",
                       "datasource": {
-                        "name": "afx57iu9wr0n4a"
+                        "name": "prometheus"
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "100 *\n(\n  sum by (instance) (\n    hadoop_datanode_dfs_used{\n      job=\"hdfs-datanodes\",\n      name=\"FSDatasetState\"\n    }\n  )\n  /\n  sum by (instance) (\n    hadoop_datanode_capacity{\n      job=\"hdfs-datanodes\",\n      name=\"FSDatasetState\"\n    }\n  )\n)",
-                        "legendFormat": "{{node}}",
+                        "expr": "ingester_last_batch_record_count{job=\"batch-ingester\"}",
+                        "legendFormat": "Consumer {{exported_instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "ingester_last_batch_size_bytes{job=\"batch-ingester\"}",
+                        "instant": false,
+                        "legendFormat": "Consumer {{exported_instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "B",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "13.2.1",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 0,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "id": 2,
+          "title": "Records Written / sec",
+          "description": "number of Netflow records per second is the Batch Ingester currently writing",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(\n  rate(\n    ingester_records_written_total{\n      job=\"batch-ingester\"\n    }[5m]\n  )\n)",
+                        "legendFormat": "Records/sec",
                         "range": true
                       }
                     },
@@ -1179,48 +733,31 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "bargauge",
+            "group": "timeseries",
             "version": "13.2.1",
             "spec": {
               "options": {
-                "displayMode": "basic",
                 "legend": {
                   "calcs": [],
                   "displayMode": "list",
                   "placement": "bottom",
-                  "showLegend": false
+                  "showLegend": true
                 },
-                "maxVizHeight": 300,
-                "minVizHeight": 16,
-                "minVizWidth": 8,
-                "namePlacement": "auto",
-                "orientation": "horizontal",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showUnfilled": true,
-                "sizing": "auto",
-                "valueMode": "color"
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "percent",
-                  "min": 0,
-                  "max": 100,
+                  "unit": "recps",
                   "thresholds": {
-                    "mode": "percentage",
+                    "mode": "absolute",
                     "steps": [
                       {
                         "value": 0,
                         "color": "green"
-                      },
-                      {
-                        "value": 60,
-                        "color": "orange"
                       },
                       {
                         "value": 80,
@@ -1229,7 +766,45 @@
                     ]
                   },
                   "color": {
-                    "mode": "thresholds"
+                    "mode": "palette-classic",
+                    "seriesBy": "last"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 20,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 2,
+                    "pointSize": 4,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
                   }
                 },
                 "overrides": []
@@ -1238,12 +813,12 @@
           }
         }
       },
-      "panel-9": {
+      "panel-3": {
         "kind": "Panel",
         "spec": {
-          "id": 9,
-          "title": "Kafka Controllers",
-          "description": "Availability of Kafka KRaft controller monitoring endpoints.",
+          "id": 3,
+          "title": "Consumer Status",
+          "description": "Current running state reported by each Batch Ingester consumer instance.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1257,13 +832,15 @@
                       "group": "prometheus",
                       "version": "v0",
                       "datasource": {
-                        "name": "afx57iu9wr0n4a"
+                        "name": "prometheus"
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "up{job=\"kafka-controllers\"}",
-                        "legendFormat": "{{node}}",
-                        "range": true
+                        "exemplar": false,
+                        "expr": "ingester_consumer_running{\n  job=\"batch-ingester\"\n}",
+                        "instant": true,
+                        "legendFormat": "Consumer {{exported_instance}}",
+                        "range": false
                       }
                     },
                     "refId": "A",
@@ -1291,7 +868,7 @@
                     "lastNotNull"
                   ],
                   "fields": "",
-                  "values": false
+                  "values": true
                 },
                 "showPercentChange": false,
                 "textMode": "auto",
@@ -1314,6 +891,17 @@
                           "index": 0
                         }
                       }
+                    },
+                    {
+                      "type": "special",
+                      "options": {
+                        "match": "null",
+                        "result": {
+                          "text": "Down",
+                          "color": "dark-red",
+                          "index": 2
+                        }
+                      }
                     }
                   ],
                   "thresholds": {
@@ -1332,6 +920,322 @@
                   "color": {
                     "mode": "thresholds",
                     "fixedColor": "#ad46ff"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "id": 5,
+          "title": "Records Written Total",
+          "description": "Total number of Netflow records successfully written by all Batch Ingester consumers since startup.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(\n  ingester_records_written_total{\n    job=\"batch-ingester\"\n  }\n)",
+                        "legendFormat": "__auto",
+                        "range": true
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.2.1",
+            "spec": {
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "blue"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds",
+                    "fixedColor": "#ad46ff"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "id": 8,
+          "title": "Consumer Lag",
+          "description": "Current Kafka consumer lag for each Netflow partition.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "kafka_consumer_fetch_manager_records_lag{\n  job=\"batch-ingester\",\n  topic=\"netflow\"\n}",
+                        "legendFormat": "P{{partition}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "13.2.1",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 2,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "id": 9,
+          "title": "Records per Poll",
+          "description": "Average number of Kafka records returned by each poll for every consumer instance.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (exported_instance) (\n  rate(\n    ingester_poll_records_sum{\n      job=\"batch-ingester\"\n    }[1m]\n  )\n)\n/\nsum by (exported_instance) (\n  rate(\n    ingester_poll_records_count{\n      job=\"batch-ingester\"\n    }[1m]\n  )\n)",
+                        "legendFormat": "Consumer {{exported_instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "13.2.1",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "bars",
+                    "fillOpacity": 70,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 0,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "normal"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
                   }
                 },
                 "overrides": []
@@ -1350,21 +1254,8 @@
             "spec": {
               "x": 0,
               "y": 0,
-              "width": 5,
-              "height": 7,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-9"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "x": 5,
-              "y": 0,
-              "width": 5,
-              "height": 7,
+              "width": 6,
+              "height": 6,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-1"
@@ -1374,126 +1265,35 @@
           {
             "kind": "GridLayoutItem",
             "spec": {
-              "x": 10,
+              "x": 6,
               "y": 0,
-              "width": 14,
-              "height": 7,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-17"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "x": 0,
-              "y": 7,
-              "width": 5,
-              "height": 7,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-15"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "x": 5,
-              "y": 7,
               "width": 6,
-              "height": 7,
+              "height": 6,
               "element": {
                 "kind": "ElementReference",
-                "name": "panel-20"
+                "name": "panel-3"
               }
             }
           },
           {
             "kind": "GridLayoutItem",
             "spec": {
-              "x": 11,
-              "y": 7,
-              "width": 5,
-              "height": 7,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-16"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "x": 16,
-              "y": 7,
-              "width": 8,
-              "height": 7,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-21"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "x": 0,
-              "y": 14,
-              "width": 5,
-              "height": 7,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-10"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "x": 5,
-              "y": 14,
+              "x": 12,
+              "y": 0,
               "width": 6,
-              "height": 7,
+              "height": 6,
               "element": {
                 "kind": "ElementReference",
-                "name": "panel-18"
+                "name": "panel-5"
               }
             }
           },
           {
             "kind": "GridLayoutItem",
             "spec": {
-              "x": 11,
-              "y": 14,
-              "width": 5,
-              "height": 7,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-11"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "x": 16,
-              "y": 14,
-              "width": 8,
-              "height": 7,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-19"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "x": 0,
-              "y": 21,
-              "width": 7,
+              "x": 18,
+              "y": 0,
+              "width": 6,
               "height": 6,
               "element": {
                 "kind": "ElementReference",
@@ -1504,13 +1304,91 @@
           {
             "kind": "GridLayoutItem",
             "spec": {
-              "x": 7,
-              "y": 21,
-              "width": 7,
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 7,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-2"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 7,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-8"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 13,
+              "width": 12,
+              "height": 6,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-9"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 12,
+              "y": 13,
+              "width": 12,
               "height": 6,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-14"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 19,
+              "width": 10,
+              "height": 6,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-15"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 10,
+              "y": 19,
+              "width": 6,
+              "height": 6,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-13"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 16,
+              "y": 19,
+              "width": 8,
+              "height": 6,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-11"
               }
             }
           }
@@ -1541,7 +1419,7 @@
       "hideTimepicker": false,
       "fiscalYearStartMonth": 0
     },
-    "title": "Infrastructure",
+    "title": "Batch Ingester Module",
     "variables": [],
     "preferences": {
       "layout": {

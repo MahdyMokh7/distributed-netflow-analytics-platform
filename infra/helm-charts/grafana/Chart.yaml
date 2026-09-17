@@ -2,5 +2,5 @@ apiVersion: v2
 name: grafana
 description: Helm chart for Grafana, dashboards and datasource provisioned as code from git — nothing depends on manual UI state
 type: application
-version: 0.1.0
-appVersion: "1.0"
+version: 0.2.0
+appVersion: "13.2.1"

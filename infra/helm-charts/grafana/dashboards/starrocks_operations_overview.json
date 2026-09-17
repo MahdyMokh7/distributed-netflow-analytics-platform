@@ -43,7 +43,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffxpopvzb6zgge"
+                        "name": "starrocks"
                       },
                       "group": "mysql",
                       "kind": "DataQuery",
@@ -203,7 +203,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffxpopvzb6zgge"
+                        "name": "starrocks"
                       },
                       "group": "mysql",
                       "kind": "DataQuery",
@@ -301,7 +301,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffxpopvzb6zgge"
+                        "name": "starrocks"
                       },
                       "group": "mysql",
                       "kind": "DataQuery",
@@ -396,7 +396,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffxpopvzb6zgge"
+                        "name": "starrocks"
                       },
                       "group": "mysql",
                       "kind": "DataQuery",
@@ -495,7 +495,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffxpopvzb6zgge"
+                        "name": "starrocks"
                       },
                       "group": "mysql",
                       "kind": "DataQuery",
@@ -598,7 +598,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffxpopvzb6zgge"
+                        "name": "starrocks"
                       },
                       "group": "mysql",
                       "kind": "DataQuery",
@@ -767,7 +767,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffxpopvzb6zgge"
+                        "name": "starrocks"
                       },
                       "group": "mysql",
                       "kind": "DataQuery",
@@ -878,7 +878,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffxpopvzb6zgge"
+                        "name": "starrocks"
                       },
                       "group": "mysql",
                       "kind": "DataQuery",
@@ -1026,7 +1026,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffxpopvzb6zgge"
+                        "name": "starrocks"
                       },
                       "group": "mysql",
                       "kind": "DataQuery",
@@ -1133,7 +1133,7 @@
                     "hidden": false,
                     "query": {
                       "datasource": {
-                        "name": "ffxpopvzb6zgge"
+                        "name": "starrocks"
                       },
                       "group": "mysql",
                       "kind": "DataQuery",

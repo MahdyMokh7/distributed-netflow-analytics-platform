@@ -1,0 +1,204 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: Batch Processor
+    folder: Nimbyte
+    interval: 1m
+    rules:
+      - uid: nimbo-batch-processor-down
+        title: BatchProcessorDown
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: 1 - min(up{job="batch-processor"}) or vector(1)
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator: {params: [0], type: gt}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {params: [], type: last}
+                  type: query
+        noDataState: Alerting
+        execErrState: Error
+        for: 2m
+        labels: {module: batch-processor, severity: critical}
+        annotations:
+          summary: Batch processor metrics endpoint is unavailable
+          description: Prometheus has no batch processor target or has been unable to scrape it for two minutes.
+
+      - uid: nimbo-batch-processor-run-failed
+        title: BatchProcessorRunFailed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 1800, to: 0}
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: increase(batch_processor_runs_total{job="batch-processor",outcome="failed"}[30m])
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator: {params: [0], type: gt}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {params: [], type: last}
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 0s
+        labels: {module: batch-processor, severity: critical}
+        annotations:
+          summary: Batch processor run failed
+          description: At least one batch processor run failed during the last thirty minutes.
+
+      - uid: nimbo-batch-processor-run-stuck
+        title: BatchProcessorRunStuck
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: batch_processor_run_in_progress{job="batch-processor"}
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator: {params: [0], type: gt}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {params: [], type: last}
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 20m
+        labels: {module: batch-processor, severity: critical}
+        annotations:
+          summary: Batch processor run is taking too long
+          description: A batch processor run has remained active for more than twenty minutes.
+
+      - uid: nimbo-batch-processor-state-fallback
+        title: BatchProcessorStateFallbackActive
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: batch_processor_state_fallback_active{job="batch-processor"}
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator: {params: [0], type: gt}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {params: [], type: last}
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        labels: {module: batch-processor, severity: critical}
+        annotations:
+          summary: Batch processor state is not durable
+          description: Processed-file state is using the in-memory fallback instead of PostgreSQL.
+
+      - uid: nimbo-batch-processor-data-stale
+        title: BatchProcessorDataStale
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: (time() - batch_processor_last_processed_file_timestamp_seconds{job="batch-processor"}) and batch_processor_last_processed_file_timestamp_seconds{job="batch-processor"} > 0
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator: {params: [1800], type: gt}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {params: [], type: last}
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 10m
+        labels: {module: batch-processor, severity: warning}
+        annotations:
+          summary: Batch processor data watermark is stale
+          description: The newest durably processed Parquet file is more than thirty minutes old.
+
+      - uid: nimbo-batch-processor-postgres-retries
+        title: BatchProcessorPostgresRetriesHigh
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: sum(increase(batch_processor_postgres_retries_total{job="batch-processor"}[15m]))
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator: {params: [5], type: gt}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {params: [], type: last}
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 0s
+        labels: {module: batch-processor, severity: warning}
+        annotations:
+          summary: Batch processor PostgreSQL retries are elevated
+          description: More than five PostgreSQL write retries occurred during the last fifteen minutes.

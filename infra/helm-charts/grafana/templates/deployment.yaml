@@ -5,9 +5,9 @@ metadata:
   labels:
     app: grafana
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   strategy:
-    type: RollingUpdate
+    type: Recreate
   selector:
     matchLabels:
       app: grafana
@@ -21,13 +21,23 @@ spec:
         checksum/dashboards: {{ include (print $.Template.BasePath "/configmap-dashboards.yaml") . | sha256sum }}
         checksum/alerting: {{ include (print $.Template.BasePath "/configmap-alerting.yaml") . | sha256sum }}
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: grafana
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           envFrom:
             - secretRef:
-                name: grafana-admin
+                name: {{ .Values.adminSecret.name }}
+            {{- if .Values.starrocks.enabled }}
+            - secretRef:
+                name: {{ .Values.starrocks.secretName }}
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.containerPort }}
