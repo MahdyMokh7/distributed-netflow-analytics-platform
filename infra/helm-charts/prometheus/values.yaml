@@ -1,0 +1,47 @@
+image:
+  repository: zoraq.inside.sahab.ir:9462/prometheus
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+containerPort: 9090
+retention: 15d
+
+storage:
+  className: disk1     # your existing OpenEBS local-pv StorageClass, BasePath /mnt/disk1
+  size: 20Gi
+
+service:
+  type: LoadBalancer
+  port: 9090
+  loadBalancerIP: 10.10.61.73
+  annotations: {}
+  loadBalancerSourceRanges: []
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: prometheus
+  automountServiceAccountToken: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  runAsGroup: 65534
+  fsGroup: 65534
+  fsGroupChangePolicy: OnRootMismatch
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 2Gi

@@ -1,0 +1,325 @@
+global:
+  scrape_interval: 30s
+
+scrape_configs:
+
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - 'localhost:9090'
+
+  # NODE EXPORTERS
+  - job_name: node-exporters
+    static_configs:
+      - targets:
+        - '10.10.61.51:9100'
+        labels:
+          node: node1
+          instance: node1
+      - targets:
+        - '10.10.61.52:9100'
+        labels:
+          node: node2
+          instance: node2
+      - targets:
+        - '10.10.61.53:9100'
+        labels:
+          node: node3
+          instance: node3
+      - targets:
+        - '10.10.61.54:9100'
+        labels:
+          node: node4
+          instance: node4
+
+  - job_name: batch-ingester
+    metrics_path: /actuator/prometheus
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - '{{ .Release.Namespace }}'
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: batch-ingester
+        action: keep
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        regex: http
+        action: keep
+      - source_labels: [__meta_kubernetes_service_name]
+        target_label: application
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+
+  - job_name: batch-processor
+    metrics_path: /actuator/prometheus
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - '{{ .Release.Namespace }}'
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: batch-processor
+        action: keep
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        regex: http
+        action: keep
+      - source_labels: [__meta_kubernetes_service_name]
+        target_label: application
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+
+  - job_name: realtime
+    metrics_path: /actuator/prometheus
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - '{{ .Release.Namespace }}'
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: realtime
+        action: keep
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        regex: http
+        action: keep
+      - source_labels: [__meta_kubernetes_service_name]
+        target_label: application
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+
+  - job_name: rest-api
+    metrics_path: /api/actuator/prometheus
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - '{{ .Release.Namespace }}'
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: rest-api
+        action: keep
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        regex: http
+        action: keep
+      - source_labels: [__meta_kubernetes_service_name]
+        target_label: application
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+
+  # KAFKA
+  - job_name: kafka-brokers
+    static_configs:
+      - targets:
+        - '10.10.61.51:7071'
+        labels:
+          node: node1
+          instance: kafka-broker-1
+      - targets:
+        - '10.10.61.52:7071'
+        labels:
+          node: node2
+          instance: kafka-broker-2
+      - targets:
+        - '10.10.61.53:7071'
+        labels:
+          node: node3
+          instance: kafka-broker-3
+      - targets:
+        - '10.10.61.54:7071'
+        labels:
+          node: node4
+          instance: kafka-broker-4
+
+  - job_name: kafka-controllers
+    static_configs:
+      - targets:
+        - '10.10.61.52:19096'
+        labels:
+          node: node2
+          instance: kafka-controller-2
+      - targets:
+        - '10.10.61.53:19096'
+        labels:
+          node: node3
+          instance: kafka-controller-3
+      - targets:
+        - '10.10.61.54:19096'
+        labels:
+          node: node4
+          instance: kafka-controller-4
+
+  # SPARK
+  - job_name: spark-master
+    metrics_path: /metrics/master/prometheus/
+    static_configs:
+      - targets:
+        - 'spark-master.{{ .Release.Namespace }}.svc.cluster.local:8080'
+        labels:
+          instance: master
+
+  - job_name: spark-applications
+    metrics_path: /metrics/applications/prometheus/
+    static_configs:
+      - targets:
+        - 'spark-master.{{ .Release.Namespace }}.svc.cluster.local:8080'
+        labels:
+          instance: master
+
+  - job_name: spark-workers
+    metrics_path: /metrics/prometheus/
+    dns_sd_configs:
+      - names:
+          - 'spark-worker.{{ .Release.Namespace }}.svc.cluster.local'
+        type: A
+        port: 8081
+        refresh_interval: 30s
+
+  # STARROCKS
+  - job_name: starrocks-fe
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+        - '10.10.61.51:8030'
+        labels:
+          node: node1
+          instance: starrocks-fe-1
+      - targets:
+        - '10.10.61.52:8030'
+        labels:
+          node: node2
+          instance: starrocks-fe-2
+      - targets:
+        - '10.10.61.53:8030'
+        labels:
+          node: node3
+          instance: starrocks-fe-3
+      - targets:
+        - '10.10.61.54:8030'
+        labels:
+          node: node4
+          instance: starrocks-fe-4
+
+  - job_name: starrocks-be
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+        - '10.10.61.51:8040'
+        labels:
+          node: node1
+          instance: starrocks-be-1
+      - targets:
+        - '10.10.61.52:8040'
+        labels:
+          node: node2
+          instance: starrocks-be-2
+      - targets:
+        - '10.10.61.53:8040'
+        labels:
+          node: node3
+          instance: starrocks-be-3
+      - targets:
+        - '10.10.61.54:8040'
+        labels:
+          node: node4
+          instance: starrocks-be-4
+
+  # HDFS
+  - job_name: hdfs-namenodes
+    static_configs:
+      - targets:
+        - '10.10.61.51:18020'
+        labels:
+          node: node1
+          instance: hdfs-namenode-1
+      - targets:
+        - '10.10.61.52:18020'
+        labels:
+          node: node2
+          instance: hdfs-namenode-2
+      - targets:
+        - '10.10.61.53:18020'
+        labels:
+          node: node3
+          instance: hdfs-namenode-3
+
+  - job_name: hdfs-datanodes
+    static_configs:
+      - targets:
+        - '10.10.61.51:19866'
+        labels:
+          node: node1
+          instance: hdfs-datanode-1
+      - targets:
+        - '10.10.61.52:19866'
+        labels:
+          node: node2
+          instance: hdfs-datanode-2
+      - targets:
+        - '10.10.61.53:19866'
+        labels:
+          node: node3
+          instance: hdfs-datanode-3
+      - targets:
+        - '10.10.61.54:19866'
+        labels:
+          node: node4
+          instance: hdfs-datanode-4
+
+
+  # POSTGRES (HA - Patroni)
+  - job_name: postgresql
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'postgresql-postgresql-0.postgresql-postgresql-config:9187'
+        labels:
+          pod: postgresql-postgresql-0
+          instance: postgresql-0
+      - targets:
+          - 'postgresql-postgresql-1.postgresql-postgresql-config:9187'
+        labels:
+          pod: postgresql-postgresql-1
+          instance: postgresql-1
+      - targets:
+          - 'postgresql-postgresql-2.postgresql-postgresql-config:9187'
+        labels:
+          pod: postgresql-postgresql-2
+          instance: postgresql-2
+
+  - job_name: patroni
+    metrics_path: /metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'postgresql-postgresql-0.postgresql-postgresql-config:8000'
+        labels:
+          pod: postgresql-postgresql-0
+          cluster: postgresql
+      - targets:
+          - 'postgresql-postgresql-1.postgresql-postgresql-config:8000'
+        labels:
+          pod: postgresql-postgresql-1
+          cluster: postgresql
+      - targets:
+          - 'postgresql-postgresql-2.postgresql-postgresql-config:8000'
+        labels:
+          pod: postgresql-postgresql-2
+          cluster: postgresql
