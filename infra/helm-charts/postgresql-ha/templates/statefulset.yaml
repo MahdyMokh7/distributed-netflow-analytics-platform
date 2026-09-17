@@ -1,0 +1,150 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "postgresql.fullname" . }}
+  labels:
+    {{- include "postgresql.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "postgresql.fullname" . }}-config
+  replicas: {{ .Values.replicaCount }}
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      {{- include "postgresql.labels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "postgresql.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "postgresql.fullname" . }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: ["postgresql"]
+                  - key: cluster-name
+                    operator: In
+                    values: ["postgresql"]
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: postgresql
+          image: "{{ .Values.image.patroni }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: PATRONI_KUBERNETES_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: PATRONI_POSTGRESQL_CONNECT_ADDRESS
+              value: "$(PATRONI_KUBERNETES_POD_IP):5432"
+            - name: PATRONI_RESTAPI_CONNECT_ADDRESS
+              value: "$(PATRONI_KUBERNETES_POD_IP):8000"
+            - name: PATRONI_KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PATRONI_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: PATRONI_SUPERUSER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postgresql.fullname" . }}-auth
+                  key: superuser-password
+            - name: PATRONI_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postgresql.fullname" . }}-auth
+                  key: replication-password
+            - name: PATRONI_REWIND_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postgresql.fullname" . }}-auth
+                  key: rewind-password
+          ports:
+            - name: postgresql
+              containerPort: 5432
+            - name: patroni-api
+              containerPort: 8000
+          livenessProbe:
+            httpGet:
+              path: /liveness
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: {{ .Values.resources.postgresql.requests.cpu | quote }}
+              memory: {{ .Values.resources.postgresql.requests.memory | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: config
+              mountPath: /etc/patroni/patroni.yml
+              subPath: patroni.yml
+              readOnly: true
+            - name: dshm
+              mountPath: /dev/shm
+
+        - name: postgresql-exporter
+          image: "{{ .Values.image.postgresExporter }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --log.format
+            - json
+          env:
+            - name: DATA_SOURCE_URI
+              value: "localhost:5432/postgres?sslmode=disable"
+            - name: DATA_SOURCE_USER
+              value: "postgres"
+            - name: DATA_SOURCE_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postgresql.fullname" . }}-auth
+                  key: superuser-password
+          ports:
+            - name: prometheus
+              containerPort: 9187
+          resources:
+            requests:
+              cpu: {{ .Values.resources.exporter.requests.cpu | quote }}
+              memory: {{ .Values.resources.exporter.requests.memory | quote }}
+
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "postgresql.fullname" . }}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.storage.className }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}

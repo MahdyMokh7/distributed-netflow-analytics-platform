@@ -1,0 +1,6 @@
+apiVersion: v2
+name: postgresql
+description: HA Postgres (Patroni-managed), our own image, no infra-team operator
+type: application
+version: 0.1.0
+appVersion: "16.0.0"

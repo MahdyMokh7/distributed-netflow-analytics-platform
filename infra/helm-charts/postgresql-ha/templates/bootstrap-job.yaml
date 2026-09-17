@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "postgresql.fullname" . }}-bootstrap
+  labels:
+    {{- include "postgresql.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: bootstrap
+          image: "{{ .Values.image.patroni }}"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postgresql.fullname" . }}-auth
+                  key: superuser-password
+            - name: APP_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.appDatabase.existingSecretName }}
+                  key: {{ .Values.appDatabase.usernameKey }}
+            - name: APP_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.appDatabase.existingSecretName }}
+                  key: {{ .Values.appDatabase.passwordKey }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              psql -h {{ include "postgresql.fullname" . }}-master -U postgres <<SQL
+              SELECT 'CREATE DATABASE {{ .Values.appDatabase.databaseName }}'
+              WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{{ .Values.appDatabase.databaseName }}')\gexec
+
+              DO \$\$
+              BEGIN
+                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${APP_DB_USER}') THEN
+                  EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', '${APP_DB_USER}', '${APP_DB_PASSWORD}');
+                END IF;
+              END
+              \$\$;
+
+              GRANT ALL PRIVILEGES ON DATABASE {{ .Values.appDatabase.databaseName }} TO "${APP_DB_USER}";
+              SQL

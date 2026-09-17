@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "postgresql.fullname" . | trimSuffix "-postgresql" }}
+  labels:
+    {{- include "postgresql.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "postgresql.labels" . | nindent 4 }}
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "postgresql.fullname" . }}-master
+  labels:
+    {{- include "postgresql.labels" . | nindent 4 }}
+  annotations:
+    metallb.universe.tf/address-pool: {{ .Values.service.metallbPoolName }}
+spec:
+  type: LoadBalancer
+  {{- if .Values.service.masterLoadBalancerIP }}
+  loadBalancerIP: {{ .Values.service.masterLoadBalancerIP }}
+  {{- end }}
+  selector:
+    {{- include "postgresql.labels" . | nindent 4 }}
+    role: master
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "postgresql.fullname" . }}-replica
+  labels:
+    {{- include "postgresql.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "postgresql.labels" . | nindent 4 }}
+    role: replica
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: patroni
+  labels:
+    {{- include "postgresql.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "postgresql.labels" . | nindent 4 }}
+  ports:
+    - name: patroni-api
+      port: 8000
+      targetPort: 8000
