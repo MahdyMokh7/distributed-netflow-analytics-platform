@@ -1,0 +1,11 @@
+[Unit]
+Description=StarRocks transparent huge page policy
+Before=starrocks-fe.service starrocks-be.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'for f in /sys/kernel/mm/transparent_hugepage/enabled /sys/kernel/mm/transparent_hugepage/defrag; do if test -f "$f"; then echo madvise > "$f"; fi; done'
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

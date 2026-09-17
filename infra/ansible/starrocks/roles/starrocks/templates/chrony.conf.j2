@@ -1,0 +1,14 @@
+# Managed by Ansible for the Nimbo cluster.
+{% for server in starrocks_ntp_servers %}
+server {{ server }} iburst
+{% endfor %}
+{% if not starrocks_ntp_servers %}
+{% for peer in groups['starrocks'] | map('extract', hostvars, 'starrocks_address') | reject('equalto', starrocks_address) | unique | sort %}
+peer {{ peer }} iburst minpoll 4 maxpoll 6
+{% endfor %}
+local stratum 10 orphan
+{% endif %}
+driftfile /var/lib/chrony/chrony.drift
+rtcsync
+makestep 1.0 3
+logdir /var/log/chrony

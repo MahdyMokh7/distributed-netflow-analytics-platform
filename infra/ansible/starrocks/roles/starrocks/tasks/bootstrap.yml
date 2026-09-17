@@ -1,0 +1,49 @@
+---
+- name: Import SQL topology context
+  ansible.builtin.import_tasks: context.yml
+
+- name: Start the initial frontend as a new cluster
+  ansible.builtin.systemd_service:
+    name: starrocks-fe
+    state: started
+    enabled: true
+    daemon_reload: true
+  # The launcher finds no metadata and no helper file, so start_fe.sh
+  # initializes a new cluster on this host.
+
+- name: Wait for the initial frontend to become healthy
+  ansible.builtin.uri:
+    url: "http://{{ starrocks_address }}:{{ starrocks_http_port }}/api/health"
+    method: GET
+    status_code: 200
+  register: starrocks_fe_health
+  until: starrocks_fe_health.status == 200
+  retries: "{{ starrocks_health_retries | int }}"
+  delay: "{{ starrocks_health_delay | int }}"
+  when: not ansible_check_mode
+
+- name: Import the live cluster state
+  ansible.builtin.import_tasks: cluster_state.yml
+
+- name: Secure the initial frontend root account
+  ansible.builtin.command:
+    argv:
+      - bash
+      - -euo
+      - pipefail
+      - -c
+      - |
+        pw=$(printf '%s' "$SR_NEWPW" | sed "s/'/''/g")
+        MYSQL_PWD="$SR_PW" mysql --connect-timeout=3 -h "{{ starrocks_sql_host }}" -P "{{ starrocks_connection.login_port }}" \
+          -u root -e "SET PASSWORD = PASSWORD('${pw}')" \
+          || MYSQL_PWD="$SR_PW" mysql --connect-timeout=3 -h "{{ starrocks_sql_host }}" -P "{{ starrocks_connection.login_port }}" \
+          -u root -e "ALTER USER 'root'@'%' IDENTIFIED BY '${pw}'"
+  environment:
+    SR_PW: "{{ starrocks_sql_pw }}"
+    SR_NEWPW: "{{ vault_starrocks_root_password }}"
+  changed_when: true
+  check_mode: false
+  no_log: true
+  when:
+    - (starrocks_sql_pw_idx | default('vault')) != 'vault'
+    - not ansible_check_mode

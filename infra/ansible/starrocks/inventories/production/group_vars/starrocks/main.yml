@@ -1,0 +1,12 @@
+---
+starrocks_bootstrap_host: team1-node1
+starrocks_client_cidrs:
+  - 10.10.61.0/24
+  - 10.244.0.0/16
+starrocks_ntp_servers: []
+
+vault_starrocks_root_password: "{{ lookup('env', 'STARROCKS_ROOT_PASSWORD') }}"
+vault_starrocks_writer_password: "{{ lookup('env', 'STARROCKS_WRITER_PASSWORD') }}"
+vault_starrocks_reader_password: "{{ lookup('env', 'STARROCKS_READER_PASSWORD') }}"
+vault_starrocks_previous_root_password: "{{ lookup('env', 'STARROCKS_PREVIOUS_ROOT_PASSWORD') }}"
+

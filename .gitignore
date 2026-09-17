@@ -61,6 +61,7 @@ terminal.log
 
 /docs/plan
 
+
 exporter.py
 temp.txt
 
@@ -107,6 +108,7 @@ temp.txt
 **/logs/
 *.log
 
-*.kilo
 .codex
 .agents
+*.kilo
+*.ansible

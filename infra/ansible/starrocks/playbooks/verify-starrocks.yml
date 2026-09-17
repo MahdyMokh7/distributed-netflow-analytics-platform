@@ -1,0 +1,10 @@
+---
+- name: Verify service and application readiness without mutations
+  hosts: starrocks
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Verify StarRocks
+      ansible.builtin.import_role:
+        name: starrocks
+        tasks_from: verify
