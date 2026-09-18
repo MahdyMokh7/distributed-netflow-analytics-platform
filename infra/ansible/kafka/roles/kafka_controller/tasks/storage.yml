@@ -5,11 +5,28 @@
   register: controller_meta
 
 
-- name: Format controller storage (only once, cluster-wide id)
+- name: Format the first controller's storage (bootstraps the dynamic quorum on its own)
   ansible.builtin.command:
     cmd: >
       {{ kafka_install_dir }}/bin/kafka-storage.sh format
       -t {{ kafka_cluster_id }}
+      --standalone
       -c {{ kafka_install_dir }}/config/controller.properties
   become_user: "{{ kafka_user }}"
-  when: not controller_meta.stat.exists
+  when:
+    - not controller_meta.stat.exists
+    - inventory_hostname == kafka_first_controller
+  changed_when: true
+
+- name: Format the other controllers' storage (join the quorum after starting)
+  ansible.builtin.command:
+    cmd: >
+      {{ kafka_install_dir }}/bin/kafka-storage.sh format
+      -t {{ kafka_cluster_id }}
+      --no-initial-controllers
+      -c {{ kafka_install_dir }}/config/controller.properties
+  become_user: "{{ kafka_user }}"
+  when:
+    - not controller_meta.stat.exists
+    - inventory_hostname != kafka_first_controller
+  changed_when: true

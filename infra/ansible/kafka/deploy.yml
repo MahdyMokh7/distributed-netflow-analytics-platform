@@ -1,0 +1,4 @@
+---
+- import_playbook: site.yml
+- import_playbook: smoke-test.yml
+- import_playbook: topics.yml

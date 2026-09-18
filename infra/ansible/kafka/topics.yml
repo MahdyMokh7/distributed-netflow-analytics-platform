@@ -1,0 +1,21 @@
+---
+- name: Create application topics
+  hosts: kafka_nodes
+  become: true
+  become_user: "{{ kafka_user }}"
+  run_once: true
+  tasks:
+    - name: Create topics
+      ansible.builtin.command:
+        cmd: >
+          {{ kafka_install_dir }}/bin/kafka-topics.sh --create --if-not-exists
+          --bootstrap-server {{ ansible_host }}:{{ kafka_broker_port }}
+          --topic {{ item.name }}
+          --partitions {{ item.partitions }}
+          --replication-factor {{ item.replication_factor }}
+          {% for k, v in (item.extra_config | default({})).items() %}--config {{ k }}={{ v }} {% endfor %}
+      loop: "{{ kafka_topics }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: topic_result
+      changed_when: "'Created topic' in (topic_result.stdout + topic_result.stderr)"

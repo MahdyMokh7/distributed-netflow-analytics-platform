@@ -1,4 +1,4 @@
-# Managed by Ansible — do not edit by hand.
+# Managed by Ansible.
 process.roles=broker
 node.id={{ broker_id }}
 
@@ -7,7 +7,7 @@ advertised.listeners=PLAINTEXT://{{ ansible_host }}:{{ kafka_broker_port }}
 listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 controller.listener.names=CONTROLLER
 
-controller.quorum.voters={{ kafka_quorum_voters }}
+controller.quorum.bootstrap.servers={{ kafka_quorum_bootstrap_servers }}
 
 log.dirs={{ kafka_broker_log_dir }}
 num.partitions={{ kafka_num_partitions }}
@@ -18,5 +18,4 @@ transaction.state.log.replication.factor={{ kafka_default_replication_factor }}
 transaction.state.log.min.isr={{ kafka_min_insync_replicas }}
 min.insync.replicas={{ kafka_min_insync_replicas }}
 
-# Matches the values your ingester/realtime configs already assume
 auto.create.topics.enable=false

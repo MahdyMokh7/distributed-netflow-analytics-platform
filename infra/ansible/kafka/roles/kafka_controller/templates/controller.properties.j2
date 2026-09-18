@@ -3,9 +3,10 @@ process.roles=controller
 node.id={{ controller_id }}
 
 listeners=CONTROLLER://0.0.0.0:{{ kafka_controller_port }}
+advertised.listeners=CONTROLLER://{{ ansible_host }}:{{ kafka_controller_port }}
 controller.listener.names=CONTROLLER
 listener.security.protocol.map=CONTROLLER:PLAINTEXT
 
-controller.quorum.voters={{ kafka_quorum_voters }}
+controller.quorum.bootstrap.servers={{ kafka_quorum_bootstrap_servers }}
 
 log.dirs={{ kafka_controller_log_dir }}

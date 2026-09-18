@@ -1,0 +1,59 @@
+---
+- name: Smoke test the cluster
+  hosts: kafka_nodes
+  become: true
+  become_user: "{{ kafka_user }}"
+  run_once: true
+  vars:
+    smoke_test_message: "ansible-smoke-test-{{ ansible_date_time.iso8601 }}"
+  tasks:
+    - name: Wait for broker to accept connections
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ kafka_broker_port }}"
+        timeout: 30
+      become: false
+
+    - name: Create smoke test topic
+      ansible.builtin.command:
+        cmd: >
+          {{ kafka_install_dir }}/bin/kafka-topics.sh --create --if-not-exists
+          --bootstrap-server {{ ansible_host }}:{{ kafka_broker_port }}
+          --topic {{ kafka_smoke_test_topic }}
+          --partitions 1 --replication-factor 1
+          --config min.insync.replicas=1
+      changed_when: true
+
+    - name: Produce a smoke test message
+      ansible.builtin.shell:
+        cmd: >
+          echo "{{ smoke_test_message }}" |
+          {{ kafka_install_dir }}/bin/kafka-console-producer.sh
+          --bootstrap-server {{ ansible_host }}:{{ kafka_broker_port }}
+          --topic {{ kafka_smoke_test_topic }}
+      changed_when: true
+
+    - name: Consume the smoke test message back
+      ansible.builtin.command:
+        cmd: >
+          {{ kafka_install_dir }}/bin/kafka-console-consumer.sh
+          --bootstrap-server {{ ansible_host }}:{{ kafka_broker_port }}
+          --topic {{ kafka_smoke_test_topic }}
+          --from-beginning --max-messages 1 --timeout-ms 15000
+      register: smoke_test_consume
+      changed_when: false
+
+    - name: Assert the round-tripped message matches what was produced
+      ansible.builtin.assert:
+        that:
+          - smoke_test_message in smoke_test_consume.stdout
+        fail_msg: "Smoke test failed: never got the produced message back from {{ kafka_smoke_test_topic }}"
+        success_msg: "Smoke test passed: produce/consume round-trip verified"
+
+    - name: Clean up smoke test topic
+      ansible.builtin.command:
+        cmd: >
+          {{ kafka_install_dir }}/bin/kafka-topics.sh --delete
+          --bootstrap-server {{ ansible_host }}:{{ kafka_broker_port }}
+          --topic {{ kafka_smoke_test_topic }}
+      changed_when: true

@@ -1,0 +1,50 @@
+---
+- name: Join this controller to the dynamic quorum
+  when: inventory_hostname != kafka_first_controller
+  become_user: "{{ kafka_user }}"
+  block:
+    - name: Wait for this controller to accept connections
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ kafka_controller_port }}"
+        timeout: 30
+      become: false
+
+    - name: Wait until the quorum has an elected leader
+      ansible.builtin.command:
+        cmd: >
+          {{ kafka_install_dir }}/bin/kafka-metadata-quorum.sh
+          --bootstrap-controller {{ hostvars[kafka_first_controller].ansible_host }}:{{ kafka_controller_port }}
+          describe --status
+      register: quorum_status
+      until: quorum_status.stdout is search('LeaderId:\s+[0-9]+')
+      retries: 10
+      delay: 3
+      changed_when: false
+
+    - name: Check whether this controller is already a voter
+      ansible.builtin.shell:
+        cmd: >
+          {{ kafka_install_dir }}/bin/kafka-metadata-quorum.sh
+          --command-config {{ kafka_install_dir }}/config/controller.properties
+          --bootstrap-controller {{ hostvars[kafka_first_controller].ansible_host }}:{{ kafka_controller_port }}
+          describe --status
+          | sed -n '/CurrentVoters:/,/CurrentObservers:/{/CurrentObservers:/!p}'
+          | grep -E '"id":[[:space:]]*{{ controller_id }}[,}]'
+      register: voter_check
+      failed_when: false
+      changed_when: false
+
+    - name: Add this controller as a voter
+      ansible.builtin.command:
+        cmd: >
+          {{ kafka_install_dir }}/bin/kafka-metadata-quorum.sh
+          --command-config {{ kafka_install_dir }}/config/controller.properties
+          --bootstrap-controller {{ hostvars[kafka_first_controller].ansible_host }}:{{ kafka_controller_port }}
+          add-controller
+      when: voter_check.rc != 0
+      register: add_controller_result
+      retries: 5
+      delay: 5
+      until: add_controller_result.rc == 0
+      changed_when: true

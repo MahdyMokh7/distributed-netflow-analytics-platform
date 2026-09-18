@@ -10,3 +10,6 @@
 
 - name: Install and start controller service
   ansible.builtin.import_tasks: service.yml
+
+- name: Join this controller to the dynamic quorum
+  ansible.builtin.import_tasks: join_quorum.yml
