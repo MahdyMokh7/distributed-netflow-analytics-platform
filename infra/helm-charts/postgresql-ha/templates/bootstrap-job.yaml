@@ -36,7 +36,7 @@ spec:
             - -c
             - |
               set -eu
-              psql -h {{ include "postgresql.fullname" . }}-master -U postgres <<SQL
+              psql -h {{ include "postgresql.fullname" . }}-master -U postgres -v ON_ERROR_STOP=1 <<SQL
               SELECT 'CREATE DATABASE {{ .Values.appDatabase.databaseName }}'
               WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{{ .Values.appDatabase.databaseName }}')\gexec
 
@@ -49,4 +49,6 @@ spec:
               \$\$;
 
               GRANT ALL PRIVILEGES ON DATABASE {{ .Values.appDatabase.databaseName }} TO "${APP_DB_USER}";
+              \connect {{ .Values.appDatabase.databaseName }}
+              GRANT USAGE, CREATE ON SCHEMA public TO "${APP_DB_USER}";
               SQL

@@ -25,7 +25,6 @@ public class HdfsFileSystemConfig {
         configuration.set("fs.defaultFS", hdfsConfig.getUri());
         configuration.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
         configuration.set("fs.file.impl", LocalFileSystem.class.getName());
-        configuration.set("dfs.replication", "1");
 
         return FileSystem.get(
                 URI.create(hdfsConfig.getUri()),

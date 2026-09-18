@@ -52,7 +52,7 @@ probes:
 
 secret:
   enabled: false
-  existingName: rest-api-secret
+  existingName: batch-processor-secret
   data:
     DB_USERNAME: "CHANGE_ME"
     DB_PASSWORD: "CHANGE_ME"

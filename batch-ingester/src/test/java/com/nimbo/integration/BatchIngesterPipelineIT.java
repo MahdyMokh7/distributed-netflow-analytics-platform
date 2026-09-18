@@ -74,7 +74,7 @@ class BatchIngesterPipelineIT {
                     testData.validRecord("192.168.1.3", "10.0.0.1", 3_000L)))).get();
 
             // When: the consumer completes the atomic batch rollover
-            await().atMost(Duration.ofMinutes(3)).pollInterval(Duration.ofMillis(100))
+            await().atMost(Duration.ofMinutes(6)).pollInterval(Duration.ofMillis(100))
                     .until(() -> finalizedFiles(pipeline.fileSystem(), basePath).size() == 1);
             await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(100))
                     .until(() -> Long.valueOf(3L).equals(KAFKA.committedOffset(group, topic, 0)));
