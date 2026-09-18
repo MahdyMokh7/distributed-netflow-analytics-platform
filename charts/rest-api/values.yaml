@@ -10,9 +10,9 @@ springProfile: prod
 terminationGracePeriodSeconds: 30
 
 service:
-  type: NodePort
+  type: LoadBalancer
   port: 18083
-  nodePort: 30083
+  loadBalancerIP: 10.10.61.75
 
 resources:
   requests:

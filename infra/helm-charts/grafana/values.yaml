@@ -15,7 +15,7 @@ prometheus:
   datasourceUid: prometheus
 
 starrocks:
-  enabled: false
+  enabled: true
   host: 10.10.61.53
   port: 9030
   database: nimbo
