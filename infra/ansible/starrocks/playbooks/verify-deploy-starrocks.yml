@@ -6,5 +6,5 @@
   tasks:
     - name: Verify StarRocks
       ansible.builtin.import_role:
-        name: starrocks
+        name: nimbo_cluster
         tasks_from: verify

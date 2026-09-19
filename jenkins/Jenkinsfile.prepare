@@ -1,10 +1,12 @@
-def STATE_DIR = '/home/team1/.infra-prepare-state'
+def stateDir() {
+    return '/home/team1/.infra-prepare-state'
+}
 
 def lastSha(String component) {
-    def path = "${STATE_DIR}/${component}"
-    def exists = sh(script: "test -f ${path}", returnStatus: true) == 0
-    if (!exists) { return null }
-    return sh(script: "cat ${path}", returnStdout: true).trim()
+    def path = "${stateDir()}/${component}"
+    def exists = sh(script: "test -f '${path}'", returnStatus: true) == 0
+    if (!exists) {return null}
+    return sh(script: "cat '${path}'", returnStdout: true).trim()
 }
 
 def changed(String component, String pathPrefix) {
@@ -20,7 +22,10 @@ def headShortSha() {
 }
 
 def recordState(String component, String sha) {
-    sh "mkdir -p ${STATE_DIR} && echo '${sha}' > ${STATE_DIR}/${component}"
+    sh """
+        mkdir -p '${stateDir()}'
+        echo '${sha}' > '${stateDir()}/${component}'
+    """
 }
 
 pipeline {
@@ -38,7 +43,7 @@ pipeline {
 
     parameters {
         booleanParam(name: 'FORCE_ALL', defaultValue: false,
-                description: 'Run every stage regardless of what changed')
+            description: 'Run every stage regardless of what changed')
         password(name: 'ROOT_PASSWORD', defaultValue: '', description: 'Become/root password for the ansible-managed nodes ')
         password(name: 'STARROCKS_ROOT_PASSWORD', defaultValue: '', description: 'StarRocks root DB password')
         password(name: 'STARROCKS_WRITER_PASSWORD', defaultValue: '', description: 'StarRocks writer DB password')
@@ -66,7 +71,7 @@ pipeline {
                 withEnv(["ANSIBLE_BECOME_PASS=${params.ROOT_PASSWORD}"]) {
                     sh '''
                         cd infra/ansible/kafka
-                    
+
                         ansible-playbook \
                           -i inventory.ini \
                           deploy.yml
@@ -86,7 +91,7 @@ pipeline {
                         "STARROCKS_WRITER_PASSWORD=${params.STARROCKS_WRITER_PASSWORD}",
                         "STARROCKS_READER_PASSWORD=${params.STARROCKS_READER_PASSWORD}",
                         "STARROCKS_SUDO_PASSWORD=${params.STARROCKS_SUDO_PASSWORD}"
-                ]) {
+                    ]) {
                     sh '''
                         set -eu
 

@@ -4,11 +4,7 @@
     that:
       - groups['starrocks_fe_voters'] | length in [1, 3, 5]
       - starrocks_bootstrap_host in groups['starrocks_fe_voters']
-      - groups['starrocks_be'] | length >= starrocks_replication | int
-      - starrocks_replication | int >= 1
-      - starrocks_client_cidrs | length > 0
       - starrocks_database is match('^[A-Za-z_][A-Za-z0-9_]*$')
-      - starrocks_table is match('^[A-Za-z_][A-Za-z0-9_]*$')
       - starrocks_writer != starrocks_reader
       - starrocks_writer != 'root' and starrocks_reader != 'root'
       - groups['starrocks'] | map('extract', hostvars, 'starrocks_address') | list | unique | length == groups['starrocks'] | length

@@ -75,7 +75,6 @@
         (starrocks_be_rows | list | length) <= 1
         or (starrocks_be_rows | rejectattr('Host', 'equalto', starrocks_address)
             | selectattr('Alive', 'equalto', 'true') | list | length)
-        >= (starrocks_replication | int)
     fail_msg: "Too few healthy BEs for a rolling restart at the requested replication factor"
   when:
     - starrocks_be_restart

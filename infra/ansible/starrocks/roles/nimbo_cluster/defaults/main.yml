@@ -1,10 +1,11 @@
 ---
 starrocks_version: 4.0.12
 starrocks_archive_url:
-  "https://store.inside.sahab.ir/repository/Raw-Hosted-Nebula/dist/starrocks/StarRocks-4.0.12-ubuntu-amd64.tar.gz"
+  "https://store.inside.sahab.ir/repository/Raw-Hosted-Nebula/dist/starrocks/StarRocks-{{ starrocks_version }}-ubuntu-amd64.tar.gz"
 starrocks_user: starrocks
 starrocks_group: starrocks
 starrocks_install_dir: "/opt/StarRocks-{{ starrocks_version }}-ubuntu-amd64"
+
 starrocks_link: /opt/starrocks
 starrocks_mount: /mnt/disk1
 starrocks_meta_dir: "{{ starrocks_mount }}/starrocks_fe/meta"
@@ -14,7 +15,6 @@ starrocks_cache_dir: "{{ starrocks_mount }}/starrocks_archives"
 starrocks_java_home: /opt/jdk-17.0.6
 starrocks_fe_heap_mb: 2048
 starrocks_be_memory_limit: 30%
-starrocks_replication: 3
 starrocks_http_port: 8030
 starrocks_query_port: 9030
 starrocks_rpc_port: 9020
@@ -25,19 +25,15 @@ starrocks_brpc_port: 8060
 starrocks_heartbeat_port: 9050
 starrocks_starlet_port: 9070
 starrocks_database: nimbo
-starrocks_table: netflow_realtime
 starrocks_writer: nimbo_realtime
 starrocks_reader: nimbo_rest_api
 starrocks_account_host: "%"
-# Database-level privilege for the writer role. The realtime app executes
-# CREATE TABLE IF NOT EXISTS on startup, so it needs table creation on the DB.
-# Adjust the token if the target StarRocks version spells it differently.
+
 starrocks_writer_database_privilege: "CREATE TABLE"
 starrocks_min_free_bytes: 10737418240
 starrocks_health_retries: 60
 starrocks_health_delay: 5
-starrocks_ntp_servers:
-  - ntp.ubuntu.com
+
 starrocks_chrony_package: chrony
 starrocks_chrony_service: "{{ 'chrony' if ansible_facts.os_family == 'Debian' else 'chronyd' }}"
 starrocks_chrony_conf: "{{ '/etc/chrony/chrony.conf' if ansible_facts.os_family == 'Debian' else '/etc/chrony.conf' }}"
@@ -48,7 +44,6 @@ starrocks_manage_ufw: true
 starrocks_client_cidrs: []
 starrocks_bootstrap_host: "{{ groups['starrocks_fe_voters'][0] }}"
 starrocks_login_hosts: "{{ groups['starrocks_fe'] | map('extract', hostvars, 'starrocks_address') | list }}"
-starrocks_schema_dest: "/etc/starrocks/netflow-realtime.sql"
 starrocks_fe_ports:
   - "{{ starrocks_http_port }}"
   - "{{ starrocks_query_port }}"

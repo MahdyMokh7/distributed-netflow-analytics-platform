@@ -43,6 +43,7 @@
     - "{{ starrocks_log_dir }}"
     - "{{ starrocks_log_dir }}/fe"
     - "{{ starrocks_log_dir }}/be"
+  no_log: true
 
 - name: Ensure preserved files are owned by the service account
   ansible.builtin.file:
@@ -101,9 +102,6 @@
     path: "{{ starrocks_install_dir }}"
     owner: "{{ starrocks_user }}"
     group: "{{ starrocks_group }}"
-    recurse: true
-
-
 
 - name: Record successful extraction
   ansible.builtin.copy:
@@ -114,12 +112,10 @@
     mode: '0644'
 
 - name: Link the active release
-  ansible.builtin.file:
+  file:
     src: "{{ starrocks_install_dir }}"
     dest: "{{ starrocks_link }}"
     state: link
-    owner: root
-    group: root
 
 - name: Create the application configuration directory
   ansible.builtin.file:

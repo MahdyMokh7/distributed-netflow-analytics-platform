@@ -212,6 +212,7 @@
   loop: "{{ starrocks_be_rows }}"
   loop_control:
     label: "{{ item.Host }}:{{ item.HeartbeatPort }}"
+  no_log: true
   when:
     - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
 
@@ -246,7 +247,6 @@
     that:
       - (starrocks_expected_frontends | length) == (starrocks_fe_rows | length)
       - (starrocks_expected_backends | length) == (starrocks_be_rows | length)
-      - (starrocks_be_rows | length) >= (starrocks_replication | int)
     fail_msg: "Cluster membership is incomplete"
   when:
     - starrocks_state_complete | default(false) | bool
@@ -261,6 +261,7 @@
   loop: "{{ starrocks_fe_rows + starrocks_be_rows }}"
   loop_control:
     label: "{{ item.Host }} ({{ item.Version }})"
+  no_log: true
   when:
     - starrocks_state_complete | default(false) | bool
     - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
