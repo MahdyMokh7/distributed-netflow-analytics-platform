@@ -1,0 +1,115 @@
+apiVersion: 1
+groups:
+    - orgId: 1
+      name: starrocks
+      folder: Nimbyte
+      interval: 1m
+      rules:
+        - uid: dfyq0zdm278cgc
+          title: High compaction pressure alert
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: starrocks
+              model:
+                dataset: nimbo
+                datasource:
+                    type: mysql
+                    uid: starrocks
+                editorMode: code
+                format: table
+                hide: false
+                instant: true
+                intervalMs: 1000
+                maxDataPoints: 43200
+                rawQuery: true
+                rawSql: |-
+                    SELECT
+                        MAX(CANDIDATE_MAX_SCORE) AS compaction_score
+                    FROM information_schema.be_compactions;
+                refId: A
+                sql:
+                    columns:
+                        - parameters: []
+                          type: function
+                    groupBy:
+                        - property:
+                            type: string
+                          type: groupBy
+                    limit: 50
+            - refId: reducer
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: []
+                      reducer:
+                        params: []
+                        type: avg
+                      type: query
+                datasource:
+                    name: Expression
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                reducer: last
+                refId: reducer
+                type: reduce
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 100
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: reducer
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: NoData
+          execErrState: Error
+          for: 1m
+          keepFiringFor: 5m
+          annotations:
+            StarRocks compaction pressure is high: |-
+                Backend compaction candidate score is above threshold.
+
+                Current value: {{ $values.A }}
+                Check:
+                - information_schema.be_compactions
+                - BE CPU
+                - ingestion rate
+                - disk usage
+          labels:
+            severity: warning
+          isPaused: false
+          notification_settings:
+            receiver: empty

@@ -1,0 +1,306 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Overview — Node Exporters
+    folder: Nimbyte
+    interval: 1m
+
+    rules:
+
+      - uid: efxtbuesbtvk0c
+        title: Node Disk Usage High
+        condition: C
+
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: afx57iu9wr0n4a
+            model:
+              editorMode: code
+              expr: |-
+                100 * (
+                  1 -
+                  node_filesystem_avail_bytes{
+                    job="node-exporters",
+                    mountpoint="/",
+                    fstype!~"tmpfs|overlay"
+                  }
+                  /
+                  node_filesystem_size_bytes{
+                    job="node-exporters",
+                    mountpoint="/",
+                    fstype!~"tmpfs|overlay"
+                  }
+                )
+              instant: true
+              intervalMs: 1000
+              legendFormat: '{{node}}'
+              maxDataPoints: 43200
+              range: false
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 95
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+
+        annotations:
+          description: |-
+            Root filesystem usage is above 95%.
+            Node: {{ $labels.node }}
+          summary: Disk usage above 95% on {{ $labels.node }}
+
+        labels:
+          service: node-exporter
+          severity: warning
+
+        isPaused: false
+
+        notification_settings:
+          receiver: empty
+
+
+      - uid: dfxtap656fb40d
+        title: Node Exporter Down
+        condition: C
+
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: afx57iu9wr0n4a
+            model:
+              editorMode: code
+              expr: up{job="node-exporters"}
+              instant: true
+              intervalMs: 1000
+              legendFormat: '{{node}}'
+              maxDataPoints: 43200
+              range: false
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+
+        annotations:
+          description: |-
+            Node exporter stopped responding.
+            Instance: {{ $labels.node }}
+          summary: Node exporter is down
+
+        labels:
+          service: node-exporter
+          severity: critical
+
+        isPaused: false
+
+        notification_settings:
+          receiver: empty
+
+
+      - uid: afxtd3gf4rke8f
+        title: Node CPU Usage High
+        condition: C
+
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: afx57iu9wr0n4a
+            model:
+              editorMode: code
+              expr: |-
+                100 - (
+                  avg by (node) (
+                    rate(
+                      node_cpu_seconds_total{
+                        job="node-exporters",
+                        mode="idle"
+                      }[5m]
+                    )
+                  ) * 100
+                )
+              instant: true
+              intervalMs: 1000
+              legendFormat: '{{node}}'
+              maxDataPoints: 43200
+              range: false
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 95
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+
+        annotations:
+          description: |-
+            CPU usage has been above 95% for 5 minutes.
+            Node: {{ $labels.node }}
+          summary: CPU usage above 95% on {{ $labels.node }}
+
+        labels:
+          service: node-exporter
+          severity: warning
+
+        isPaused: false
+
+        notification_settings:
+          receiver: empty
+
+
+      - uid: ffxteecpdnym8a
+        title: Node Memory Usage High
+        condition: C
+
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: afx57iu9wr0n4a
+            model:
+              editorMode: code
+              expr: |-
+                100 * (
+                  1 -
+                  node_memory_MemAvailable_bytes{job="node-exporters"}
+                  /
+                  node_memory_MemTotal_bytes{job="node-exporters"}
+                )
+              instant: true
+              intervalMs: 1000
+              legendFormat: '{{node}}'
+              maxDataPoints: 43200
+              range: false
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 95
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+
+        annotations:
+          description: |-
+            RAM usage has been above 95% for 5 minutes.
+            Node: {{ $labels.node }}
+          summary: Memory usage above 95% on {{ $labels.node }}
+
+        labels:
+          service: node-exporter
+          severity: warning
+
+        isPaused: false
+
+        notification_settings:
+          receiver: empty

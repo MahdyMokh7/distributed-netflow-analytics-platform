@@ -2,26 +2,7 @@
   "apiVersion": "dashboard.grafana.app/v2",
   "kind": "Dashboard",
   "metadata": {
-    "name": "adn7wsd",
-    "namespace": "default",
-    "uid": "2296424c-aea4-4e1a-8eae-1aa1449196b8",
-    "resourceVersion": "1789754415252985",
-    "generation": 1,
-    "creationTimestamp": "2026-09-18T18:00:15Z",
-    "labels": {
-      "grafana.app/deprecatedInternalID": "2330986813206528"
-    },
-    "annotations": {
-      "grafana.app/createdBy": "access-policy:service",
-      "grafana.app/folder": "efyndbnk2h3wge",
-      "grafana.app/managedBy": "classic-file-provisioning",
-      "grafana.app/managerId": "nimbo-dashboards",
-      "grafana.app/sourceChecksum": "73901534aefd2a7b398e28faae603bb0",
-      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/batch_Ingester_module.json",
-      "grafana.app/sourceTimestamp": "1789739416000",
-      "grafana.app/folderTitle": "Nimbyte",
-      "grafana.app/folderUrl": "/dashboards/f/efyndbnk2h3wge/nimbyte"
-    }
+    "name": "adn7wsd"
   },
   "spec": {
     "annotations": [
