@@ -1,0 +1,188 @@
+def STATE_DIR = '/home/team1/.infra-prepare-state'
+
+def lastSha(String component) {
+    def path = "${STATE_DIR}/${component}"
+    def exists = sh(script: "test -f ${path}", returnStatus: true) == 0
+    if (!exists) { return null }
+    return sh(script: "cat ${path}", returnStdout: true).trim()
+}
+
+def changed(String component, String pathPrefix) {
+    if (params.FORCE_ALL) { return true }
+    def sha = lastSha(component)
+    if (sha == null) { return true }
+    def diff = sh(script: "git diff --name-only ${sha}..HEAD -- ${pathPrefix}", returnStdout: true).trim()
+    return diff.length() > 0
+}
+
+def headShortSha() {
+    return sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+}
+
+def recordState(String component, String sha) {
+    sh "mkdir -p ${STATE_DIR} && echo '${sha}' > ${STATE_DIR}/${component}"
+}
+
+pipeline {
+    agent {
+        label 'nimbo-nimbyte'
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        skipDefaultCheckout(true)
+        buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '10'))
+        timeout(time: 45, unit: 'MINUTES')
+    }
+
+    parameters {
+        booleanParam(name: 'FORCE_ALL', defaultValue: false,
+                description: 'Run every stage regardless of what changed')
+        password(name: 'ROOT_PASSWORD', defaultValue: '', description: 'Become/root password for the ansible-managed nodes ')
+        password(name: 'STARROCKS_ROOT_PASSWORD', defaultValue: '', description: 'StarRocks root DB password')
+        password(name: 'STARROCKS_WRITER_PASSWORD', defaultValue: '', description: 'StarRocks writer DB password')
+        password(name: 'STARROCKS_READER_PASSWORD', defaultValue: '', description: 'StarRocks reader DB password')
+        password(name: 'STARROCKS_SUDO_PASSWORD', defaultValue: '', description: 'StarRocks node sudo password')
+        string(name: 'KUBE_NAMESPACE', defaultValue: 'team1', description: 'Namespace for helm releases')
+    }
+
+    environment {
+        KUBECONFIG = '/home/team1/.kube/nimbo-deploy-config'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        // ---------------- Ansible ----------------
+
+        stage('Kafka (Ansible)') {
+            when { expression { changed('kafka', 'infra/ansible/kafka/') } }
+            steps {
+                withEnv(["ANSIBLE_BECOME_PASS=${params.ROOT_PASSWORD}"]) {
+                    sh '''
+                        cd infra/ansible/kafka
+                    
+                        ansible-playbook \
+                          -i inventory.ini \
+                          deploy.yml
+                    '''
+                }
+                script { env.RAN_KAFKA = 'true' }
+            }
+        }
+
+        stage('StarRocks (Ansible)') {
+            when { expression { changed('starrocks', 'infra/ansible/starrocks/') } }
+
+            steps {
+                withEnv([
+                        "ANSIBLE_BECOME_PASS=${params.ROOT_PASSWORD}",
+                        "STARROCKS_ROOT_PASSWORD=${params.STARROCKS_ROOT_PASSWORD}",
+                        "STARROCKS_WRITER_PASSWORD=${params.STARROCKS_WRITER_PASSWORD}",
+                        "STARROCKS_READER_PASSWORD=${params.STARROCKS_READER_PASSWORD}",
+                        "STARROCKS_SUDO_PASSWORD=${params.STARROCKS_SUDO_PASSWORD}"
+                ]) {
+                    sh '''
+                        set -eu
+
+                        if [ -f infra/ansible/starrocks/playbooks/starrocks.yml ]; then
+                            cd infra/ansible
+
+                            ansible-playbook \
+                              -i starrocks/inventories/production/hosts.yml \
+                              starrocks/playbooks/starrocks.yml
+                        else
+                            echo "infra/ansible/starrocks/playbooks/starrocks.yml not written yet, skipping."
+                        fi
+                    '''
+                }
+                script {
+                    env.RAN_STARROCKS = 'true'
+                }
+            }
+        }
+
+        // ---------------- Helm charts ----------------
+
+        stage('Postgres HA (Helm)') {
+            when {
+                expression {
+                    changed('postgresql-ha', 'infra/helm-charts/postgresql-ha/')
+                }
+            }
+            steps {
+                sh """
+                    set -eu
+                    helm upgrade --install postgresql-ha infra/helm-charts/postgresql-ha \
+                        --namespace ${params.KUBE_NAMESPACE} \
+                        --wait --timeout 5m
+                """
+                script { env.RAN_POSTGRES_CHART = 'true' }
+            }
+        }
+
+        stage('Spark (Helm)') {
+            when {
+                expression {
+                    changed('spark-chart', 'infra/helm-charts/spark/')
+                }
+            }
+            steps {
+                sh """
+                    set -eu
+                    helm upgrade --install spark infra/helm-charts/spark \
+                        --namespace ${params.KUBE_NAMESPACE} \
+                        --wait --timeout 5m
+                """
+                script { env.RAN_SPARK_CHART = 'true' }
+            }
+        }
+
+        stage('Prometheus (Helm)') {
+            when { expression { changed('prometheus', 'infra/helm-charts/prometheus/') } }
+            steps {
+                sh """
+                    set -eu
+                    helm upgrade --install prometheus infra/helm-charts/prometheus \
+                        --namespace ${params.KUBE_NAMESPACE} --wait --timeout 5m
+                """
+                script { env.RAN_PROMETHEUS = 'true' }
+            }
+        }
+
+        stage('Grafana (Helm)') {
+            when { expression { changed('grafana', 'infra/helm-charts/grafana/') } }
+            steps {
+                sh """
+                    set -eu
+                    helm upgrade --install grafana infra/helm-charts/grafana \
+                        --namespace ${params.KUBE_NAMESPACE} --wait --timeout 5m
+                """
+                script { env.RAN_GRAFANA = 'true' }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                def sha = headShortSha()
+                if (env.RAN_KAFKA == 'true')            { recordState('kafka', sha) }
+                if (env.RAN_STARROCKS == 'true')        { recordState('starrocks', sha) }
+                if (env.RAN_POSTGRES_CHART == 'true')   { recordState('postgresql-ha', sha) }
+                if (env.RAN_SPARK_CHART == 'true')      { recordState('spark-chart', sha) }
+                if (env.RAN_PROMETHEUS == 'true')       { recordState('prometheus', sha) }
+                if (env.RAN_GRAFANA == 'true')          { recordState('grafana', sha) }
+            }
+            echo 'infra-prepare finished -- only changed components ran, no git push involved.'
+        }
+        failure {
+            echo 'infra-prepare failed -- no state files were written, so next run still diffs against the last known-good state.'
+        }
+    }
+}
