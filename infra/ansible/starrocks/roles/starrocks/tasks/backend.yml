@@ -1,0 +1,125 @@
+---
+- name: Import SQL topology context
+  ansible.builtin.import_tasks: context.yml
+
+- name: Import the live cluster state
+  ansible.builtin.import_tasks: cluster_state.yml
+
+- name: Ensure StarRocks BE files are owned by starrocks
+  ansible.builtin.file:
+    path: /opt/starrocks/be
+    owner: starrocks
+    group: starrocks
+    recurse: true
+
+- name: Ensure the backend service is running
+  ansible.builtin.systemd_service:
+    name: starrocks-be
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for the backend to become healthy
+  ansible.builtin.uri:
+    url: "http://{{ starrocks_address }}:{{ starrocks_be_http_port }}/api/health"
+    method: GET
+    status_code: 200
+  register: starrocks_be_health
+  until: starrocks_be_health.status == 200
+  retries: "{{ starrocks_health_retries | int }}"
+  delay: "{{ starrocks_health_delay | int }}"
+  when: not ansible_check_mode
+
+- name: Register the backend with the cluster
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - --connect-timeout=3
+      - "-h{{ starrocks_sql_host }}"
+      - "-P{{ starrocks_connection.login_port }}"
+      - "-uroot"
+      - -e
+      - >-
+        ALTER SYSTEM ADD BACKEND
+        '{{ starrocks_address }}:{{ starrocks_heartbeat_port | int }}'
+  environment:
+    MYSQL_PWD: "{{ starrocks_sql_pw }}"
+  changed_when: true
+  check_mode: false
+  no_log: false
+  when:
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
+    - (starrocks_be_rows | selectattr('Host', 'equalto', starrocks_address) | list | length) == 0
+
+- name: Re-assert the backend service unit
+  ansible.builtin.template:
+    src: starrocks.service.j2
+    dest: /etc/systemd/system/starrocks-be.service
+    owner: root
+    group: root
+    mode: '0644'
+  vars:
+    starrocks_component: be
+  register: starrocks_be_unit
+
+- name: Determine whether the backend unit changed
+  ansible.builtin.set_fact:
+    starrocks_be_restart: >-
+      {{ (starrocks_be_unit.changed | bool)
+         or (starrocks_be_unit_changed | default(false) | bool) }}
+
+- name: Guard the rolling backend restart
+  ansible.builtin.assert:
+    that:
+      - >-
+        (starrocks_be_rows | list | length) <= 1
+        or (starrocks_be_rows | rejectattr('Host', 'equalto', starrocks_address)
+            | selectattr('Alive', 'equalto', 'true') | list | length)
+        >= (starrocks_replication | int)
+    fail_msg: "Too few healthy BEs for a rolling restart at the requested replication factor"
+  when:
+    - starrocks_be_restart
+    - starrocks_disk.has_be_data
+    - not ansible_check_mode
+
+- name: Restart the backend after its unit changed
+  ansible.builtin.systemd_service:
+    name: starrocks-be
+    state: restarted
+    daemon_reload: true
+  when:
+    - starrocks_be_restart
+    - starrocks_disk.has_be_data
+    - not ansible_check_mode
+
+- name: Clear the backend unit change record
+  ansible.builtin.set_fact:
+    starrocks_be_unit_changed: false
+
+- name: Verify the backend is alive in the cluster
+  ansible.builtin.command:
+    argv:
+      - bash
+      - -c
+      - |
+        MYSQL_PWD="$SR_PW" mysql --connect-timeout=3 -h "{{ starrocks_sql_host }}" -P "{{ starrocks_connection.login_port }}" \
+          -u root -e "SHOW BACKENDS" 2>/dev/null | awk '
+          BEGIN { FS = "\t" }
+          NR == 1 {
+            for (i = 1; i <= NF; i += 1) if ($i == "Alive") alive = i
+            for (i = 1; i <= NF; i += 1) if ($i == "Ip") { ip = i; break }
+            if (ip == "") for (i = 1; i <= NF; i += 1) if ($i == "IP" || $i == "Host") { ip = i; break }
+          }
+          ip != "" && alive != "" && $ip == h { print $alive }
+        ' h="{{ starrocks_address }}"
+  environment:
+    SR_PW: "{{ starrocks_sql_pw }}"
+  register: starrocks_be_ready
+  until: starrocks_be_ready.stdout | trim == 'true'
+  retries: 150
+  delay: 2
+  changed_when: false
+  check_mode: false
+  no_log: true
+  when:
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
