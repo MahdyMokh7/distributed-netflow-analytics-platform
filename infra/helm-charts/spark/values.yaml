@@ -8,6 +8,7 @@ fullnameOverride: spark
 
 master:
   replicas: 1
+  terminationGracePeriodSeconds: 60
 
   resources:
     requests:
@@ -19,8 +20,9 @@ master:
 
 worker:
   replicaCount: 4
+  terminationGracePeriodSeconds: 60
   cores: 4
-  memory: 6g
+  memory: 4g
   rpcPort: 7078
 
   resources:
@@ -29,16 +31,18 @@ worker:
       memory: 4Gi
     limits:
       cpu: "4"
-      memory: 8Gi
+      memory: 6Gi
 
   storage:
     hostPath: /mnt/disk1/spark/work
     mountPath: /opt/spark/work
+    workDirectory: /opt/spark/work
     localDirectory: /opt/spark/work/local
     initializePermissions: true
 
 historyServer:
   replicas: 1
+  terminationGracePeriodSeconds: 60
 
   resources:
     requests:
@@ -109,8 +113,6 @@ service:
       loadBalancerIP: 10.10.61.72
       annotations: {}
       loadBalancerSourceRanges: []
-
-terminationGracePeriodSeconds: 60
 
 affinity:
   workers:

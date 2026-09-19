@@ -31,7 +31,7 @@ spec:
 
     spec:
 
-      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.worker.terminationGracePeriodSeconds }}
 
       {{- if .Values.affinity.workers.enabled }}
       affinity:
@@ -56,7 +56,7 @@ spec:
           command:
             - sh
             - -c
-            - install -d -o spark -g spark -m 0750 {{ .Values.worker.storage.mountPath }} {{ .Values.worker.storage.localDirectory }}
+            - install -d -o spark -g spark -m 0750 {{ .Values.worker.storage.mountPath }} {{ .Values.worker.storage.workDirectory }} {{ .Values.worker.storage.localDirectory }}
           volumeMounts:
             - name: spark-work
               mountPath: {{ .Values.worker.storage.mountPath }}
@@ -98,7 +98,7 @@ spec:
               value: "{{ .Values.worker.memory }}"
 
             - name: SPARK_WORKER_DIR
-              value: {{ .Values.worker.storage.mountPath }}
+              value: {{ .Values.worker.storage.workDirectory }}
 
             - name: SPARK_LOCAL_DIRS
               value: {{ .Values.worker.storage.localDirectory }}

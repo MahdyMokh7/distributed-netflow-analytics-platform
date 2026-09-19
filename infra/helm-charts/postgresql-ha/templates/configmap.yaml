@@ -42,42 +42,12 @@ data:
       pgpass: /tmp/pgpass
       parameters:
         log_destination: jsonlog
-        logging_collector: on
-        log_statement: all
-        log_directory: /var/log/postgresql
-        log_filename: log
-        log_rotation_age: 0
-        log_rotation_size: 0
         effective_cache_size: 4GB
-        effective_io_concurrency: 1
-        max_parallel_maintenance_workers: 2
-        max_parallel_workers: 8
-        max_parallel_workers_per_gather: 2
-        max_wal_size: 1GB
-        min_wal_size: 80MB
-        reserved_connections: 0
         shared_buffers: 128MB
-        shared_preload_libraries: null
-        superuser_reserved_connections: 3
-        wal_buffers: 16MB
         wal_compression: "on"
-        work_mem: 4MB
 
     kubernetes:
       use_endpoints: true
       labels:
         app: postgresql
         cluster-name: postgresql
-
-    log:
-      type: json
-      format:
-        - asctime: timestamp
-        - message
-        - levelname: level
-        - module
-        - filename: file
-        - lineno: line_number
-      dateformat: "%Y-%m-%d %H:%M:%S.%03d %z"
-      static_fields:
-        app: patroni

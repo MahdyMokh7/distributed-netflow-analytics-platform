@@ -1105,8 +1105,8 @@
                   "calcs": [
                     "lastNotNull"
                   ],
-                  "fields": "",
-                  "values": false
+                  "fields": "/^jobs$/",
+                  "values": true
                 },
                 "sort": "desc",
                 "tooltip": {

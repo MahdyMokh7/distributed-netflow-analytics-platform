@@ -27,7 +27,7 @@ spec:
         component: history-server
 
     spec:
-      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.historyServer.terminationGracePeriodSeconds }}
       containers:
         - name: spark-history-server
 

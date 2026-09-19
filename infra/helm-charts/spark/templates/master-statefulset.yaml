@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 
 metadata:
   name: {{ include "spark.fullname" . }}-master
@@ -8,10 +8,11 @@ metadata:
     component: master
 
 spec:
+  serviceName: {{ include "spark.fullname" . }}-master-headless
   replicas: {{ .Values.master.replicas }}
 
-  strategy:
-    type: Recreate
+  updateStrategy:
+    type: RollingUpdate
 
   selector:
     matchLabels:
@@ -27,7 +28,7 @@ spec:
         component: master
 
     spec:
-      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.master.terminationGracePeriodSeconds }}
       containers:
         - name: spark-master
 
@@ -39,6 +40,16 @@ spec:
             - /opt/spark/sbin/start-master.sh
 
           env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: SPARK_MASTER_HOST
+              value: "$(POD_NAME).{{ include "spark.fullname" . }}-master-headless.$(POD_NAMESPACE).svc.cluster.local"
             - name: SPARK_NO_DAEMONIZE
               value: "true"
             - name: SPARK_MASTER_PORT
