@@ -17,7 +17,7 @@ import java.io.Serial;
 import java.io.Serializable;
 
 @Component
-public class JdbiDaoFactory implements Serializable {
+public class JdbiDaoFactory implements Serializable, AutoCloseable {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -49,6 +49,14 @@ public class JdbiDaoFactory implements Serializable {
             dataSource = new HikariDataSource(createHikariConfig());
         }
         return dataSource;
+    }
+
+    @Override
+    public synchronized void close() {
+        if (dataSource != null) {
+            dataSource.close();
+            dataSource = null;
+        }
     }
 
     HikariConfig createHikariConfig() {

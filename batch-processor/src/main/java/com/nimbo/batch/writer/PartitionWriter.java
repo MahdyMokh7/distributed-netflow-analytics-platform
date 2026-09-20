@@ -12,8 +12,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.BiFunction;
-import java.util.function.Supplier;
 
 @Slf4j
 public class PartitionWriter<T, D> implements Serializable {
@@ -26,7 +24,8 @@ public class PartitionWriter<T, D> implements Serializable {
     private final int maxRetryAttempts;
     private final long initialRetryDelayMs;
     private final long maxDelayMs;
-    private final SerializableSupplier<D> daoSupplier;
+    private final JdbiDaoFactory daoFactory;
+    private final SerializableFunction<JdbiDaoFactory, D> daoCreator;
     private final SerializableBiFunction<D, List<T>, int[]> upsertFunction;
     private final RowMapper<T> rowMapper;
     private final UUID batchId;
@@ -41,7 +40,8 @@ public class PartitionWriter<T, D> implements Serializable {
             int maxRetryAttempts,
             long initialRetryDelayMs,
             long maxDelayMs,
-            SerializableSupplier<D> daoSupplier,
+            JdbiDaoFactory daoFactory,
+            SerializableFunction<JdbiDaoFactory, D> daoCreator,
             SerializableBiFunction<D, List<T>, int[]> upsertFunction,
             RowMapper<T> rowMapper,
             UUID batchId,
@@ -55,7 +55,8 @@ public class PartitionWriter<T, D> implements Serializable {
         this.maxRetryAttempts = maxRetryAttempts;
         this.initialRetryDelayMs = initialRetryDelayMs;
         this.maxDelayMs = maxDelayMs;
-        this.daoSupplier = daoSupplier;
+        this.daoFactory = daoFactory;
+        this.daoCreator = daoCreator;
         this.upsertFunction = upsertFunction;
         this.rowMapper = rowMapper;
         this.batchId = batchId;
@@ -70,26 +71,28 @@ public class PartitionWriter<T, D> implements Serializable {
         int batchNumber = 0;
         List<T> batch = new ArrayList<>(batchSize);
 
-        // Create DAO once per partition
-        D dao = daoSupplier.get();
+        try {
+            D dao = daoCreator.apply(daoFactory);
+            while (partition.hasNext()) {
+                Row row = partition.next();
+                batch.add(rowMapper.map(row, batchId, ingestedAt));
 
-        while (partition.hasNext()) {
-            Row row = partition.next();
-            batch.add(rowMapper.map(row, batchId, ingestedAt));
+                if (batch.size() >= batchSize) {
+                    batchNumber++;
+                    log.info("Partition {} - Writing batch #{} ({} rows) to {}",
+                            partitionId, batchNumber, batch.size(), tableName);
+                    flushBatch(batch, dao);
+                }
+            }
 
-            if (batch.size() >= batchSize) {
+            if (!batch.isEmpty()) {
                 batchNumber++;
-                log.info("Partition {} - Writing batch #{} ({} rows) to {}",
+                log.info("Partition {} - Writing final batch #{} ({} rows) to {}",
                         partitionId, batchNumber, batch.size(), tableName);
                 flushBatch(batch, dao);
             }
-        }
-
-        if (!batch.isEmpty()) {
-            batchNumber++;
-            log.info("Partition {} - Writing final batch #{} ({} rows) to {}",
-                    partitionId, batchNumber, batch.size(), tableName);
-            flushBatch(batch, dao);
+        } finally {
+            daoFactory.close();
         }
     }
 
