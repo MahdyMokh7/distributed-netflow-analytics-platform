@@ -70,7 +70,7 @@ public class PostgresWriter implements Serializable {
                 TABLE_TRAFFIC_AGGREGATES,
                 Cube.TRAFFIC,
                 Stage.POSTGRES_TRAFFIC,
-                daoFactory::createTrafficDao,
+                JdbiDaoFactory::createTrafficDao,
                 TrafficAggregateDao::upsertBatch,
                 rowMapper::toTrafficAggregate
         );
@@ -84,7 +84,7 @@ public class PostgresWriter implements Serializable {
                 TABLE_CONNECTION_AGGREGATES,
                 Cube.CONNECTION,
                 Stage.POSTGRES_CONNECTION,
-                daoFactory::createConnectionDao,
+                JdbiDaoFactory::createConnectionDao,
                 ConnectionAggregateDao::upsertBatch,
                 rowMapper::toConnectionAggregate
         );
@@ -98,7 +98,7 @@ public class PostgresWriter implements Serializable {
                 TABLE_PROTOCOL_USAGE_AGGREGATES,
                 Cube.PROTOCOL,
                 Stage.POSTGRES_PROTOCOL,
-                daoFactory::createProtocolDao,
+                JdbiDaoFactory::createProtocolDao,
                 ProtocolAggregateDao::upsertBatch,
                 rowMapper::toProtocolAggregate
         );
@@ -112,7 +112,7 @@ public class PostgresWriter implements Serializable {
                 TABLE_IP_BANDWIDTH_AGGREGATES,
                 Cube.TOP_IP,
                 Stage.POSTGRES_TOP_IP,
-                daoFactory::createIpBandwidthDao,
+                JdbiDaoFactory::createIpBandwidthDao,
                 IpBandwidthAggregateDao::upsertBatch,
                 rowMapper::toIpBandwidthAggregate
         );
@@ -125,7 +125,7 @@ public class PostgresWriter implements Serializable {
             String tableName,
             Cube cube,
             Stage writeStage,
-            SerializableSupplier<D> daoSupplier,
+            SerializableFunction<JdbiDaoFactory, D> daoCreator,
             SerializableBiFunction<D, List<T>, int[]> upsertFunction,
             RowMapper<T> rowMapperFn) {
 
@@ -144,7 +144,8 @@ public class PostgresWriter implements Serializable {
                 maxRetryAttempts,
                 initialRetryDelayMs,
                 maxDelayMs,
-                daoSupplier,
+                daoFactory,
+                daoCreator,
                 upsertFunction,
                 rowMapperFn,
                 batchId,
