@@ -8,7 +8,7 @@ public final class SqlConstants {
             "INSERT INTO traffic_aggregates (src_ip, window_start, window_end, " +
                     "in_bytes, out_bytes, in_packets, out_packets, record_count, " +
                     "batch_id, ingested_at) " +
-                    "VALUES (:srcIp, :windowStart, :windowEnd, :inBytes, :outBytes, " +
+                    "VALUES (CAST(:srcIp AS inet), :windowStart, :windowEnd, :inBytes, :outBytes, " +
                     ":inPackets, :outPackets, :recordCount, :batchId, :ingestedAt)";
 
     public static final String TRAFFIC_AGGREGATES_CONFLICT =
@@ -30,7 +30,7 @@ public final class SqlConstants {
             "INSERT INTO connection_aggregates (id, src_ip, dst_ip, window_start, window_end, " +
                     "in_bytes, out_bytes, in_packets, out_packets, " +
                     "batch_id, ingested_at) " +
-                    "VALUES (:id, :srcIp, :dstIp, :windowStart, :windowEnd, :inBytes, :outBytes, " +
+                    "VALUES (:id, CAST(:srcIp AS inet), CAST(:dstIp AS inet), :windowStart, :windowEnd, :inBytes, :outBytes, " +
                     ":inPackets, :outPackets, :batchId, :ingestedAt)";
 
     public static final String CONNECTION_AGGREGATES_CONFLICT =
@@ -76,7 +76,7 @@ public final class SqlConstants {
             "INSERT INTO ip_bandwidth_aggregates (ip, window_start, window_end, " +
                     "inbound_bytes, outbound_bytes, inbound_packets, outbound_packets, " +
                     "batch_id, ingested_at) " +
-                    "VALUES (:ip, :windowStart, :windowEnd, :inboundBytes, :outboundBytes, " +
+                    "VALUES (CAST(:ip AS inet), :windowStart, :windowEnd, :inboundBytes, :outboundBytes, " +
                     ":inboundPackets, :outboundPackets, :batchId, :ingestedAt)";
 
     public static final String IP_BANDWIDTH_AGGREGATES_CONFLICT =

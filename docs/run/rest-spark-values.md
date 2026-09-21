@@ -1,113 +1,127 @@
-All current REST endpoints are `GET` requests, so Swagger shows path and query fields—not a JSON request body.
-
-Open Swagger at:
-
-```text
-http://<rest-api-host>:8080/api/swagger-ui.html
-```
-
-Use this valid historical range in the examples:
-
-```text
-startTime = 2026-09-07T00:00:00Z
-endTime   = 2026-09-08T00:00:00Z
-```
-
-The end must be after the start, not in the future, and the range cannot exceed seven days.
+http://10.10.61.75:18083/api/swagger-ui/index.html#
 
 ## PostgreSQL batch-cube endpoints
 
-### `GET /traffic/{srcIp}`
-
-```text
-srcIp        = 70.192.246.222
-startTime    = 2026-09-07T00:00:00Z
-endTime      = 2026-09-08T00:00:00Z
-page         = 0
-size         = 20
-sortBy       = windowStart
-sortDirection = DESC
-```
-
-### `GET /traffic`
-
-```text
-srcIp        = 70.192.246.222
-startTime    = 2026-09-07T00:00:00Z
-endTime      = 2026-09-08T00:00:00Z
-page         = 0
-size         = 20
-sortBy       = inBytes
-sortDirection = DESC
-```
-
-Leave `srcIp` empty to list traffic for every source IP.
-
-### `GET /connections/{ip}`
-
-```text
-ip           = 70.192.246.222
-startTime    = 2026-09-07T00:00:00Z
-endTime      = 2026-09-08T00:00:00Z
-page         = 0
-size         = 20
-sortBy       = windowStart
-sortDirection = DESC
-```
-
-The IP can match either `src_ip` or `dst_ip`.
-
-### `GET /connections`
-
-```text
-srcIp        = 10.0.0.1
-dstIp        = 10.0.0.2
-startTime    = 2026-09-07T00:00:00Z
-endTime      = 2026-09-08T00:00:00Z
-page         = 0
-size         = 20
-sortBy       = inBytes
-sortDirection = DESC
-```
-
-Either IP filter can be left empty.
 
 ### `GET /bandwidth/top`
 
 ```text
-limit     = 10
-startTime = 2026-09-07T00:00:00Z
-endTime   = 2026-09-08T00:00:00Z
+limit = 10
+{
+  "startTime": "2026-09-07T04:47:15.772Z",
+  "endTime": "2026-09-09T04:47:15.772Z"
+}
 ```
-
 Valid limit: `1–100`.
+
 
 ### `GET /bandwidth/{ip}`
 
 ```text
-ip        = 70.192.246.222
-startTime = 2026-09-07T00:00:00Z
-endTime   = 2026-09-08T00:00:00Z
+ip = 192.168.1.152
+{
+  "startTime": "2026-09-07T04:47:15.772Z",
+  "endTime": "2026-09-09T04:47:15.772Z"
+}
 ```
+
+
+### `GET /connections/{ip}`
+
+```text
+ip = 172.31.69.23
+{
+  "startTime": "2026-09-07T04:47:15.772Z",
+  "endTime": "2026-09-09T04:47:15.772Z"
+}
+{
+  "page": 0,
+  "size": 10,
+  "sortBy": "inBytes",
+  "sortDirection": "DESC"
+}
+```
+The IP can match either `src_ip` or `dst_ip`.
+
+
+### `GET /connections`
+
+```text
+srcIp = 172.31.69.23
+dstIp = 18.219.211.138
+{
+  "startTime": "2026-09-07T04:47:15.772Z",
+  "endTime": "2026-09-09T04:47:15.772Z"
+}
+{
+  "page": 0,
+  "size": 10,
+  "sortBy": "inBytes",
+  "sortDirection": "DESC"
+}
+```
+Either IP filter can be left empty.
+
 
 ### `GET /protocols`
 
 ```text
-startTime = 2026-09-07T00:00:00Z
-endTime   = 2026-09-08T00:00:00Z
+{
+  "startTime": "2026-09-07T04:47:15.772Z",
+  "endTime": "2026-09-09T04:47:15.772Z"
+}
 ```
+
 
 ### `GET /protocols/{l7Protocol}`
 
-UDP example:
+```text
+l7Protocol = 5.0
+{
+  "startTime": "2026-09-07T04:47:15.772Z",
+  "endTime": "2026-09-09T04:47:15.772Z"
+}
+```
+TCP would be `6.0` and UDP woudl be `5.0`.
+
+
+### `GET /traffic/{srcIp}`
 
 ```text
-l7Protocol = 17.0
-startTime  = 2026-09-07T00:00:00Z
-endTime    = 2026-09-08T00:00:00Z
+srcIp = 70.192.246.222
+{
+  "startTime": "2026-09-07T04:47:15.772Z",
+  "endTime": "2026-09-09T04:47:15.772Z"
+}
+{
+  "page": 0,
+  "size": 10,
+  "sortBy": "inBytes",
+  "sortDirection": "DESC"
+}
 ```
 
-TCP would be `6.0`.
+
+### `GET /traffic`
+
+```text
+srcIp = 70.192.246.222
+{
+  "startTime": "2026-09-07T04:47:15.772Z",
+  "endTime": "2026-09-09T04:47:15.772Z"
+}
+{
+  "page": 0,
+  "size": 10,
+  "sortBy": "inBytes",
+  "sortDirection": "DESC"
+}
+```
+Leave `srcIp` empty to list traffic for every source IP.
+
+
+
+
 
 ## StarRocks realtime endpoints
 
