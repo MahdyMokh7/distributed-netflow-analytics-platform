@@ -7,297 +7,203 @@ import org.springframework.stereotype.Service;
 @Service
 public class NetflowValidationService {
 
-    private static final String NULL_ERROR = " is null";
-    private static final String INVALID_IPV4_ERROR = " invalid IPv4: ";
+    private static final String FLOW_DURATION_MILLISECONDS = "FLOW_DURATION_MILLISECONDS";
 
     public ValidationResult validate(GenericRecord genericRecord) {
+
+        if (genericRecord == null) {
+            return ValidationResult.failure("Record is null");
+        }
 
         StringBuilder errors = new StringBuilder();
 
         checkIpv4(genericRecord, "IPV4_SRC_ADDR", errors);
         checkIpv4(genericRecord, "IPV4_DST_ADDR", errors);
 
-        checkRange(
-                genericRecord,
-                "L4_SRC_PORT",
-                0,
-                65535,
-                errors
-        );
 
-        checkRange(
-                genericRecord,
-                "L4_DST_PORT",
-                0,
-                65535,
-                errors
-        );
+        checkRange(genericRecord, "L4_SRC_PORT", 0, 65_535, errors);
+        checkRange(genericRecord, "L4_DST_PORT", 0, 65_535, errors);
 
-        checkNonNegative(
-                genericRecord,
-                "IN_BYTES",
-                errors
-        );
+        checkRange(genericRecord, "PROTOCOL", 0, 255, errors);
 
-        checkNonNegative(
-                genericRecord,
-                "OUT_BYTES",
-                errors
-        );
 
-        checkNonNegative(
-                genericRecord,
-                "IN_PKTS",
-                errors
-        );
+        checkRange(genericRecord, "MIN_TTL", 0, 255, errors);
+        checkRange(genericRecord, "MAX_TTL", 0, 255, errors);
 
-        checkNonNegative(
-                genericRecord,
-                "OUT_PKTS",
-                errors
-        );
 
-        checkRange(
-                genericRecord,
-                "MIN_TTL",
-                0,
-                255,
-                errors
-        );
+        checkRange(genericRecord, "MIN_IP_PKT_LEN", 0, 65_535, errors);
+        checkRange(genericRecord, "MAX_IP_PKT_LEN", 0, 65_535, errors);
 
-        checkRange(
-                genericRecord,
-                "MAX_TTL",
-                0,
-                255,
-                errors
-        );
 
-        checkMinMax(
-                genericRecord,
-                "MIN_TTL",
-                "MAX_TTL",
-                errors
-        );
+        checkRange(genericRecord, "ICMP_TYPE", 0, 65_535, errors);
+        checkRange(genericRecord, "ICMP_IPV4_TYPE", 0, 255, errors);
 
-        checkNonNegative(
-                genericRecord,
-                "LONGEST_FLOW_PKT",
-                errors
-        );
 
-        checkNonNegative(
-                genericRecord,
-                "SHORTEST_FLOW_PKT",
-                errors
-        );
+        checkRange(genericRecord, "DNS_QUERY_ID", 0, 65_535, errors);
+        checkRange(genericRecord, "DNS_QUERY_TYPE", 0, 65_535, errors);
 
-        checkMinMax(
-                genericRecord,
-                "SHORTEST_FLOW_PKT",
-                "LONGEST_FLOW_PKT",
-                errors
-        );
 
-        checkNonNegative(
-                genericRecord,
-                "MIN_IP_PKT_LEN",
-                errors
-        );
+        checkNonNegative(genericRecord, "IN_BYTES", errors);
+        checkNonNegative(genericRecord, "OUT_BYTES", errors);
 
-        checkNonNegative(
-                genericRecord,
-                "MAX_IP_PKT_LEN",
-                errors
-        );
+        checkNonNegative(genericRecord, "IN_PKTS", errors);
+        checkNonNegative(genericRecord, "OUT_PKTS", errors);
 
-        checkMinMax(
-                genericRecord,
-                "MIN_IP_PKT_LEN",
-                "MAX_IP_PKT_LEN",
-                errors
-        );
+
+        checkNonNegative(genericRecord, FLOW_DURATION_MILLISECONDS, errors);
+
+        checkNonNegative(genericRecord, "DURATION_IN", errors);
+        checkNonNegative(genericRecord, "DURATION_OUT", errors);
+
+
+        checkNonNegative(genericRecord, "LONGEST_FLOW_PKT", errors);
+        checkNonNegative(genericRecord, "SHORTEST_FLOW_PKT", errors);
+
+
+        checkMinMax(genericRecord, "MIN_TTL", "MAX_TTL", errors);
+        checkMinMax(genericRecord, "SHORTEST_FLOW_PKT", "LONGEST_FLOW_PKT", errors);
+        checkMinMax(genericRecord, "MIN_IP_PKT_LEN", "MAX_IP_PKT_LEN", errors);
+        checkMinMax(genericRecord, "DURATION_OUT", FLOW_DURATION_MILLISECONDS, errors);
+        checkMinMax(genericRecord, "DURATION_IN", FLOW_DURATION_MILLISECONDS, errors);
+
+        checkFiniteNonNegativeDouble(genericRecord, "L7_PROTO", errors);
 
         if (errors.isEmpty()) {
-            return ValidationResult.ok();
+            return ValidationResult.success();
         }
 
-        return ValidationResult.invalid(
-                errors.toString()
-        );
+        return ValidationResult.failure(errors.toString());
     }
 
-    private void checkNonNegative(
-            GenericRecord genericRecord,
-            String field,
-            StringBuilder errors
-    ) {
 
-        Object value = genericRecord.get(field);
+    private void checkNonNegative(GenericRecord record, String field, StringBuilder errors) {
 
-        if (value == null) {
-            addError(
-                    errors,
-                    field + NULL_ERROR
-            );
-            return;
-        }
+        Number value = number(record, field, errors);
 
-        long number =
-                ((Number) value).longValue();
-
-        if (number < 0) {
-            addError(
-                    errors,
-                    field
-                            + " is negative: "
-                            + number
-            );
+        if (value != null && value.longValue() < 0) {
+            addError(errors, field + " is negative: " + value);
         }
     }
 
-    private void checkRange(
-            GenericRecord genericRecord,
-            String field,
-            long min,
-            long max,
-            StringBuilder errors
-    ) {
 
-        Object value = genericRecord.get(field);
+    private void checkRange(GenericRecord record, String field, long min, long max, StringBuilder errors) {
+
+        Number value = number(record, field, errors);
 
         if (value == null) {
-            addError(
-                    errors,
-                    field + NULL_ERROR
-            );
             return;
         }
 
-        long number =
-                ((Number) value).longValue();
+        long number = value.longValue();
 
         if (number < min || number > max) {
-            addError(
-                    errors,
-                    field
-                            + " out of range: "
-                            + number
-            );
+            addError(errors, field + " out of range [" + min + ", " + max + "]: " + number);
         }
     }
 
-    private void checkMinMax(
-            GenericRecord genericRecord,
-            String minField,
-            String maxField,
-            StringBuilder errors
-    ) {
 
-        Object minObject =
-                genericRecord.get(minField);
+    private void checkMinMax(GenericRecord record, String minField, String maxField, StringBuilder errors) {
 
-        Object maxObject =
-                genericRecord.get(maxField);
+        Object minObject = record.get(minField);
+        Object maxObject = record.get(maxField);
 
-        if (minObject == null || maxObject == null) {
+        if (!(minObject instanceof Number min) || !(maxObject instanceof Number max)) {
             return;
         }
 
-        long min =
-                ((Number) minObject).longValue();
+        if (min.longValue() > max.longValue()) {
 
-        long max =
-                ((Number) maxObject).longValue();
-
-        if (min > max) {
-            addError(
-                    errors,
-                    minField
-                            + " > "
-                            + maxField
-                            + " ("
-                            + min
-                            + " > "
-                            + max
-                            + ")"
-            );
+            addError(errors, minField + " > " + maxField + " (" + min + " > " + max + ")");
         }
     }
 
-    private void checkIpv4(
-            GenericRecord genericRecord,
-            String field,
-            StringBuilder errors
-    ) {
+    private void checkFiniteNonNegativeDouble(GenericRecord record, String field, StringBuilder errors) {
 
-        Object value = genericRecord.get(field);
+        Number value = number(record, field, errors);
 
         if (value == null) {
-            addError(
-                    errors,
-                    field + NULL_ERROR
-            );
             return;
         }
 
-        String ip =
-                value.toString();
+        double number = value.doubleValue();
 
-        String[] parts =
-                ip.split("\\.", -1);
+        if (!Double.isFinite(number)) {
 
-        if (parts.length != 4) {
-            addError(
-                    errors,
-                    field
-                            + INVALID_IPV4_ERROR
-                            + ip
-            );
-            return;
-        }
+            addError(errors, field + " is not finite: " + number);
+        } else if (number < 0) {
 
-        try {
-            for (String part : parts) {
-
-                if (part.isEmpty()) {
-                    throw new NumberFormatException();
-                }
-
-                int number =
-                        Integer.parseInt(part);
-
-                if (number < 0 || number > 255) {
-                    addError(
-                            errors,
-                            field
-                                    + INVALID_IPV4_ERROR
-                                    + ip
-                    );
-                    return;
-                }
-            }
-
-        } catch (NumberFormatException e) {
-
-            addError(
-                    errors,
-                    field
-                            + INVALID_IPV4_ERROR
-                            + ip
-            );
+            addError(errors, field + " is negative: " + number);
         }
     }
 
-    private void addError(
-            StringBuilder errors,
-            String error
-    ) {
+
+    private Number number(GenericRecord record, String field, StringBuilder errors) {
+
+        Object value = record.get(field);
+        if (value == null) {
+
+            addError(errors, field + " is null");
+            return null;
+        }
+
+        if (!(value instanceof Number number)) {
+
+            addError(errors, field + " is not numeric");
+            return null;
+        }
+        return number;
+    }
+
+
+    private void checkIpv4(GenericRecord record, String field, StringBuilder errors) {
+
+        Object value = record.get(field);
+        if (value == null) {
+
+            addError(errors, field + " is null");
+            return;
+        }
+
+        String ip = value.toString();
+
+        String[] parts = ip.split("\\.", -1);
+
+        if (parts.length != 4) {
+
+            addInvalidIpv4(errors, field, ip);
+            return;
+        }
+
+
+        for (String part : parts) {
+
+            if (part.isEmpty() || part.length() > 3 || !part.chars().allMatch(Character::isDigit)) {
+
+                addInvalidIpv4(errors, field, ip);
+                return;
+            }
+
+            int number = Integer.parseInt(part);
+
+            if (number > 255) {
+
+                addInvalidIpv4(errors, field, ip);
+                return;
+            }
+        }
+    }
+
+
+    private void addInvalidIpv4(StringBuilder errors, String field, String ip) {
+        addError(errors, field + " invalid IPv4: " + ip);
+    }
+
+
+    private void addError(StringBuilder errors, String error) {
 
         if (!errors.isEmpty()) {
             errors.append(" | ");
         }
-
         errors.append(error);
     }
 }

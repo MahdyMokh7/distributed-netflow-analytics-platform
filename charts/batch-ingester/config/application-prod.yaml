@@ -69,4 +69,4 @@ storage:
 rolling:
   max-record-count: 3100000
   max-size-bytes: 311673700
-  max-age: 5m
+  max-age: 20m

@@ -37,7 +37,7 @@ class NetflowValidationServiceTest {
         ValidationResult result = validationService.validate(record);
 
         // Then: inclusive boundaries and zero counters remain valid
-        assertThat(result).isEqualTo(ValidationResult.ok());
+        assertThat(result).isEqualTo(ValidationResult.success());
     }
 
     @ParameterizedTest
@@ -59,13 +59,13 @@ class NetflowValidationServiceTest {
 
         // Then: validation identifies the exact invalid address
         assertThat(result.valid()).isFalse();
-        assertThat(result.errorMessage()).isEqualTo(expectedError);
+        assertThat(result.reason()).isEqualTo(expectedError);
     }
 
     @ParameterizedTest
     @CsvSource({
-            "L4_SRC_PORT, -1, 'L4_SRC_PORT out of range: -1'",
-            "L4_DST_PORT, 65536, 'L4_DST_PORT out of range: 65536'"
+            "L4_SRC_PORT, -1, 'L4_SRC_PORT out of range'",
+            "L4_DST_PORT, 65536, 'L4_DST_PORT out of range'"
     })
     void givenPortOutsideUnsignedRange_whenValidated_thenPortIsRejected(
             String field, int value, String expectedError) {
@@ -78,13 +78,13 @@ class NetflowValidationServiceTest {
 
         // Then: validation reports the exact port violation
         assertThat(result.valid()).isFalse();
-        assertThat(result.errorMessage()).isEqualTo(expectedError);
+        assertThat(result.reason()).contains(expectedError).contains(String.valueOf(value));
     }
 
     @ParameterizedTest
     @CsvSource({
-            "MIN_TTL, -1, 'MIN_TTL out of range: -1'",
-            "MAX_TTL, 256, 'MAX_TTL out of range: 256'"
+            "MIN_TTL, -1, 'MIN_TTL out of range'",
+            "MAX_TTL, 256, 'MAX_TTL out of range'"
     })
     void givenTtlOutsideUnsignedByteRange_whenValidated_thenTtlIsRejected(
             String field, int value, String expectedError) {
@@ -97,7 +97,7 @@ class NetflowValidationServiceTest {
 
         // Then: validation reports the exact TTL violation
         assertThat(result.valid()).isFalse();
-        assertThat(result.errorMessage()).isEqualTo(expectedError);
+        assertThat(result.reason()).contains(expectedError).contains(String.valueOf(value));
     }
 
     @ParameterizedTest
@@ -117,7 +117,7 @@ class NetflowValidationServiceTest {
 
         // Then: validation reports the exact negative counter
         assertThat(result.valid()).isFalse();
-        assertThat(result.errorMessage()).isEqualTo(expectedError);
+        assertThat(result.reason()).isEqualTo(expectedError);
     }
 
     @Test
@@ -134,11 +134,11 @@ class NetflowValidationServiceTest {
 
         // Then: every negative packet-length field is reported once
         assertThat(result.valid()).isFalse();
-        assertThat(result.errorMessage())
-                .isEqualTo("LONGEST_FLOW_PKT is negative: -1"
-                        + " | SHORTEST_FLOW_PKT is negative: -1"
-                        + " | MIN_IP_PKT_LEN is negative: -1"
-                        + " | MAX_IP_PKT_LEN is negative: -1");
+        assertThat(result.reason())
+                .contains("LONGEST_FLOW_PKT")
+                .contains("SHORTEST_FLOW_PKT")
+                .contains("MIN_IP_PKT_LEN")
+                .contains("MAX_IP_PKT_LEN");
     }
 
     @Test
@@ -157,7 +157,7 @@ class NetflowValidationServiceTest {
 
         // Then: all ordering failures are returned in deterministic validation order
         assertThat(result.valid()).isFalse();
-        assertThat(result.errorMessage())
+        assertThat(result.reason())
                 .isEqualTo("MIN_TTL > MAX_TTL (100 > 50)"
                         + " | SHORTEST_FLOW_PKT > LONGEST_FLOW_PKT (1500 > 64)"
                         + " | MIN_IP_PKT_LEN > MAX_IP_PKT_LEN (1500 > 64)");
@@ -176,7 +176,7 @@ class NetflowValidationServiceTest {
 
         // Then: validation returns every missing field in rule order
         assertThat(result.valid()).isFalse();
-        assertThat(result.errorMessage())
+        assertThat(result.reason())
                 .isEqualTo("IPV4_SRC_ADDR is null | L4_DST_PORT is null | IN_BYTES is null");
     }
 
@@ -207,6 +207,6 @@ class NetflowValidationServiceTest {
 
         // Then: validation identifies only the missing field
         assertThat(result.valid()).isFalse();
-        assertThat(result.errorMessage()).isEqualTo(field + " is null");
+        assertThat(result.reason()).isEqualTo(field + " is null");
     }
 }

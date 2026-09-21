@@ -2,7 +2,6 @@ package com.nimbo.storage.service.naming;
 
 import org.springframework.stereotype.Component;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -20,35 +19,31 @@ public final class FileNameGenerator {
     private static final DateTimeFormatter HOUR_FORMATTER =
             DateTimeFormatter.ofPattern("HH").withZone(ZoneOffset.UTC);
 
-    private final Clock clock;
     private final Supplier<UUID> uuidSupplier;
 
     public FileNameGenerator() {
-        this(Clock.systemUTC(), UUID::randomUUID);
+        this(UUID::randomUUID);
     }
 
-    FileNameGenerator(Clock clock, Supplier<UUID> uuidSupplier) {
-        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    FileNameGenerator(Supplier<UUID> uuidSupplier) {
         this.uuidSupplier = Objects.requireNonNull(uuidSupplier, "uuidSupplier must not be null");
     }
 
-    public String generateFileName(int partition) {
+    public String generateFileName(int partition, long kafkaTimestamp) {
+
         if (partition < 0) {
             throw new IllegalArgumentException("partition must not be negative");
         }
-        Instant openedAt = clock.instant();
+
+        Instant eventTime = Instant.ofEpochMilli(kafkaTimestamp);
         String fileName = String.format(
                 "netflow-p%02d-%s-%s.parquet",
                 partition,
-                TIMESTAMP_FORMATTER.format(openedAt),
+                TIMESTAMP_FORMATTER.format(eventTime),
                 uuidSupplier.get()
         );
-        return String.join(
-                "/",
-                DATE_FORMATTER.format(openedAt),
-                HOUR_FORMATTER.format(openedAt),
-                fileName
-        );
+
+        return String.join("/", DATE_FORMATTER.format(eventTime), HOUR_FORMATTER.format(eventTime), fileName);
     }
 
     public String generateTempFileName(String finalFileName) {

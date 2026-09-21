@@ -1,6 +1,5 @@
 package com.nimbo.batch.processor;
 
-import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.exception.BatchProcessingException;
@@ -8,14 +7,11 @@ import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.apache.spark.sql.functions.col;
@@ -79,7 +75,7 @@ public class TopIpProcessor extends BaseProcessor {
                         col(NETFLOW_IN_BYTES).alias(SPARK_INBOUND_BYTES),
                         col(NETFLOW_OUT_PKTS).alias(SPARK_OUTBOUND_PACKETS),
                         col(NETFLOW_IN_PKTS).alias(SPARK_INBOUND_PACKETS),
-                        timestamp_micros(col(NETFLOW_PROCESSING_TIME)).alias(NETFLOW_PROCESSING_TIME)
+                        timestamp_micros(col(NETFLOW_EVENT_TIME)).alias(NETFLOW_EVENT_TIME)
                 );
 
         Dataset<Row> dstPerspective = sourceDf
@@ -89,7 +85,7 @@ public class TopIpProcessor extends BaseProcessor {
                         col(NETFLOW_OUT_BYTES).alias(SPARK_INBOUND_BYTES),
                         col(NETFLOW_IN_PKTS).alias(SPARK_OUTBOUND_PACKETS),
                         col(NETFLOW_OUT_PKTS).alias(SPARK_INBOUND_PACKETS),
-                        timestamp_micros(col(NETFLOW_PROCESSING_TIME)).alias(NETFLOW_PROCESSING_TIME)
+                        timestamp_micros(col(NETFLOW_EVENT_TIME)).alias(NETFLOW_EVENT_TIME)
                 );
 
         Dataset<Row> unified = srcPerspective.unionByName(dstPerspective);
@@ -97,7 +93,7 @@ public class TopIpProcessor extends BaseProcessor {
         return unified
                 .groupBy(
                         col(SPARK_IP),
-                            window(col(NETFLOW_PROCESSING_TIME), windowDuration)
+                            window(col(NETFLOW_EVENT_TIME), windowDuration)
                 )
                 .agg(
                         sum(col(SPARK_OUTBOUND_BYTES)).alias(SPARK_OUTBOUND_BYTES),

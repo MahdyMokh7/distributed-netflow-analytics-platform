@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 class BatchAccumulatorTest {
 
     private static final Schema TEST_SCHEMA = Schema.createRecord("TestRecord", null, null, false);
-
+    private static final long KAFKA_TIMESTAMP = 1_700_000_000_000L;
     static {
         TEST_SCHEMA.setFields(List.of());
     }
@@ -34,7 +34,7 @@ class BatchAccumulatorTest {
     private IngestedRecord createRecord(String topic, int partition, long offset, int sizeBytes) {
         GenericRecord avroRecord = new GenericData.Record(TEST_SCHEMA);
 
-        return new IngestedRecord(avroRecord, topic, partition, offset, sizeBytes);
+        return new IngestedRecord(avroRecord, topic, partition, offset,KAFKA_TIMESTAMP, sizeBytes);
     }
 
     private IngestedRecord createRecord(int sizeBytes) {

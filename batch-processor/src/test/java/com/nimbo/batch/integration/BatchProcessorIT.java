@@ -266,12 +266,12 @@ class BatchProcessorIT {
                 long outBytes = row.getLong(7);
                 long inPackets = row.getLong(8);
                 long outPackets = row.getLong(9);
-                long processingTimeMicros = row.getLong(43);
+                long eventTimeMicros = row.getLong(43);
 
                 // Convert micros to Instant and truncate to hour window
                 Instant recordTime = Instant.ofEpochSecond(
-                        processingTimeMicros / 1_000_000,
-                        (processingTimeMicros % 1_000_000) * 1000
+                        eventTimeMicros / 1_000_000,
+                        (eventTimeMicros % 1_000_000) * 1000
                 );
                 Instant windowStart = recordTime.truncatedTo(ChronoUnit.HOURS);
                 Instant windowEnd = windowStart.plus(1, ChronoUnit.HOURS);

@@ -352,7 +352,7 @@ The `TestDataGenerator` was updated to include `PROCESSING_TIME` column, ensurin
 | `All 4 processors` | `.cast("decimal(38,0)")` + `.cast("timestamp")`, removed `orderBy` |
 | `BatchJobRunner.java` | File discovery integration |
 | `BaseProcessor.java` | `process(List<Path> files, UUID batchId)` |
-| `ColumnConstants.java` | Added `NETFLOW_PROCESSING_TIME` constant |
+| `ColumnConstants.java` | Added `NETFLOW_EVENT_TIME` constant |
 | `application.yml` | Added `max-files-per-batch` |
 | `application-dev.yml` | Updated for dev environment |
 | `application-prod.yml` | Updated for prod environment |

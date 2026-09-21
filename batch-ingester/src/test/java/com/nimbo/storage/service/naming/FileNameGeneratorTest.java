@@ -2,9 +2,7 @@ package com.nimbo.storage.service.naming;
 
 import org.junit.jupiter.api.Test;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,16 +10,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FileNameGeneratorTest {
 
     @Test
-    void givenAFixedWriterOpeningTime_whenFileNameIsGenerated_thenDirectoryAndNameUseTheSameUtcHour() {
+    void givenAKafkaTimestamp_whenFileNameIsGenerated_thenDirectoryAndNameUseTheSameUtcHour() {
         // Given: a writer opening just before a UTC hour boundary
         UUID fileId = UUID.fromString("50000000-0000-0000-0000-000000000001");
-        FileNameGenerator generator = new FileNameGenerator(
-                Clock.fixed(Instant.parse("2026-09-07T13:59:59.987Z"), ZoneOffset.UTC),
-                () -> fileId
-        );
+        FileNameGenerator generator = new FileNameGenerator(() -> fileId);
 
         // When: the partitioned relative file name is generated
-        String fileName = generator.generateFileName(3);
+        long kafkaTimestamp = Instant.parse("2026-09-07T13:59:59.987Z").toEpochMilli();
+        String fileName = generator.generateFileName(3, kafkaTimestamp);
 
         // Then: date, hour, filename timestamp, partition, and identity are consistent
         assertThat(fileName).isEqualTo(
@@ -50,7 +46,10 @@ class FileNameGeneratorTest {
         FileNameGenerator generator = new FileNameGenerator();
 
         // When: a filename is requested for the invalid partition
-        Throwable failure = org.assertj.core.api.Assertions.catchThrowable(() -> generator.generateFileName(-1));
+        Throwable failure = org.assertj.core.api.Assertions.catchThrowable(() -> generator.generateFileName(
+                -1,
+                1_700_000_000_000L
+        ));
 
         // Then: no undiscoverable filename can be produced
         assertThat(failure).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("partition");

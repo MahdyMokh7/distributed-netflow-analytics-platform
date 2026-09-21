@@ -1,6 +1,5 @@
 package com.nimbo.batch.processor;
 
-import com.nimbo.batch.config.HdfsConfig;
 import com.nimbo.batch.config.BatchConfig;
 import com.nimbo.batch.config.OutputConfig;
 import com.nimbo.batch.exception.BatchProcessingException;
@@ -8,14 +7,11 @@ import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.apache.spark.sql.functions.col;
@@ -78,7 +74,7 @@ public class ConnectionProcessor extends BaseProcessor {
                 .groupBy(
                         col(NETFLOW_SRC_IP).alias(SPARK_SRC_IP),
                         col(NETFLOW_DST_IP).alias(SPARK_DST_IP),
-                        window(timestamp_micros(col(NETFLOW_PROCESSING_TIME)), windowDuration)
+                        window(timestamp_micros(col(NETFLOW_EVENT_TIME)), windowDuration)
                 )
                 .agg(
                         sum(col(NETFLOW_IN_BYTES)).alias(SPARK_IN_BYTES),

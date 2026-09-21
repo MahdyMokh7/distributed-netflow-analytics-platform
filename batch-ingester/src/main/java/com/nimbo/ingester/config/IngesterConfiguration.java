@@ -37,8 +37,8 @@ public class IngesterConfiguration {
 
     @Bean
     public Schema storageSchema(Schema avroSchema) {
-        Schema.Field processingTimeField = new Schema.Field(
-                "PROCESSING_TIME",
+        Schema.Field eventTimeField = new Schema.Field(
+                "EVENT_TIME",
                 Schema.createUnion(
                         Schema.create(Schema.Type.NULL),
                         Schema.create(Schema.Type.LONG)
@@ -58,7 +58,7 @@ public class IngesterConfiguration {
             fields.add(copy);
         }
 
-        fields.add(processingTimeField);
+        fields.add(eventTimeField);
 
         return Schema.createRecord(
                 avroSchema.getName(),

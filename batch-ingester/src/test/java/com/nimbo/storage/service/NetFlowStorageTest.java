@@ -56,6 +56,7 @@ class NetFlowStorageTest {
     private BatchIngesterMetrics metrics;
     private SimpleMeterRegistry meterRegistry;
 
+    private static final long KAFKA_TIMESTAMP = 1_700_000_000_000L;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -112,16 +113,16 @@ class NetFlowStorageTest {
         GenericRecord testRecord = new GenericData.Record(sourceSchema);
         testRecord.put("value", "test-value");
 
-        return new IngestedRecord(testRecord, "test-topic", partition, offset, 100);
+        return new IngestedRecord(testRecord, "test-topic", partition, offset, KAFKA_TIMESTAMP,100);
     }
 
     private Schema buildStorageSchema(Schema sourceSchema) {
 
-        Schema.Field processingTimeField =
+        Schema.Field eventTimeField =
                 new Schema.Field(
-                        "PROCESSING_TIME",
+                        "EVENT_TIME",
                         Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)),
-                        "Processing time",
+                        "event time",
                         (Object) null
                 );
 
@@ -132,7 +133,7 @@ class NetFlowStorageTest {
             fields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
         }
 
-        fields.add(processingTimeField);
+        fields.add(eventTimeField);
 
         return Schema.createRecord(sourceSchema.getName(), sourceSchema.getDoc(), sourceSchema.getNamespace(),
                 sourceSchema.isError(), fields);
@@ -151,20 +152,26 @@ class NetFlowStorageTest {
     }
 
     @Test
-    @DisplayName("Should flush and commit when flush is called directly")
-    void shouldFlushAndReturnPendingOffsets() throws Exception {
+    @DisplayName("Should flush and create parquet file using Kafka timestamp path")
+    void shouldFlushAndCreateKafkaTimestampBasedPath() throws Exception {
 
         IngestedRecord realRecord = createRecord(0, 100L);
-
         storage.accept(realRecord);
+        storage.flush();
+        String expectedDate = "2023-11-14"; // 1_700_000_000_000L UTC date
 
-        Map<TopicPartitionKey, Long> result = storage.flush();
+        String expectedHour = "22";
 
-        assertEquals(Map.of(new TopicPartitionKey("test-topic", 0), 101L), result);
         try (var paths = Files.walk(tempDirectory.resolve("parquet"))) {
-            assertTrue(paths.anyMatch(path -> path.toString().endsWith(".parquet")));
-        }
 
+            assertTrue(paths.anyMatch(path ->
+                    path.toString().contains(expectedDate)
+                            &&
+                            path.toString().contains(expectedHour)
+                            &&
+                            path.toString().endsWith(".parquet")
+            ));
+        }
     }
 
     @Test

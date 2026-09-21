@@ -171,7 +171,7 @@ public class NetflowConsumer {
 
             if (!result.valid()) {
                 metrics.invalidRecord(instanceId, "VALIDATION_ERROR");
-                dlqService.publish(consumerRecord, "VALIDATION_ERROR", result.errorMessage());
+                dlqService.publish(consumerRecord, "VALIDATION_ERROR", result.reason());
                 return dataProcessingService.recordSkippedOffset(
                         consumerRecord.topic(), consumerRecord.partition(), nextOffset);
             }
@@ -181,6 +181,7 @@ public class NetflowConsumer {
                     consumerRecord.topic(),
                     consumerRecord.partition(),
                     consumerRecord.offset(),
+                    consumerRecord.timestamp(),
                     consumerRecord.value().length
             );
 

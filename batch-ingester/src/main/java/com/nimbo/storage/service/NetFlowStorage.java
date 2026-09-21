@@ -85,7 +85,11 @@ public final class NetFlowStorage {
                 openWriter(ingestedRecord);
             }
 
-            GenericRecord enrichedRecord = enrichWithProcessingTime(ingestedRecord.record());
+            GenericRecord enrichedRecord = enrichWithKafkaTime(
+                    ingestedRecord.record(),
+                    ingestedRecord.kafkaTimestamp()
+            );
+            
             parquetFileWriter.write(currentWriter, enrichedRecord);
             metrics.recordWritten(instanceId);
             batchAccumulator.add(ingestedRecord);
@@ -158,7 +162,7 @@ public final class NetFlowStorage {
     private void openWriter(IngestedRecord firstRecord)  {
         int primaryPartition = firstRecord.partition();
 
-        String finalFileName = fileNameGenerator.generateFileName(primaryPartition);
+        String finalFileName = fileNameGenerator.generateFileName(primaryPartition, firstRecord.kafkaTimestamp());
         String tempFileName = fileNameGenerator.generateTempFileName(finalFileName);
 
         Path basePath = new Path(hdfsProperties.getBasePath());
@@ -226,16 +230,16 @@ public final class NetFlowStorage {
         currentFinalPath = null;
     }
 
-    private GenericRecord enrichWithProcessingTime(GenericRecord original) {
-        GenericRecord enriched = new GenericData.Record(storageSchema);
+    private GenericRecord enrichWithKafkaTime(GenericRecord original, long kafkaTimestamp) {
 
-        Instant now = Instant.now();
-        long processingTimeMicros = now.getEpochSecond() * 1_000_000 + now.getNano() / 1000;
+        GenericRecord enriched = new GenericData.Record(storageSchema);
+        long kafkaTimestampMicros = kafkaTimestamp * 1000;
 
         for (Schema.Field field : storageSchema.getFields()) {
             String fieldName = field.name();
-            if ("PROCESSING_TIME".equals(fieldName)) {
-                enriched.put("PROCESSING_TIME", processingTimeMicros);
+
+            if ("EVENT_TIME".equals(fieldName)) {
+                enriched.put("EVENT_TIME", kafkaTimestampMicros);
             } else {
                 enriched.put(fieldName, original.get(fieldName));
             }

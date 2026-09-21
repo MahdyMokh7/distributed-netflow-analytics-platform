@@ -90,7 +90,7 @@ public final class NetFlowParquetTestData {
                 DataTypes.createStructField("DNS_QUERY_TYPE", DataTypes.IntegerType, false),
                 DataTypes.createStructField("DNS_TTL_ANSWER", DataTypes.LongType, false),
                 DataTypes.createStructField("FTP_COMMAND_RET_CODE", DataTypes.IntegerType, false),
-                DataTypes.createStructField("PROCESSING_TIME", DataTypes.LongType, false)
+                DataTypes.createStructField("EVENT_TIME", DataTypes.LongType, false)
         });
     }
 
@@ -107,7 +107,7 @@ public final class NetFlowParquetTestData {
                     .plusSeconds(fileIndex * 30L)
                     .plusMillis(recordIdx * 10L);
 
-            long processingTimeMicros = recordTime.getEpochSecond() * 1_000_000L
+            long eventTimeMicros = recordTime.getEpochSecond() * 1_000_000L
                     + recordTime.getNano() / 1000;
 
             int ipIdx = (fileIndex + recordIdx) % IP_ADDRESSES.length;
@@ -158,7 +158,7 @@ public final class NetFlowParquetTestData {
                     protocol == 17 ? 1 : 0,
                     protocol == 17 ? 300L : 0L,
                     protocol == 6 ? 200 : 0,
-                    processingTimeMicros
+                    eventTimeMicros
             );
 
             rows.add(row);

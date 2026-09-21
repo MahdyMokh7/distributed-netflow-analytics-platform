@@ -93,7 +93,7 @@ class BatchIngesterPipelineIT {
                             tuple("192.168.1.1", "10.0.0.1", 1_000L, 500L),
                             tuple("192.168.1.2", "10.0.0.1", 2_000L, 1_000L),
                             tuple("192.168.1.3", "10.0.0.1", 3_000L, 1_500L));
-            assertThat(persisted).allSatisfy(record -> assertThat(record.get("PROCESSING_TIME")).isNotNull());
+            assertThat(persisted).allSatisfy(record -> assertThat(record.get("EVENT_TIME")).isNotNull());
             assertThat(finalizedFiles(pipeline.fileSystem(), basePath).get(0).getName()).doesNotStartWith(".");
             assertThat(KAFKA.committedOffset(group, topic, 0)).isEqualTo(3L);
             assertThat(pipeline.registry().get("ingester_records_written_total")

@@ -2,14 +2,14 @@ package com.nimbo.ingester.model;
 
 public record ValidationResult(
         boolean valid,
-        String errorMessage
+        String reason
 ) {
 
-    public static ValidationResult ok() {
+    public static ValidationResult success() {
         return new ValidationResult(true, null);
     }
 
-    public static ValidationResult invalid(String errorMessage) {
-        return new ValidationResult(false, errorMessage);
+    public static ValidationResult failure(String reason) {
+        return new ValidationResult(false, reason);
     }
 }

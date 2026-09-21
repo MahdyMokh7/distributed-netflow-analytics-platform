@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class IngestedRecordTest {
 
     private GenericRecord record;
+    private static final long KAFKA_TIMESTAMP = 1_700_000_000_000L;
 
     @BeforeEach
     void setUp() {
@@ -23,7 +24,7 @@ class IngestedRecordTest {
         String topic = "netflow-v2";
 
         // When: the consumer creates an ingested record
-        IngestedRecord ingested = new IngestedRecord(record, topic, 2, 41L, 1_024);
+        IngestedRecord ingested = new IngestedRecord(record, topic, 2, 41L, KAFKA_TIMESTAMP,1_024);
 
         // Then: storage receives the exact payload and Kafka coordinates
         assertThat(ingested.record()).isSameAs(record);
@@ -39,7 +40,7 @@ class IngestedRecordTest {
         int serializedSize = 0;
 
         // When: the record is created at the lower supported size boundary
-        IngestedRecord ingested = new IngestedRecord(record, "netflow-v2", 0, 0L, serializedSize);
+        IngestedRecord ingested = new IngestedRecord(record, "netflow-v2", 0,0L,KAFKA_TIMESTAMP, serializedSize);
 
         // Then: zero is retained as a permitted nonnegative size
         assertThat(ingested.serializedSizeBytes()).isZero();
@@ -52,9 +53,9 @@ class IngestedRecordTest {
 
         // When: callers construct records without required components
         var missingRecordFailure = org.assertj.core.api.Assertions.catchThrowable(
-                () -> new IngestedRecord(missingRecord, "netflow-v2", 0, 0L, 1));
+                () -> new IngestedRecord(missingRecord, "netflow-v2", 0, 0L, KAFKA_TIMESTAMP,1));
         var missingTopicFailure = org.assertj.core.api.Assertions.catchThrowable(
-                () -> new IngestedRecord(record, null, 0, 0L, 1));
+                () -> new IngestedRecord(record, null, 0, 0L, KAFKA_TIMESTAMP,1));
 
         // Then: both invalid records fail with specific invariant messages
         assertThat(missingRecordFailure).isInstanceOf(NullPointerException.class)
@@ -70,7 +71,7 @@ class IngestedRecordTest {
 
         // When: the consumer attempts to preserve invalid size metadata
         var invocation = org.assertj.core.api.Assertions.catchThrowable(
-                () -> new IngestedRecord(record, "netflow-v2", 0, 0L, invalidSize));
+                () -> new IngestedRecord(record, "netflow-v2", 0, 0L,KAFKA_TIMESTAMP, invalidSize));
 
         // Then: construction rejects the impossible serialized size
         assertThat(invocation).isInstanceOf(IllegalArgumentException.class)

@@ -48,7 +48,7 @@ class BatchJobRunnerIT {
             .add("OUT_BYTES", DataTypes.LongType, false)
             .add("IN_PKTS", DataTypes.LongType, false)
             .add("OUT_PKTS", DataTypes.LongType, false)
-            .add("PROCESSING_TIME", DataTypes.LongType, false);
+            .add("EVENT_TIME", DataTypes.LongType, false);
 
     @RegisterExtension
     static final PostgresContainerExtension POSTGRES = new PostgresContainerExtension();

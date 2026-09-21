@@ -7,8 +7,6 @@ import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
 import com.nimbo.batch.writer.PostgresWriter;
 import static com.nimbo.batch.constants.ColumnConstants.*;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.spark.SparkException;
-import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.springframework.core.annotation.Order;
@@ -78,7 +76,7 @@ public class TrafficAggregationProcessor extends BaseProcessor {
         return sourceDf
                 .groupBy(
                         col(NETFLOW_SRC_IP).alias(SPARK_SRC_IP),
-                        window(timestamp_micros(col(NETFLOW_PROCESSING_TIME)), windowDuration)
+                        window(timestamp_micros(col(NETFLOW_EVENT_TIME)), windowDuration)
                 )
                 .agg(
                         sum(col(NETFLOW_IN_BYTES)).alias(SPARK_IN_BYTES),
