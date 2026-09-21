@@ -102,7 +102,7 @@
     MYSQL_PWD: "{{ starrocks_sql_pw }}"
   changed_when: true
   check_mode: false
-  no_log: false
+  no_log: true
   loop: "{{ starrocks_accounts }}"
   loop_control:
     label: "{{ item.role }}"
@@ -219,7 +219,7 @@
     MYSQL_PWD: "{{ starrocks_sql_pw }}"
   changed_when: true
   check_mode: false
-  no_log: false
+  no_log: true
   loop: "{{ starrocks_role_grant_tasks }}"
   loop_control:
     label: "{{ item.0.role }}"
@@ -273,7 +273,7 @@
     MYSQL_PWD: "{{ starrocks_sql_pw }}"
   changed_when: true
   check_mode: false
-  no_log: false
+  no_log: true
   loop: "{{ starrocks_accounts }}"
   loop_control:
     label: "{{ item.name }}"
@@ -455,7 +455,7 @@
     MYSQL_PWD: "{{ starrocks_sql_pw }}"
   changed_when: true
   check_mode: false
-  no_log: false
+  no_log: true
   loop: "{{ starrocks_accounts }}"
   loop_control:
     label: "{{ item.name }}"
