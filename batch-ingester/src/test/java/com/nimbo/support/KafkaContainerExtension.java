@@ -1,10 +1,13 @@
 package com.nimbo.support;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -13,11 +16,12 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 public final class KafkaContainerExtension implements BeforeAllCallback {
@@ -42,12 +46,30 @@ public final class KafkaContainerExtension implements BeforeAllCallback {
         Properties properties = new Properties();
         properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         try (AdminClient admin = AdminClient.create(properties)) {
-            List<NewTopic> definitions = java.util.Arrays.stream(topics)
-                    .map(topic -> new NewTopic(topic, 1, (short) 1))
-                    .toList();
+
+            Set<String> existingTopics = admin.listTopics().names().get();
+            List<String> existingTopicsToDelete = Arrays.stream(topics).filter(existingTopics::contains).toList();
+            if (!existingTopicsToDelete.isEmpty()) {
+
+                admin.deleteTopics(existingTopicsToDelete).all().get();
+                org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(30))
+                    .until(() -> {
+                        var names = admin.listTopics().names().get(5, java.util.concurrent.TimeUnit.SECONDS);
+                        return existingTopicsToDelete.stream().noneMatch(names::contains);
+                    });
+            }
+
+            List<NewTopic> definitions = Arrays.stream(topics)
+                    .map(topic -> new NewTopic(topic, 1, (short) 1)).toList();
+
             admin.createTopics(definitions).all().get();
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to create deterministic Kafka test topics", e);
+
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while creating Kafka test topics", exception);
+
+        } catch (ExecutionException | TimeoutException exception) {
+            throw new IllegalStateException("Failed to create Kafka test topics", exception);
         }
     }
 
@@ -97,7 +119,7 @@ public final class KafkaContainerExtension implements BeforeAllCallback {
 
     private static final class SharedKafka implements ExtensionContext.Store.CloseableResource {
         private final KafkaContainer container =
-                new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+                new KafkaContainer(DockerImageName.parse("apache/kafka-native:3.8.0")).withReuse(true);
 
         private SharedKafka() {
             container.start();
@@ -105,7 +127,7 @@ public final class KafkaContainerExtension implements BeforeAllCallback {
 
         @Override
         public void close() {
-            container.stop();
+            // intentionally not stopping — container is shared/reused across modules
         }
     }
 }

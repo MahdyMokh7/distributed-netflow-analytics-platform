@@ -1,4 +1,4 @@
-package com.nimbo.restapi.service;
+package com.nimbo.restapi.integration.service;
 
 import com.nimbo.restapi.dto.request.BandwidthQueryRequestDto;
 import com.nimbo.restapi.dto.request.ConnectionQueryRequestDto;
@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(initializers = PostgresTestExtension.DatasourceInitializer.class)
-class PostgresQueryIntegrationTest {
+class PostgresQueryIT {
 
     private static final Instant RANGE_START = Instant.parse("2026-01-01T00:00:00Z");
     private static final Instant RANGE_END = Instant.parse("2026-01-01T01:00:00Z");
@@ -58,7 +58,7 @@ class PostgresQueryIntegrationTest {
     private final QueryMetrics metrics = new QueryMetrics(new SimpleMeterRegistry());
 
     @Autowired
-    PostgresQueryIntegrationTest(
+    PostgresQueryIT(
             TrafficRepository trafficRepository,
             ConnectionRepository connectionRepository,
             BandwidthRepository bandwidthRepository,

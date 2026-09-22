@@ -28,7 +28,7 @@ public final class TestKafka {
     private static final String CONSUMER_GROUP = "realtime-integration-test";
     private static final int PARTITIONS = 2;
 
-    private final KafkaContainer container = new KafkaContainer(DockerImageName.parse(IMAGE));
+    private final KafkaContainer container = new KafkaContainer(DockerImageName.parse(IMAGE)).withReuse(true);
 
     KafkaContainer container() {
         return container;

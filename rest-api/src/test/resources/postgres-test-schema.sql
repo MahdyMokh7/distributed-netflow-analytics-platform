@@ -5,7 +5,7 @@ CREATE TABLE protocol_dim (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE traffic_aggregates (
+CREATE TABLE IF NOT EXISTS traffic_aggregates (
     id BIGSERIAL,
     src_ip VARCHAR(45) NOT NULL,
     window_start TIMESTAMP NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE traffic_aggregates (
     PRIMARY KEY (src_ip, window_start, batch_id)
 );
 
-CREATE TABLE connection_aggregates (
+CREATE TABLE IF NOT EXISTS connection_aggregates (
     id VARCHAR(64) NOT NULL,
     src_ip VARCHAR(45) NOT NULL,
     dst_ip VARCHAR(45) NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE connection_aggregates (
     PRIMARY KEY (id, window_start, batch_id)
 );
 
-CREATE TABLE protocol_usage_aggregates (
+CREATE TABLE IF NOT EXISTS protocol_usage_aggregates (
     id BIGSERIAL,
     l7_protocol DOUBLE PRECISION NOT NULL,
     window_start TIMESTAMP NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE protocol_usage_aggregates (
     PRIMARY KEY (l7_protocol, window_start, batch_id)
 );
 
-CREATE TABLE ip_bandwidth_aggregates (
+CREATE TABLE IF NOT EXISTS ip_bandwidth_aggregates (
     id BIGSERIAL,
     ip VARCHAR(45) NOT NULL,
     window_start TIMESTAMP NOT NULL,

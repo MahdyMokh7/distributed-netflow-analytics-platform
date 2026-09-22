@@ -2,6 +2,8 @@ package com.nimbo.support;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.Map;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
