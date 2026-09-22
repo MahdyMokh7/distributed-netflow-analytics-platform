@@ -7,9 +7,10 @@ image:
   pullPolicy: IfNotPresent
 
 auth:
-  superuserPassword: "nimbyte_patroni"
-  replicationPassword: "nimbyte_patroni"
-  rewindPassword: "nimbyte_patroni"
+  existingSecret: postgresql-auth
+  superuserPassword: "DUMMY"
+  replicationPassword: "DUMMY"
+  rewindPassword: "DUMMY"
 
 appDatabase:
   databaseName: "nimbo_db"
@@ -19,7 +20,7 @@ appDatabase:
 
 storage:
   className: "disk1"
-  size: "20Gi"
+  size: "150Gi"
 
 resources:
   postgresql:

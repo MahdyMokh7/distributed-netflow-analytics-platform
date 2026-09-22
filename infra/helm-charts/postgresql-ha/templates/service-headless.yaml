@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "postgresql.fullname" . }}-config
+  name: {{ include "postgresql.fullname" . }}-headless
   labels:
     {{- include "postgresql.labels" . | nindent 4 }}
 spec:
