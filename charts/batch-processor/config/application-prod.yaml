@@ -37,10 +37,10 @@ management:
 spark:
   master: spark://spark-master:7077
   app-name: nimbo-batch-processor
-  executor-memory: 1g
+  executor-memory: 2g
   executor-cores: 1
-  num-executors: 3
-  max-cores: 3
+  num-executors: 4
+  max-cores: 4
   files-max-partition-bytes: 64m
   shuffle-partitions: 12
   session-time-zone: UTC

@@ -34,7 +34,8 @@ worker:
       memory: 6Gi
 
   storage:
-    hostPath: /mnt/disk1/spark/work
+    size: 20Gi
+    storageClass: disk1
     mountPath: /opt/spark/work
     workDirectory: /opt/spark/work
     localDirectory: /opt/spark/work/local
@@ -61,10 +62,10 @@ spark:
   ioCompressionCodec: lz4
   driverBindAddress: 0.0.0.0
 
-  workerCleanup:
-    enabled: true
-    intervalSeconds: 86400
-    appDataTtlSeconds: 604800
+workerCleanup:
+  enabled: true
+  intervalSeconds: 86400     # 1 day
+  appDataTtlSeconds: 172800  # 2 days
 
   eventLog:
     enabled: true

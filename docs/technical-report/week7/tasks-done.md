@@ -5,4 +5,5 @@
  
 - 0. `batch_id` needs to be in the tables in teh primary key and we can not remove it, becuaase the upsert logic is based off of that 
 
-- 1. 
+- 1. Optimize aggregate table indexes
+- 2. Storage optimization for aggregate tables

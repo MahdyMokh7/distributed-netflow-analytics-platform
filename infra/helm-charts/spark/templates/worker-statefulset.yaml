@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 
 metadata:
   name: {{ include "spark.fullname" . }}-worker
@@ -8,13 +8,11 @@ metadata:
     component: worker
 
 spec:
+  serviceName: {{ include "spark.fullname" . }}-worker
   replicas: {{ .Values.worker.replicaCount }}
 
-  strategy:
+  updateStrategy:
     type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 1
 
   selector:
     matchLabels:
@@ -28,6 +26,7 @@ spec:
       labels:
         {{- include "spark.labels" . | nindent 8 }}
         component: worker
+        app.kubernetes.io/component: worker
 
     spec:
 
@@ -39,7 +38,7 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchExpressions:
-                  - key: component
+                  - key: app.kubernetes.io/component
                     operator: In
                     values:
                       - worker
@@ -154,13 +153,17 @@ spec:
 
 
       volumes:
-
-        - name: spark-work
-          hostPath:
-            path: {{ .Values.worker.storage.hostPath }}
-            type: DirectoryOrCreate
-
-
         - name: spark-config
           configMap:
             name: {{ include "spark.fullname" . }}-config
+
+  volumeClaimTemplates:
+    - metadata:
+        name: spark-work
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ .Values.worker.storage.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.worker.storage.size }}
