@@ -50,6 +50,7 @@ spark:
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer
   ui-enabled: true
+  ui-port: 4040
   io-mode-default: NIO
   driver-host: ${DRIVER_HOST}
   driver-bind-address: 0.0.0.0

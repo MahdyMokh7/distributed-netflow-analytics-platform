@@ -49,6 +49,9 @@ spec:
             - name: SPARK_HISTORY_OPTS
               value: >
                 -Dspark.history.fs.logDirectory={{ .Values.spark.eventLog.directory }}
+                -Dspark.history.fs.cleaner.enabled={{ .Values.spark.historyServer.cleaner.enabled }}
+                -Dspark.history.fs.cleaner.interval={{ .Values.spark.historyServer.cleaner.interval }}
+                -Dspark.history.fs.cleaner.maxAge={{ .Values.spark.historyServer.cleaner.maxAge }}
 
           startupProbe:
             httpGet:

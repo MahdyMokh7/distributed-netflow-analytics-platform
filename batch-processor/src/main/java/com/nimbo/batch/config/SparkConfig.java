@@ -30,6 +30,7 @@ public class SparkConfig {
     private Boolean adaptiveCoalescePartitionsEnabled;
     private String serializer;
     private Boolean uiEnabled;
+    private int uiPort;
     private String ioModeDefault;
     private String driverHost;
     private String driverBindAddress;
@@ -59,6 +60,7 @@ public class SparkConfig {
 
         setIfPresent(builder, "spark.serializer", serializer);
         setIfPresent(builder, "spark.ui.enabled", uiEnabled);
+        setIfPositive(builder, "spark.ui.port", uiPort);
         setIfPresent(builder, "spark.io.mode.default", ioModeDefault);
         setIfPresent(builder, "spark.driver.host", driverHost);
         setIfPresent(builder, "spark.driver.bindAddress", driverBindAddress);

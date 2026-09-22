@@ -28,6 +28,7 @@ class SparkConfigTest {
         config.setEventLogEnabled(true);
         config.setEventLogDirectory(eventLogDirectory.toUri().toString());
         config.setUiEnabled(false);
+        config.setUiPort(4040);
 
         // When: the production Spark configuration creates a session
         SparkSession spark = config.sparkSession();
@@ -43,6 +44,7 @@ class SparkConfigTest {
             assertThat(spark.sparkContext().getConf().getBoolean("spark.eventLog.enabled", false)).isTrue();
             assertThat(spark.sparkContext().getConf().get("spark.eventLog.dir"))
                     .isEqualTo(eventLogDirectory.toUri().toString());
+            assertThat(spark.sparkContext().getConf().getInt("spark.ui.port", 0)).isEqualTo(4040);
         } finally {
             spark.stop();
             SparkSession.clearActiveSession();

@@ -6,6 +6,7 @@ image:
   pullPolicy: IfNotPresent
 
 containerPort: 18081
+sparkUiPort: 4040
 springProfile: prod
 
 terminationGracePeriodSeconds: 60
@@ -13,6 +14,11 @@ terminationGracePeriodSeconds: 60
 service:
   type: ClusterIP
   port: 18081
+
+sparkUiService:
+  enabled: true
+  type: LoadBalancer
+  port: 4040
 
 hdfs:
   uri: hdfs://10.10.61.53:8020

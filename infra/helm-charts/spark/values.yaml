@@ -62,14 +62,20 @@ spark:
   ioCompressionCodec: lz4
   driverBindAddress: 0.0.0.0
 
-workerCleanup:
-  enabled: true
-  intervalSeconds: 86400     # 1 day
-  appDataTtlSeconds: 172800  # 2 days
-
   eventLog:
     enabled: true
     directory: hdfs://team1/spark-history
+
+  historyServer:
+    cleaner:
+      enabled: true
+      interval: 1d
+      maxAge: 7d
+
+  workerCleanup:
+    enabled: true
+    intervalSeconds: 86400     # 1 day
+    appDataTtlSeconds: 172800  # 2 days
 
 hadoop:
   defaultFs: hdfs://team1

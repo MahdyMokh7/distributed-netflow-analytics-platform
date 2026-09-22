@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: {{ include "MODULE.fullname" . }}-spark-ui
+  labels:
+    {{- include "MODULE.labels" . | nindent 4 }}
+
+spec:
+  type: {{ .Values.sparkUiService.type }}
+
+  ports:
+    - name: spark-ui
+      port: {{ .Values.sparkUiService.port }}
+      targetPort: spark-ui
+      protocol: TCP
+
+  selector:
+    {{- include "MODULE.labels" . | nindent 4 }}
