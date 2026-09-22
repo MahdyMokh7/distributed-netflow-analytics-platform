@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "postgresql.labels" . | nindent 4 }}
 spec:
-  serviceName: {{ include "postgresql.fullname" . }}-config
+  serviceName: {{ include "postgresql.fullname" . }}-headless
   replicas: {{ .Values.replicaCount }}
   updateStrategy:
     type: RollingUpdate
@@ -56,17 +56,17 @@ spec:
             - name: PATRONI_SUPERUSER_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "postgresql.fullname" . }}-auth
+                  name: {{ include "postgresql.authSecretName" . }}
                   key: superuser-password
             - name: PATRONI_REPLICATION_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "postgresql.fullname" . }}-auth
+                  name: {{ include "postgresql.authSecretName" . }}
                   key: replication-password
             - name: PATRONI_REWIND_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "postgresql.fullname" . }}-auth
+                  name: {{ include "postgresql.authSecretName" . }}
                   key: rewind-password
           ports:
             - name: postgresql
@@ -121,7 +121,7 @@ spec:
             - name: DATA_SOURCE_PASS
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "postgresql.fullname" . }}-auth
+                  name: {{ include "postgresql.authSecretName" . }}
                   key: superuser-password
           ports:
             - name: prometheus
