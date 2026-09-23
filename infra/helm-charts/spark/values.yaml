@@ -21,17 +21,17 @@ master:
 worker:
   replicaCount: 4
   terminationGracePeriodSeconds: 60
-  cores: 4
-  memory: 4g
+  cores: 2
+  memory: 3g
   rpcPort: 7078
 
   resources:
     requests:
+      cpu: "1"
+      memory: 3Gi
+    limits:
       cpu: "2"
       memory: 4Gi
-    limits:
-      cpu: "4"
-      memory: 6Gi
 
   storage:
     size: 20Gi
@@ -74,8 +74,8 @@ spark:
 
   workerCleanup:
     enabled: true
-    intervalSeconds: 86400     # 1 day
-    appDataTtlSeconds: 172800  # 2 days
+    intervalSeconds: 3600  # 1 hour
+    appDataTtlSeconds: 21600  # 6 hours
 
 hadoop:
   defaultFs: hdfs://team1

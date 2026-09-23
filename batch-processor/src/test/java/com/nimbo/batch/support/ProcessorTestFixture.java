@@ -90,15 +90,17 @@ public final class ProcessorTestFixture {
         postgresConfig.setUsername(postgres.username());
         postgresConfig.setPassword(postgres.password());
         postgresConfig.setBatchSize(2);
+        postgresConfig.setWriterPartitions(1);
         postgresConfig.getRetry().setMaxAttempts(2);
         postgresConfig.getRetry().setInitialDelayMs(1);
         postgresConfig.getRetry().setMaxDelayMs(2);
 
         ExecutorPoolConfig executorPool = new ExecutorPoolConfig();
-        executorPool.setMaxPoolSize(2);
+        executorPool.setMaxPoolSize(1);
+        executorPool.setMinimumIdle(0);
         executorPool.setConnectionTimeoutMs(5_000);
         executorPool.setIdleTimeoutMs(60_000);
-        executorPool.setMaxLifetimeMs(120_000);
+        executorPool.setMaxLifetimeMs(1_800_000);
         executorPool.setPoolName("processor-test-executor-pool");
 
         return new PostgresWriter(

@@ -63,7 +63,7 @@ hdfs:
   parquet-path: /netflow/parquetFiles/
 
 output:
-  mode: both
+  mode: database
 
 postgres:
   host: postgresql-postgresql-master
@@ -72,6 +72,7 @@ postgres:
   username: ${DB_USERNAME}
   password: ${DB_PASSWORD}
   batch-size: 5000
+  writer-partitions: 4
 
   driver-pool:
     size: 4
@@ -80,6 +81,7 @@ postgres:
 
   executor-pool:
     max-pool-size: ${EXECUTOR_POOL_SIZE}
+    minimum-idle: ${EXECUTOR_MINIMUM_IDLE}
     connection-timeout-ms: ${EXECUTOR_CONNECTION_TIMEOUT}
     idle-timeout-ms: ${EXECUTOR_IDLE_TIMEOUT}
     max-lifetime-ms: ${EXECUTOR_MAX_LIFETIME}
@@ -91,10 +93,10 @@ postgres:
     max-delay-ms: 30000
 
 batch:
-  schedule: "0 0 */1 * * ?"
+  schedule: "0 0 * * * ?"
   window-duration: "1 hour"
   enabled: true
-  max-files-per-batch: 2
+  max-files-per-batch: 5
 
 server:
   port: ${SERVER_PORT:18081}

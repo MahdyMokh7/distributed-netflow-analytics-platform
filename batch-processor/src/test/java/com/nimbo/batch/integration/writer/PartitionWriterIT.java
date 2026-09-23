@@ -11,6 +11,7 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.util.LongAccumulator;
 import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -48,8 +49,13 @@ class PartitionWriterIT {
         jdbi.useHandle(handle -> handle.execute("TRUNCATE traffic_aggregates"));
     }
 
+    @AfterEach
+    void closeExecutorPools() {
+        JdbiDaoFactory.closeExecutorPools();
+    }
+
     @Test
-    void givenValidRows_whenPartitionIsWritten_thenRowsPersistAndExecutorConnectionsClose() {
+    void givenTwoPartitions_whenTheyAreWritten_thenRowsPersistAndTheExecutorConnectionIsReused() {
         // Given: two valid aggregates and a real executor-side database pool
         long connectionsBefore = executorConnections();
         LongAccumulator written = new LongAccumulator();
@@ -57,31 +63,36 @@ class PartitionWriterIT {
                 partitionWriter(new JdbiDaoFactory(postgresConfig(), executorPoolConfig()), written);
 
         // When: the partition writes both rows through the real DAO
-        partitionWriter.call(List.of(trafficRow("10.0.0.1", 100L), trafficRow("10.0.0.2", 200L)).iterator());
+        partitionWriter.call(List.of(trafficRow("10.0.0.1", 100L)).iterator());
+        long connectionsAfterFirstPartition = executorConnections();
+        partitionWriter.call(List.of(trafficRow("10.0.0.2", 200L)).iterator());
 
-        // Then: data is committed and no executor pool connections remain open
+        // Then: data is committed through one executor-local physical connection
         assertThat(written.value()).isEqualTo(2L);
         assertThat(trafficRowCount()).isEqualTo(2L);
-        assertThat(executorConnections()).isEqualTo(connectionsBefore);
+        assertThat(connectionsAfterFirstPartition).isEqualTo(connectionsBefore + 1);
+        assertThat(executorConnections()).isEqualTo(connectionsAfterFirstPartition);
     }
 
     @Test
-    void givenDatabaseRejectsRow_whenRetriesFail_thenExecutorConnectionsClose() {
-        // Given: an aggregate that violates the nonnegative byte constraint
+    void givenOneInvalidRowInABatch_whenRetriesFail_thenTheWholeTransactionRollsBack() {
+        // Given: one valid aggregate and one aggregate that violates the nonnegative byte constraint
         long connectionsBefore = executorConnections();
         LongAccumulator retries = new LongAccumulator();
         PartitionWriter<com.nimbo.batch.model.TrafficAggregate, TrafficAggregateDao> partitionWriter =
                 partitionWriter(new JdbiDaoFactory(postgresConfig(), executorPoolConfig()), new LongAccumulator(), retries);
 
         // When: the real DAO retries and the database rejects both attempts
-        assertThatThrownBy(() -> partitionWriter.call(List.of(trafficRow("10.0.0.3", -1L)).iterator()))
+        assertThatThrownBy(() -> partitionWriter.call(List.of(
+                        trafficRow("10.0.0.2", 200L),
+                        trafficRow("10.0.0.3", -1L)).iterator()))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Batch execution failed after 2 attempts");
 
-        // Then: the failed row is absent and the executor pool has released its connections
+        // Then: neither row is committed and the executor keeps only its one bounded connection
         assertThat(retries.value()).isEqualTo(1L);
         assertThat(trafficRowCount()).isZero();
-        assertThat(executorConnections()).isEqualTo(connectionsBefore);
+        assertThat(executorConnections()).isEqualTo(connectionsBefore + 1);
     }
 
     private PartitionWriter<com.nimbo.batch.model.TrafficAggregate, TrafficAggregateDao> partitionWriter(
@@ -135,10 +146,11 @@ class PartitionWriterIT {
 
     private ExecutorPoolConfig executorPoolConfig() {
         ExecutorPoolConfig config = new ExecutorPoolConfig();
-        config.setMaxPoolSize(2);
+        config.setMaxPoolSize(1);
+        config.setMinimumIdle(0);
         config.setConnectionTimeoutMs(5_000);
         config.setIdleTimeoutMs(60_000);
-        config.setMaxLifetimeMs(120_000);
+        config.setMaxLifetimeMs(1_800_000);
         config.setPoolName("partition-writer-test-pool");
         return config;
     }

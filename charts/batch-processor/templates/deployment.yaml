@@ -43,6 +43,8 @@ spec:
               value: {{ required "hdfs.uri is required" .Values.hdfs.uri | quote }}
             - name: EXECUTOR_POOL_SIZE
               value: {{ required "postgres.executorPool.maxPoolSize is required" .Values.postgres.executorPool.maxPoolSize | quote }}
+            - name: EXECUTOR_MINIMUM_IDLE
+              value: {{ .Values.postgres.executorPool.minimumIdle | quote }}
             - name: EXECUTOR_CONNECTION_TIMEOUT
               value: {{ required "postgres.executorPool.connectionTimeoutMs is required" .Values.postgres.executorPool.connectionTimeoutMs | quote }}
             - name: EXECUTOR_IDLE_TIMEOUT

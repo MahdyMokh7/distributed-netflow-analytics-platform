@@ -52,6 +52,7 @@ class PostgresWriterIT {
 
     @AfterEach
     void closeRegistry() {
+        JdbiDaoFactory.closeExecutorPools();
         meterRegistry.close();
     }
 
@@ -115,6 +116,7 @@ class PostgresWriterIT {
         config.setUsername(POSTGRES.username());
         config.setPassword(POSTGRES.password());
         config.setBatchSize(2);
+        config.setWriterPartitions(1);
         config.getRetry().setMaxAttempts(2);
         config.getRetry().setInitialDelayMs(0);
         config.getRetry().setMaxDelayMs(0);
@@ -123,10 +125,11 @@ class PostgresWriterIT {
 
     private ExecutorPoolConfig executorPoolConfig() {
         ExecutorPoolConfig config = new ExecutorPoolConfig();
-        config.setMaxPoolSize(2);
+        config.setMaxPoolSize(1);
+        config.setMinimumIdle(0);
         config.setConnectionTimeoutMs(5_000);
         config.setIdleTimeoutMs(60_000);
-        config.setMaxLifetimeMs(120_000);
+        config.setMaxLifetimeMs(1_800_000);
         config.setPoolName("writer-test-pool");
         return config;
     }

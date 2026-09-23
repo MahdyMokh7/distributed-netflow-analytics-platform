@@ -24,6 +24,7 @@ public class PostgresConfig implements Serializable {
     private String username;
     private String password;
     private int batchSize;
+    private int writerPartitions = 4;
 
     private DriverPool driverPool = new DriverPool();
     private Retry retry = new Retry();

@@ -22,11 +22,24 @@ storage:
   className: "disk1"
   size: "150Gi"
 
+postgresql:
+  parameters:
+    maxConnections: 100
+    sharedBuffers: 512MB
+    effectiveCacheSize: 3GB
+    maxWalSize: 2GB
+    checkpointTimeout: 15min
+    checkpointCompletionTarget: 0.9
+    walCompression: "on"
+
 resources:
   postgresql:
     requests:
-      cpu: "250m"
-      memory: "512Mi"
+      cpu: "1"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
   exporter:
     requests:
       cpu: "50m"

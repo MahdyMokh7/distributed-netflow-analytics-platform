@@ -18,6 +18,7 @@ public class ExecutorPoolConfig implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private int maxPoolSize;
+    private int minimumIdle;
     private long connectionTimeoutMs;
     private long idleTimeoutMs;
     private long maxLifetimeMs;

@@ -35,6 +35,7 @@ public class PostgresWriter implements Serializable {
     private final BatchExecutor batchExecutor;
     private final JdbiDaoFactory daoFactory;
     private final int batchSize;
+    private final int writerPartitions;
     private final int maxRetryAttempts;
     private final long initialRetryDelayMs;
     private final long maxDelayMs;
@@ -51,14 +52,15 @@ public class PostgresWriter implements Serializable {
         this.batchExecutor = batchExecutor;
         this.daoFactory = daoFactory;
         this.batchSize = postgresConfig.getBatchSize();
+        this.writerPartitions = postgresConfig.getWriterPartitions();
         this.maxRetryAttempts = postgresConfig.getRetry().getMaxAttempts();
         this.initialRetryDelayMs = postgresConfig.getRetry().getInitialDelayMs();
         this.maxDelayMs = postgresConfig.getRetry().getMaxDelayMs();
         this.metrics = metrics;
 
         log.info(
-                "PostgresWriter initialized - batchSize: {}, maxRetries: {}, retryDelayMs: {}, maxDelayMs: {}",
-                batchSize, maxRetryAttempts, initialRetryDelayMs, maxDelayMs
+                "PostgresWriter initialized - batchSize: {}, writerPartitions: {}, maxRetries: {}, retryDelayMs: {}, maxDelayMs: {}",
+                batchSize, writerPartitions, maxRetryAttempts, initialRetryDelayMs, maxDelayMs
         );
     }
 
@@ -157,7 +159,7 @@ public class PostgresWriter implements Serializable {
 
         Timer.Sample writeTimer = metrics.startTimer();
         try {
-            dataset.foreachPartition(partitionWriter::call);
+            dataset.repartition(writerPartitions).foreachPartition(partitionWriter::call);
         } catch (RuntimeException | Error e) {
             metrics.stageFailed(writeStage);
             throw e;

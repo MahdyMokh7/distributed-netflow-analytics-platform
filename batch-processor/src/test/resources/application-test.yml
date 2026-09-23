@@ -51,6 +51,7 @@ postgres:
   username: ${POSTGRES_USER:test_user}
   password: ${POSTGRES_PASSWORD:test_pass}
   batch-size: 100
+  writer-partitions: 1
 
   driver-pool:
     size: 2
@@ -59,6 +60,7 @@ postgres:
 
   executor-pool:
     max-pool-size: 1
+    minimum-idle: 0
     connection-timeout-ms: 3000
     idle-timeout-ms: 30000
     max-lifetime-ms: 60000

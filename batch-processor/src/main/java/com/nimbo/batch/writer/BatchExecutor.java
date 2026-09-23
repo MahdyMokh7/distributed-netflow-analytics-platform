@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.Serializable;
+import java.sql.Statement;
 import java.util.function.Supplier;
 
 @Component
@@ -57,8 +58,8 @@ public class BatchExecutor  implements Serializable {
 
     private void verifyAllRowsAffected(int[] results) {
         for (int result : results) {
-            if (result != 1) {
-                throw new RuntimeException("Batch write incomplete: expected 1 row affected, got " + result);
+            if (result != 1 && result != Statement.SUCCESS_NO_INFO) {
+                throw new RuntimeException("Batch write incomplete: expected success, got " + result);
             }
         }
     }
@@ -86,7 +87,7 @@ public class BatchExecutor  implements Serializable {
     public long sumResults(int[] results) {
         long total = 0;
         for (int result : results) {
-            total += result;
+            total += result == Statement.SUCCESS_NO_INFO ? 1 : result;
         }
         return total;
     }

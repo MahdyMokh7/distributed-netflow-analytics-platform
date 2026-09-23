@@ -71,28 +71,24 @@ public class PartitionWriter<T, D> implements Serializable {
         int batchNumber = 0;
         List<T> batch = new ArrayList<>(batchSize);
 
-        try {
-            D dao = daoCreator.apply(daoFactory);
-            while (partition.hasNext()) {
-                Row row = partition.next();
-                batch.add(rowMapper.map(row, batchId, ingestedAt));
+        D dao = daoCreator.apply(daoFactory);
+        while (partition.hasNext()) {
+            Row row = partition.next();
+            batch.add(rowMapper.map(row, batchId, ingestedAt));
 
-                if (batch.size() >= batchSize) {
-                    batchNumber++;
-                    log.info("Partition {} - Writing batch #{} ({} rows) to {}",
-                            partitionId, batchNumber, batch.size(), tableName);
-                    flushBatch(batch, dao);
-                }
-            }
-
-            if (!batch.isEmpty()) {
+            if (batch.size() >= batchSize) {
                 batchNumber++;
-                log.info("Partition {} - Writing final batch #{} ({} rows) to {}",
+                log.info("Partition {} - Writing batch #{} ({} rows) to {}",
                         partitionId, batchNumber, batch.size(), tableName);
                 flushBatch(batch, dao);
             }
-        } finally {
-            daoFactory.close();
+        }
+
+        if (!batch.isEmpty()) {
+            batchNumber++;
+            log.info("Partition {} - Writing final batch #{} ({} rows) to {}",
+                    partitionId, batchNumber, batch.size(), tableName);
+            flushBatch(batch, dao);
         }
     }
 

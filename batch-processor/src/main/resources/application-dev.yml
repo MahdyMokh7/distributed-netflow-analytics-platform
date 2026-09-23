@@ -34,6 +34,7 @@ postgres:
   username: nimbo_user
   password: 123456
   batch-size: 2000
+  writer-partitions: 4
 
   driver-pool:
     size: 4
@@ -41,10 +42,11 @@ postgres:
     pool-name: nimbo-batch-pg-pool
 
   executor-pool:
-    max-pool-size: ${EXECUTOR_POOL_SIZE:2}
+    max-pool-size: ${EXECUTOR_POOL_SIZE:1}
+    minimum-idle: ${EXECUTOR_MINIMUM_IDLE:0}
     connection-timeout-ms: ${EXECUTOR_CONNECTION_TIMEOUT:5000}
     idle-timeout-ms: ${EXECUTOR_IDLE_TIMEOUT:60000}
-    max-lifetime-ms: ${EXECUTOR_MAX_LIFETIME:180000}
+    max-lifetime-ms: ${EXECUTOR_MAX_LIFETIME:1800000}
     pool-name: ${EXECUTOR_POOL_NAME:JdbiExecutorPool}
 
   retry:

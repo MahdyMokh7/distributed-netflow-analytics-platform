@@ -17,8 +17,14 @@ data:
             - host all all 0.0.0.0/0 md5
             - host replication replication 0.0.0.0/0 md5
           parameters:
-            max_connections: 100
+            max_connections: {{ .Values.postgresql.parameters.maxConnections }}
             max_worker_processes: 8
+            shared_buffers: {{ .Values.postgresql.parameters.sharedBuffers }}
+            effective_cache_size: {{ .Values.postgresql.parameters.effectiveCacheSize }}
+            max_wal_size: {{ .Values.postgresql.parameters.maxWalSize }}
+            checkpoint_timeout: {{ .Values.postgresql.parameters.checkpointTimeout }}
+            checkpoint_completion_target: {{ .Values.postgresql.parameters.checkpointCompletionTarget }}
+            wal_compression: {{ .Values.postgresql.parameters.walCompression | quote }}
 
       initdb:
         - auth-host: md5
@@ -42,9 +48,13 @@ data:
       pgpass: /tmp/pgpass
       parameters:
         log_destination: jsonlog
-        effective_cache_size: 4GB
-        shared_buffers: 128MB
-        wal_compression: "on"
+        max_connections: {{ .Values.postgresql.parameters.maxConnections }}
+        shared_buffers: {{ .Values.postgresql.parameters.sharedBuffers }}
+        effective_cache_size: {{ .Values.postgresql.parameters.effectiveCacheSize }}
+        max_wal_size: {{ .Values.postgresql.parameters.maxWalSize }}
+        checkpoint_timeout: {{ .Values.postgresql.parameters.checkpointTimeout }}
+        checkpoint_completion_target: {{ .Values.postgresql.parameters.checkpointCompletionTarget }}
+        wal_compression: {{ .Values.postgresql.parameters.walCompression | quote }}
 
     kubernetes:
       use_endpoints: true

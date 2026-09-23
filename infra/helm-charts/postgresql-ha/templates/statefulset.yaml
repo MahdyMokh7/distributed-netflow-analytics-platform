@@ -97,6 +97,9 @@ spec:
             requests:
               cpu: {{ .Values.resources.postgresql.requests.cpu | quote }}
               memory: {{ .Values.resources.postgresql.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.resources.postgresql.limits.cpu | quote }}
+              memory: {{ .Values.resources.postgresql.limits.memory | quote }}
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data

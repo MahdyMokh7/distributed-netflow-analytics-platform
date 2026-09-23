@@ -25,10 +25,11 @@ hdfs:
 
 postgres:
   executorPool:
-    maxPoolSize: 2
+    maxPoolSize: 1
+    minimumIdle: 0
     connectionTimeoutMs: 5000
     idleTimeoutMs: 60000
-    maxLifetimeMs: 180000
+    maxLifetimeMs: "1800000"
     poolName: JdbiExecutorPool
 
 resources:

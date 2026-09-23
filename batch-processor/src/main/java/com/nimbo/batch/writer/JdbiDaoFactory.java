@@ -15,9 +15,12 @@ import org.springframework.stereotype.Component;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Component
-public class JdbiDaoFactory implements Serializable, AutoCloseable {
+public class JdbiDaoFactory implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -26,37 +29,27 @@ public class JdbiDaoFactory implements Serializable, AutoCloseable {
     private final String username;
     private final String password;
     private final int maxPoolSize;
+    private final int minimumIdle;
     private final long connectionTimeoutMs;
     private final long idleTimeoutMs;
     private final long maxLifetimeMs;
     private final String poolName;
-
-    private transient HikariDataSource dataSource;
 
     public JdbiDaoFactory(PostgresConfig postgresConfig, ExecutorPoolConfig executorPoolConfig) {
         this.jdbcUrl = postgresConfig.getJdbcUrl();
         this.username = postgresConfig.getUsername();
         this.password = postgresConfig.getPassword();
         this.maxPoolSize = executorPoolConfig.getMaxPoolSize();
+        this.minimumIdle = executorPoolConfig.getMinimumIdle();
         this.connectionTimeoutMs = executorPoolConfig.getConnectionTimeoutMs();
         this.idleTimeoutMs = executorPoolConfig.getIdleTimeoutMs();
         this.maxLifetimeMs = executorPoolConfig.getMaxLifetimeMs();
         this.poolName = executorPoolConfig.getPoolName();
     }
 
-    private synchronized HikariDataSource getDataSource() {
-        if (dataSource == null) {
-            dataSource = new HikariDataSource(createHikariConfig());
-        }
-        return dataSource;
-    }
-
-    @Override
-    public synchronized void close() {
-        if (dataSource != null) {
-            dataSource.close();
-            dataSource = null;
-        }
+    private HikariDataSource getDataSource() {
+        PoolKey poolKey = new PoolKey(jdbcUrl, username, password, poolName);
+        return ExecutorPoolRegistry.getOrCreate(poolKey, this::createHikariConfig);
     }
 
     HikariConfig createHikariConfig() {
@@ -64,10 +57,12 @@ public class JdbiDaoFactory implements Serializable, AutoCloseable {
         postgresDataSource.setUrl(jdbcUrl);
         postgresDataSource.setUser(username);
         postgresDataSource.setPassword(password);
+        postgresDataSource.setReWriteBatchedInserts(true);
 
         HikariConfig config = new HikariConfig();
         config.setDataSource(postgresDataSource);
         config.setMaximumPoolSize(maxPoolSize);
+        config.setMinimumIdle(minimumIdle);
         config.setConnectionTimeout(connectionTimeoutMs);
         config.setIdleTimeout(idleTimeoutMs);
         config.setMaxLifetime(maxLifetimeMs);
@@ -93,5 +88,41 @@ public class JdbiDaoFactory implements Serializable, AutoCloseable {
 
     private Jdbi createJdbi() {
         return Jdbi.create(getDataSource()).installPlugin(new SqlObjectPlugin());
+    }
+
+    static void closeExecutorPools() {
+        ExecutorPoolRegistry.closeAll();
+    }
+
+    private record PoolKey(String jdbcUrl, String username, String password, String poolName) {
+        private PoolKey {
+            Objects.requireNonNull(jdbcUrl);
+            Objects.requireNonNull(username);
+            Objects.requireNonNull(password);
+            Objects.requireNonNull(poolName);
+        }
+    }
+
+    private static final class ExecutorPoolRegistry {
+
+        private static final ConcurrentMap<PoolKey, HikariDataSource> DATA_SOURCES = new ConcurrentHashMap<>();
+
+        static {
+            Runtime.getRuntime().addShutdownHook(new Thread(
+                    ExecutorPoolRegistry::closeAll,
+                    "postgres-executor-pool-shutdown"));
+        }
+
+        private ExecutorPoolRegistry() {
+        }
+
+        private static HikariDataSource getOrCreate(PoolKey poolKey, java.util.function.Supplier<HikariConfig> config) {
+            return DATA_SOURCES.computeIfAbsent(poolKey, ignored -> new HikariDataSource(config.get()));
+        }
+
+        private static void closeAll() {
+            DATA_SOURCES.forEach((ignored, dataSource) -> dataSource.close());
+            DATA_SOURCES.clear();
+        }
     }
 }

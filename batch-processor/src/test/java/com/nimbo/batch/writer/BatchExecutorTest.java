@@ -2,6 +2,7 @@ package com.nimbo.batch.writer;
 
 import org.junit.jupiter.api.Test;
 
+import java.sql.Statement;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -10,6 +11,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class BatchExecutorTest {
 
     private final BatchExecutor executor = new BatchExecutor();
+
+    @Test
+    void givenSuccessfulBatchWithoutPerRowCounts_whenSummed_thenEveryEntryCountsAsOneRow() {
+        int[] results = {Statement.SUCCESS_NO_INFO, Statement.SUCCESS_NO_INFO};
+
+        int[] executed = executor.executeWithRetry(() -> results, "traffic_aggregates", 1, 0, 0);
+
+        assertThat(executor.sumResults(executed)).isEqualTo(2L);
+    }
 
     @Test
     void givenATransientFailure_whenExecuted_thenItRetriesAndReturnsTheCompleteBatchResult() {
