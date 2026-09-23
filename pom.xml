@@ -22,6 +22,7 @@
     <description>Nimbo NetFlow data processing platform.</description>
 
     <modules>
+        <module>common</module>
         <module>batch-ingester</module>
         <module>batch-processor</module>
         <module>starrocks-writer</module>

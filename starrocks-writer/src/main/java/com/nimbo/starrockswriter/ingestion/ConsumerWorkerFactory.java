@@ -1,5 +1,6 @@
 package com.nimbo.starrockswriter.ingestion;
 
+import com.nimbo.common.validation.NetflowValidationService;
 import com.nimbo.starrockswriter.avro.AvroDeserializer;
 import com.nimbo.starrockswriter.streamload.StarRocksStreamLoadClient;
 import com.nimbo.starrockswriter.config.KafkaProperties;
@@ -11,7 +12,6 @@ import com.nimbo.starrockswriter.processing.BatchProcessor;
 import com.nimbo.starrockswriter.processing.InFlightLoadManager;
 import com.nimbo.starrockswriter.streamload.StreamLoadLabelGenerator;
 import com.nimbo.starrockswriter.streamload.StreamLoadRetryHandler;
-import com.nimbo.starrockswriter.validation.NetflowValidationService;
 import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;

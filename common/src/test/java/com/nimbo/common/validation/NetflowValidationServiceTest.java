@@ -1,7 +1,7 @@
-package com.nimbo.ingester.service;
+package com.nimbo.common.validation;
 
-import com.nimbo.ingester.model.ValidationResult;
-import com.nimbo.support.NetFlowTestData;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,19 +13,48 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class NetflowValidationServiceTest {
 
-    private NetFlowTestData testData;
     private NetflowValidationService validationService;
+    private Schema schema;
 
     @BeforeEach
     void setUp() {
-        testData = new NetFlowTestData();
         validationService = new NetflowValidationService();
+        schema = new Schema.Parser().parse("""
+                {
+                  "type":"record",
+                  "name":"NetFlowV2Record",
+                  "fields":[
+                    {"name":"IPV4_SRC_ADDR","type":["null","string"],"default":null},
+                    {"name":"IPV4_DST_ADDR","type":["null","string"],"default":null},
+                    {"name":"L4_SRC_PORT","type":["null","int"],"default":null},
+                    {"name":"L4_DST_PORT","type":["null","int"],"default":null},
+                    {"name":"PROTOCOL","type":["null","int"],"default":null},
+                    {"name":"MIN_TTL","type":["null","int"],"default":null},
+                    {"name":"MAX_TTL","type":["null","int"],"default":null},
+                    {"name":"MIN_IP_PKT_LEN","type":["null","int"],"default":null},
+                    {"name":"MAX_IP_PKT_LEN","type":["null","int"],"default":null},
+                    {"name":"ICMP_TYPE","type":["null","int"],"default":null},
+                    {"name":"ICMP_IPV4_TYPE","type":["null","int"],"default":null},
+                    {"name":"DNS_QUERY_ID","type":["null","int"],"default":null},
+                    {"name":"DNS_QUERY_TYPE","type":["null","int"],"default":null},
+                    {"name":"IN_BYTES","type":["null","long"],"default":null},
+                    {"name":"OUT_BYTES","type":["null","long"],"default":null},
+                    {"name":"IN_PKTS","type":["null","long"],"default":null},
+                    {"name":"OUT_PKTS","type":["null","long"],"default":null},
+                    {"name":"FLOW_DURATION_MILLISECONDS","type":["null","long"],"default":null},
+                    {"name":"DURATION_IN","type":["null","long"],"default":null},
+                    {"name":"DURATION_OUT","type":["null","long"],"default":null},
+                    {"name":"LONGEST_FLOW_PKT","type":["null","long"],"default":null},
+                    {"name":"SHORTEST_FLOW_PKT","type":["null","long"],"default":null},
+                    {"name":"L7_PROTO","type":["null","double"],"default":null}
+                  ]
+                }
+                """);
     }
 
     @Test
     void givenCompleteNetFlowAtSupportedBoundaries_whenValidated_thenRecordIsAccepted() {
-        // Given: a complete flow using valid lower and upper boundaries
-        GenericRecord record = testData.validRecord();
+        GenericRecord record = validRecord();
         record.put("L4_SRC_PORT", 0);
         record.put("L4_DST_PORT", 65_535);
         record.put("MIN_TTL", 0);
@@ -33,10 +62,8 @@ class NetflowValidationServiceTest {
         record.put("IN_BYTES", 0L);
         record.put("OUT_PKTS", 0L);
 
-        // When: domain validation checks every constrained field
         ValidationResult result = validationService.validate(record);
 
-        // Then: inclusive boundaries and zero counters remain valid
         assertThat(result).isEqualTo(ValidationResult.success());
     }
 
@@ -50,14 +77,11 @@ class NetflowValidationServiceTest {
     })
     void givenMalformedIpv4_whenValidated_thenSpecificAddressIsRejected(
             String field, String value, String expectedError) {
-        // Given: a complete flow containing one malformed IPv4 address
-        GenericRecord record = testData.validRecord();
+        GenericRecord record = validRecord();
         record.put(field, value);
 
-        // When: domain validation evaluates the address
         ValidationResult result = validationService.validate(record);
 
-        // Then: validation identifies the exact invalid address
         assertThat(result.valid()).isFalse();
         assertThat(result.reason()).isEqualTo(expectedError);
     }
@@ -69,14 +93,11 @@ class NetflowValidationServiceTest {
     })
     void givenPortOutsideUnsignedRange_whenValidated_thenPortIsRejected(
             String field, int value, String expectedError) {
-        // Given: a complete flow containing one out-of-range port
-        GenericRecord record = testData.validRecord();
+        GenericRecord record = validRecord();
         record.put(field, value);
 
-        // When: domain validation checks the port range
         ValidationResult result = validationService.validate(record);
 
-        // Then: validation reports the exact port violation
         assertThat(result.valid()).isFalse();
         assertThat(result.reason()).contains(expectedError).contains(String.valueOf(value));
     }
@@ -88,14 +109,11 @@ class NetflowValidationServiceTest {
     })
     void givenTtlOutsideUnsignedByteRange_whenValidated_thenTtlIsRejected(
             String field, int value, String expectedError) {
-        // Given: a complete flow containing one out-of-range TTL
-        GenericRecord record = testData.validRecord();
+        GenericRecord record = validRecord();
         record.put(field, value);
 
-        // When: domain validation checks the TTL range
         ValidationResult result = validationService.validate(record);
 
-        // Then: validation reports the exact TTL violation
         assertThat(result.valid()).isFalse();
         assertThat(result.reason()).contains(expectedError).contains(String.valueOf(value));
     }
@@ -108,31 +126,25 @@ class NetflowValidationServiceTest {
             "OUT_PKTS, 'OUT_PKTS is negative: -1'"
     })
     void givenNegativeTrafficCounter_whenValidated_thenCounterIsRejected(String field, String expectedError) {
-        // Given: a complete flow containing one negative traffic counter
-        GenericRecord record = testData.validRecord();
+        GenericRecord record = validRecord();
         record.put(field, -1L);
 
-        // When: domain validation checks nonnegative counters
         ValidationResult result = validationService.validate(record);
 
-        // Then: validation reports the exact negative counter
         assertThat(result.valid()).isFalse();
         assertThat(result.reason()).isEqualTo(expectedError);
     }
 
     @Test
     void givenNegativePacketLengths_whenValidated_thenEveryPacketLengthIsRejected() {
-        // Given: a complete flow containing negative packet-length boundaries
-        GenericRecord record = testData.validRecord();
+        GenericRecord record = validRecord();
         record.put("LONGEST_FLOW_PKT", -1);
         record.put("SHORTEST_FLOW_PKT", -1);
         record.put("MIN_IP_PKT_LEN", -1);
         record.put("MAX_IP_PKT_LEN", -1);
 
-        // When: domain validation checks nonnegative packet lengths
         ValidationResult result = validationService.validate(record);
 
-        // Then: every negative packet-length field is reported once
         assertThat(result.valid()).isFalse();
         assertThat(result.reason())
                 .contains("LONGEST_FLOW_PKT")
@@ -143,8 +155,7 @@ class NetflowValidationServiceTest {
 
     @Test
     void givenInvertedMinimumAndMaximumValues_whenValidated_thenAllOrderingErrorsAreReported() {
-        // Given: a flow with inverted TTL and packet-length boundaries
-        GenericRecord record = testData.validRecord();
+        GenericRecord record = validRecord();
         record.put("MIN_TTL", 100);
         record.put("MAX_TTL", 50);
         record.put("SHORTEST_FLOW_PKT", 1_500);
@@ -152,10 +163,8 @@ class NetflowValidationServiceTest {
         record.put("MIN_IP_PKT_LEN", 1_500);
         record.put("MAX_IP_PKT_LEN", 64);
 
-        // When: domain validation checks related minimum and maximum fields
         ValidationResult result = validationService.validate(record);
 
-        // Then: all ordering failures are returned in deterministic validation order
         assertThat(result.valid()).isFalse();
         assertThat(result.reason())
                 .isEqualTo("MIN_TTL > MAX_TTL (100 > 50)"
@@ -165,16 +174,13 @@ class NetflowValidationServiceTest {
 
     @Test
     void givenSeveralMissingRequiredValues_whenValidated_thenEveryMissingFieldIsReportedOnce() {
-        // Given: a flow with deterministic missing identity and traffic values
-        GenericRecord record = testData.validRecord();
+        GenericRecord record = validRecord();
         record.put("IPV4_SRC_ADDR", null);
         record.put("L4_DST_PORT", null);
         record.put("IN_BYTES", null);
 
-        // When: domain validation evaluates the incomplete flow
         ValidationResult result = validationService.validate(record);
 
-        // Then: validation returns every missing field in rule order
         assertThat(result.valid()).isFalse();
         assertThat(result.reason())
                 .isEqualTo("IPV4_SRC_ADDR is null | L4_DST_PORT is null | IN_BYTES is null");
@@ -198,15 +204,70 @@ class NetflowValidationServiceTest {
             "MAX_IP_PKT_LEN"
     })
     void givenMissingValidatedField_whenValidated_thenExactFieldIsRejected(String field) {
-        // Given: a complete flow with one validated field missing
-        GenericRecord record = testData.validRecord();
+        GenericRecord record = validRecord();
         record.put(field, null);
 
-        // When: domain validation checks the incomplete flow
         ValidationResult result = validationService.validate(record);
 
-        // Then: validation identifies only the missing field
         assertThat(result.valid()).isFalse();
         assertThat(result.reason()).isEqualTo(field + " is null");
+    }
+
+    @Test
+    void givenNullRecord_whenValidated_thenRecordIsRejected() {
+        ValidationResult result = validationService.validate(null);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.reason()).isEqualTo("Record is null");
+    }
+
+    @Test
+    void givenNegativeL7Protocol_whenValidated_thenProtocolIsRejected() {
+        GenericRecord record = validRecord();
+        record.put("L7_PROTO", -1.0);
+
+        ValidationResult result = validationService.validate(record);
+
+        assertThat(result.reason()).isEqualTo("L7_PROTO is negative: -1.0");
+    }
+
+    @Test
+    void givenInfiniteL7Protocol_whenValidated_thenProtocolIsRejected() {
+        GenericRecord record = validRecord();
+        record.put("L7_PROTO", Double.POSITIVE_INFINITY);
+
+        ValidationResult result = validationService.validate(record);
+
+        assertThat(result.reason()).isEqualTo("L7_PROTO is not finite: Infinity");
+    }
+
+    private GenericRecord validRecord() {
+        GenericRecord record = new GenericData.Record(schema);
+
+        record.put("IPV4_SRC_ADDR", "192.168.1.10");
+        record.put("IPV4_DST_ADDR", "8.8.8.8");
+        record.put("L4_SRC_PORT", 1000);
+        record.put("L4_DST_PORT", 443);
+        record.put("PROTOCOL", 6);
+        record.put("MIN_TTL", 20);
+        record.put("MAX_TTL", 30);
+        record.put("MIN_IP_PKT_LEN", 64);
+        record.put("MAX_IP_PKT_LEN", 512);
+        record.put("ICMP_TYPE", 0);
+        record.put("ICMP_IPV4_TYPE", 0);
+        record.put("DNS_QUERY_ID", 1);
+        record.put("DNS_QUERY_TYPE", 1);
+        record.put("IN_BYTES", 100L);
+        record.put("OUT_BYTES", 200L);
+        record.put("IN_PKTS", 10L);
+        record.put("OUT_PKTS", 20L);
+        record.put("FLOW_DURATION_MILLISECONDS", 1000L);
+        record.put("DURATION_IN", 100L);
+        record.put("DURATION_OUT", 200L);
+        record.put("LONGEST_FLOW_PKT", 512L);
+        record.put("SHORTEST_FLOW_PKT", 64L);
+        record.put("L7_PROTO", 7.5);
+
+        return record;
     }
 }

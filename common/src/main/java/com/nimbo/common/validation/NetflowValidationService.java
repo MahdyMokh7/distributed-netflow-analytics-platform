@@ -1,16 +1,12 @@
-package com.nimbo.ingester.service;
+package com.nimbo.common.validation;
 
-import com.nimbo.ingester.model.ValidationResult;
 import org.apache.avro.generic.GenericRecord;
-import org.springframework.stereotype.Service;
 
-@Service
 public class NetflowValidationService {
 
     private static final String FLOW_DURATION_MILLISECONDS = "FLOW_DURATION_MILLISECONDS";
 
     public ValidationResult validate(GenericRecord genericRecord) {
-
         if (genericRecord == null) {
             return ValidationResult.failure("Record is null");
         }
@@ -20,45 +16,33 @@ public class NetflowValidationService {
         checkIpv4(genericRecord, "IPV4_SRC_ADDR", errors);
         checkIpv4(genericRecord, "IPV4_DST_ADDR", errors);
 
-
         checkRange(genericRecord, "L4_SRC_PORT", 0, 65_535, errors);
         checkRange(genericRecord, "L4_DST_PORT", 0, 65_535, errors);
-
         checkRange(genericRecord, "PROTOCOL", 0, 255, errors);
-
 
         checkRange(genericRecord, "MIN_TTL", 0, 255, errors);
         checkRange(genericRecord, "MAX_TTL", 0, 255, errors);
 
-
         checkRange(genericRecord, "MIN_IP_PKT_LEN", 0, 65_535, errors);
         checkRange(genericRecord, "MAX_IP_PKT_LEN", 0, 65_535, errors);
-
 
         checkRange(genericRecord, "ICMP_TYPE", 0, 65_535, errors);
         checkRange(genericRecord, "ICMP_IPV4_TYPE", 0, 255, errors);
 
-
         checkRange(genericRecord, "DNS_QUERY_ID", 0, 65_535, errors);
         checkRange(genericRecord, "DNS_QUERY_TYPE", 0, 65_535, errors);
 
-
         checkNonNegative(genericRecord, "IN_BYTES", errors);
         checkNonNegative(genericRecord, "OUT_BYTES", errors);
-
         checkNonNegative(genericRecord, "IN_PKTS", errors);
         checkNonNegative(genericRecord, "OUT_PKTS", errors);
 
-
         checkNonNegative(genericRecord, FLOW_DURATION_MILLISECONDS, errors);
-
         checkNonNegative(genericRecord, "DURATION_IN", errors);
         checkNonNegative(genericRecord, "DURATION_OUT", errors);
 
-
         checkNonNegative(genericRecord, "LONGEST_FLOW_PKT", errors);
         checkNonNegative(genericRecord, "SHORTEST_FLOW_PKT", errors);
-
 
         checkMinMax(genericRecord, "MIN_TTL", "MAX_TTL", errors);
         checkMinMax(genericRecord, "SHORTEST_FLOW_PKT", "LONGEST_FLOW_PKT", errors);
@@ -75,9 +59,7 @@ public class NetflowValidationService {
         return ValidationResult.failure(errors.toString());
     }
 
-
     private void checkNonNegative(GenericRecord record, String field, StringBuilder errors) {
-
         Number value = number(record, field, errors);
 
         if (value != null && value.longValue() < 0) {
@@ -85,9 +67,7 @@ public class NetflowValidationService {
         }
     }
 
-
     private void checkRange(GenericRecord record, String field, long min, long max, StringBuilder errors) {
-
         Number value = number(record, field, errors);
 
         if (value == null) {
@@ -101,9 +81,7 @@ public class NetflowValidationService {
         }
     }
 
-
     private void checkMinMax(GenericRecord record, String minField, String maxField, StringBuilder errors) {
-
         Object minObject = record.get(minField);
         Object maxObject = record.get(maxField);
 
@@ -112,13 +90,11 @@ public class NetflowValidationService {
         }
 
         if (min.longValue() > max.longValue()) {
-
             addError(errors, minField + " > " + maxField + " (" + min + " > " + max + ")");
         }
     }
 
     private void checkFiniteNonNegativeDouble(GenericRecord record, String field, StringBuilder errors) {
-
         Number value = number(record, field, errors);
 
         if (value == null) {
@@ -128,57 +104,43 @@ public class NetflowValidationService {
         double number = value.doubleValue();
 
         if (!Double.isFinite(number)) {
-
             addError(errors, field + " is not finite: " + number);
         } else if (number < 0) {
-
             addError(errors, field + " is negative: " + number);
         }
     }
 
-
     private Number number(GenericRecord record, String field, StringBuilder errors) {
-
         Object value = record.get(field);
         if (value == null) {
-
             addError(errors, field + " is null");
             return null;
         }
 
         if (!(value instanceof Number number)) {
-
             addError(errors, field + " is not numeric");
             return null;
         }
         return number;
     }
 
-
     private void checkIpv4(GenericRecord record, String field, StringBuilder errors) {
-
         Object value = record.get(field);
         if (value == null) {
-
             addError(errors, field + " is null");
             return;
         }
 
         String ip = value.toString();
-
         String[] parts = ip.split("\\.", -1);
 
         if (parts.length != 4) {
-
             addInvalidIpv4(errors, field, ip);
             return;
         }
 
-
         for (String part : parts) {
-
             if (part.isEmpty() || part.length() > 3 || !part.chars().allMatch(Character::isDigit)) {
-
                 addInvalidIpv4(errors, field, ip);
                 return;
             }
@@ -186,21 +148,17 @@ public class NetflowValidationService {
             int number = Integer.parseInt(part);
 
             if (number > 255) {
-
                 addInvalidIpv4(errors, field, ip);
                 return;
             }
         }
     }
 
-
     private void addInvalidIpv4(StringBuilder errors, String field, String ip) {
         addError(errors, field + " invalid IPv4: " + ip);
     }
 
-
     private void addError(StringBuilder errors, String error) {
-
         if (!errors.isEmpty()) {
             errors.append(" | ");
         }

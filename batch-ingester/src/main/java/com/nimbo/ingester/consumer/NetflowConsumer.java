@@ -1,14 +1,14 @@
 package com.nimbo.ingester.consumer;
 
+import com.nimbo.common.validation.NetflowValidationService;
+import com.nimbo.common.validation.ValidationResult;
 import com.nimbo.ingester.config.KafkaProperties;
 import com.nimbo.ingester.deserializer.AvroDeserializer;
 import com.nimbo.ingester.exception.DeserializationException;
 import com.nimbo.ingester.exception.KafkaConsumerException;
 import com.nimbo.ingester.model.IngestedRecord;
-import com.nimbo.ingester.model.ValidationResult;
 import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
-import com.nimbo.ingester.service.NetflowValidationService;
 import com.nimbo.metrics.BatchIngesterMetrics;
 import com.nimbo.storage.exception.StorageException;
 import com.nimbo.storage.model.TopicPartitionKey;

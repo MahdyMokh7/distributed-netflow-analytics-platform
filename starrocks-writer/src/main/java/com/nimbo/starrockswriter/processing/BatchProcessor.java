@@ -1,5 +1,7 @@
 package com.nimbo.starrockswriter.processing;
 
+import com.nimbo.common.validation.NetflowValidationService;
+import com.nimbo.common.validation.ValidationResult;
 import com.nimbo.starrockswriter.avro.AvroDeserializer;
 import com.nimbo.starrockswriter.streamload.StreamLoadRetryHandler;
 import com.nimbo.starrockswriter.streamload.StreamLoadLabelGenerator;
@@ -7,8 +9,6 @@ import com.nimbo.starrockswriter.mapper.StarRocksRecordMapper;
 import com.nimbo.starrockswriter.model.PendingLoad;
 import com.nimbo.starrockswriter.model.StarRocksRow;
 import com.nimbo.starrockswriter.model.StreamLoadResult;
-import com.nimbo.starrockswriter.validation.NetflowValidationService;
-import com.nimbo.starrockswriter.validation.ValidationResult;
 import com.nimbo.starrockswriter.metrics.StarRocksWriterMetrics;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

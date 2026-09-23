@@ -1,12 +1,12 @@
 package com.nimbo.integration;
 
+import com.nimbo.common.validation.NetflowValidationService;
 import com.nimbo.ingester.config.KafkaProperties;
 import com.nimbo.ingester.consumer.KafkaOffsetCommitter;
 import com.nimbo.ingester.consumer.NetflowConsumer;
 import com.nimbo.ingester.deserializer.AvroDeserializer;
 import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
-import com.nimbo.ingester.service.NetflowValidationService;
 import com.nimbo.metrics.BatchIngesterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.config.ParquetProperties;

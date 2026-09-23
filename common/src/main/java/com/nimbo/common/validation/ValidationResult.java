@@ -1,4 +1,4 @@
-package com.nimbo.starrockswriter.validation;
+package com.nimbo.common.validation;
 
 public record ValidationResult(
         boolean valid,
