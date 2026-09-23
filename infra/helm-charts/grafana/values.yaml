@@ -7,6 +7,20 @@ image:
 
 containerPort: 3000
 
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 472
+  runAsGroup: 472
+  fsGroup: 472
+  fsGroupChangePolicy: OnRootMismatch
+
+persistence:
+  enabled: true
+  storageClassName: disk1
+  accessModes:
+    - ReadWriteOnce
+  size: 2Gi
+
 adminSecret:
   name: grafana-admin-secret
 

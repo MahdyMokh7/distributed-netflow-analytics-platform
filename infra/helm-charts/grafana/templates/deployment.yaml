@@ -22,6 +22,8 @@ spec:
         checksum/alerting: {{ include (print $.Template.BasePath "/configmap-alerting.yaml") . | sha256sum }}
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: grafana
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -54,6 +56,10 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 15
           volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: /var/lib/grafana
+            {{- end }}
             - name: datasources
               mountPath: /etc/grafana/provisioning/datasources
             - name: dashboard-provider
@@ -65,6 +71,11 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: grafana-data
+        {{- end }}
         - name: datasources
           configMap:
             name: grafana-datasources
