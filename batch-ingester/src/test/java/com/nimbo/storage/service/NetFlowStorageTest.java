@@ -118,11 +118,11 @@ class NetFlowStorageTest {
 
     private Schema buildStorageSchema(Schema sourceSchema) {
 
-        Schema.Field eventTimeField =
+        Schema.Field processTimeField =
                 new Schema.Field(
-                        "EVENT_TIME",
+                        "PROCESS_TIME",
                         Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)),
-                        "event time",
+                        "process time",
                         (Object) null
                 );
 
@@ -133,7 +133,7 @@ class NetFlowStorageTest {
             fields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
         }
 
-        fields.add(eventTimeField);
+        fields.add(processTimeField);
 
         return Schema.createRecord(sourceSchema.getName(), sourceSchema.getDoc(), sourceSchema.getNamespace(),
                 sourceSchema.isError(), fields);

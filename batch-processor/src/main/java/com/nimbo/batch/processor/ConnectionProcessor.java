@@ -74,7 +74,7 @@ public class ConnectionProcessor extends BaseProcessor {
                 .groupBy(
                         col(NETFLOW_SRC_IP).alias(SPARK_SRC_IP),
                         col(NETFLOW_DST_IP).alias(SPARK_DST_IP),
-                        window(timestamp_micros(col(NETFLOW_EVENT_TIME)), windowDuration)
+                        window(timestamp_micros(col(NETFLOW_PROCESS_TIME)), windowDuration)
                 )
                 .agg(
                         sum(col(NETFLOW_IN_BYTES)).alias(SPARK_IN_BYTES),

@@ -31,7 +31,7 @@ class IngesterConfigurationTest {
     }
 
     @Test
-    void givenSourceSchema_whenStorageSchemaIsBuilt_thenEventTimeIsAppendedWithoutMutation() {
+    void givenSourceSchema_whenStorageSchemaIsBuilt_thenProcessTimeIsAppendedWithoutMutation() {
         // Given: the immutable production source-field contract
         Schema source = configuration.avroSchema();
         List<String> originalNames = source.getFields().stream().map(Schema.Field::name).toList();
@@ -40,13 +40,13 @@ class IngesterConfigurationTest {
         Schema storage = configuration.storageSchema(source);
 
         // Then: source fields remain unchanged and nullable epoch micros are appended once
-        assertThat(source.getField("EVENT_TIME")).isNull();
+        assertThat(source.getField("PROCESS_TIME")).isNull();
         assertThat(storage.getFields()).hasSize(source.getFields().size() + 1);
         assertThat(storage.getFields().subList(0, originalNames.size()))
                 .extracting(Schema.Field::name)
                 .containsExactlyElementsOf(originalNames);
-        assertThat(storage.getFields().get(storage.getFields().size() - 1).name()).isEqualTo("EVENT_TIME");
-        assertThat(storage.getField("EVENT_TIME").schema().getTypes())
+        assertThat(storage.getFields().get(storage.getFields().size() - 1).name()).isEqualTo("PROCESS_TIME");
+        assertThat(storage.getField("PROCESS_TIME").schema().getTypes())
                 .extracting(Schema::getType)
                 .containsExactly(Schema.Type.NULL, Schema.Type.LONG);
     }

@@ -75,7 +75,7 @@ public class TopIpProcessor extends BaseProcessor {
                         col(NETFLOW_IN_BYTES).alias(SPARK_INBOUND_BYTES),
                         col(NETFLOW_OUT_PKTS).alias(SPARK_OUTBOUND_PACKETS),
                         col(NETFLOW_IN_PKTS).alias(SPARK_INBOUND_PACKETS),
-                        timestamp_micros(col(NETFLOW_EVENT_TIME)).alias(NETFLOW_EVENT_TIME)
+                        timestamp_micros(col(NETFLOW_PROCESS_TIME)).alias(NETFLOW_PROCESS_TIME)
                 );
 
         Dataset<Row> dstPerspective = sourceDf
@@ -85,7 +85,7 @@ public class TopIpProcessor extends BaseProcessor {
                         col(NETFLOW_OUT_BYTES).alias(SPARK_INBOUND_BYTES),
                         col(NETFLOW_IN_PKTS).alias(SPARK_OUTBOUND_PACKETS),
                         col(NETFLOW_OUT_PKTS).alias(SPARK_INBOUND_PACKETS),
-                        timestamp_micros(col(NETFLOW_EVENT_TIME)).alias(NETFLOW_EVENT_TIME)
+                        timestamp_micros(col(NETFLOW_PROCESS_TIME)).alias(NETFLOW_PROCESS_TIME)
                 );
 
         Dataset<Row> unified = srcPerspective.unionByName(dstPerspective);
@@ -93,7 +93,7 @@ public class TopIpProcessor extends BaseProcessor {
         return unified
                 .groupBy(
                         col(SPARK_IP),
-                            window(col(NETFLOW_EVENT_TIME), windowDuration)
+                            window(col(NETFLOW_PROCESS_TIME), windowDuration)
                 )
                 .agg(
                         sum(col(SPARK_OUTBOUND_BYTES)).alias(SPARK_OUTBOUND_BYTES),

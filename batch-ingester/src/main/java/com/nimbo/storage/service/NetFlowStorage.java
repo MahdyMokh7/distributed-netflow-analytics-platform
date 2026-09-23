@@ -238,8 +238,8 @@ public final class NetFlowStorage {
         for (Schema.Field field : storageSchema.getFields()) {
             String fieldName = field.name();
 
-            if ("EVENT_TIME".equals(fieldName)) {
-                enriched.put("EVENT_TIME", kafkaTimestampMicros);
+            if ("PROCESS_TIME".equals(fieldName)) {
+                enriched.put("PROCESS_TIME", kafkaTimestampMicros);
             } else {
                 enriched.put(fieldName, original.get(fieldName));
             }

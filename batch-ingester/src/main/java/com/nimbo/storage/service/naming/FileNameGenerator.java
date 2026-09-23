@@ -35,15 +35,15 @@ public final class FileNameGenerator {
             throw new IllegalArgumentException("partition must not be negative");
         }
 
-        Instant eventTime = Instant.ofEpochMilli(kafkaTimestamp);
+        Instant processTime = Instant.ofEpochMilli(kafkaTimestamp);
         String fileName = String.format(
                 "netflow-p%02d-%s-%s.parquet",
                 partition,
-                TIMESTAMP_FORMATTER.format(eventTime),
+                TIMESTAMP_FORMATTER.format(processTime),
                 uuidSupplier.get()
         );
 
-        return String.join("/", DATE_FORMATTER.format(eventTime), HOUR_FORMATTER.format(eventTime), fileName);
+        return String.join("/", DATE_FORMATTER.format(processTime), HOUR_FORMATTER.format(processTime), fileName);
     }
 
     public String generateTempFileName(String finalFileName) {

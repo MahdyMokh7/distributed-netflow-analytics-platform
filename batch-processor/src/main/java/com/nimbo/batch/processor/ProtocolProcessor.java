@@ -72,7 +72,7 @@ public class ProtocolProcessor extends BaseProcessor {
         return sourceDf
                 .groupBy(
                         col(NETFLOW_L7_PROTO).alias(SPARK_L7_PROTOCOL),
-                        window(timestamp_micros(col(NETFLOW_EVENT_TIME)), windowDuration)
+                        window(timestamp_micros(col(NETFLOW_PROCESS_TIME)), windowDuration)
                 )
                 .agg(
                         sum(col(NETFLOW_IN_BYTES)).alias(SPARK_IN_BYTES),

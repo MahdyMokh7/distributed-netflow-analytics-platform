@@ -76,7 +76,7 @@ public class TrafficAggregationProcessor extends BaseProcessor {
         return sourceDf
                 .groupBy(
                         col(NETFLOW_SRC_IP).alias(SPARK_SRC_IP),
-                        window(timestamp_micros(col(NETFLOW_EVENT_TIME)), windowDuration)
+                        window(timestamp_micros(col(NETFLOW_PROCESS_TIME)), windowDuration)
                 )
                 .agg(
                         sum(col(NETFLOW_IN_BYTES)).alias(SPARK_IN_BYTES),

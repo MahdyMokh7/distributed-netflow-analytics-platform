@@ -34,7 +34,7 @@ public final class ProcessorTestFixture {
             .add("OUT_BYTES", DataTypes.LongType, false)
             .add("IN_PKTS", DataTypes.LongType, false)
             .add("OUT_PKTS", DataTypes.LongType, false)
-            .add("EVENT_TIME", DataTypes.LongType, false);
+            .add("PROCESS_TIME", DataTypes.LongType, false);
 
     private final PostgresContainerExtension postgres;
     private final SparkSession spark;
