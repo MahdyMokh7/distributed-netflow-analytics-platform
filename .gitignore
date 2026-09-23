@@ -53,8 +53,8 @@ terminal.log
 /rest-api/docs/
 /rest-api/code-extracter.py
 
-/realtime/docs/
-/realtime/code-extracter.py
+/starrocks-writer/docs/
+/starrocks-writer/code-extracter.py
 
 /charts/docs/
 /charts/code-extracter.py

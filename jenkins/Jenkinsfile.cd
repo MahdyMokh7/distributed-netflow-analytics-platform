@@ -201,7 +201,7 @@ pipeline {
                     parallel(
                             'Deploy batch-ingester': { helmDeploy('batch-ingester') },
                             'Deploy batch-processor': { helmDeploy('batch-processor') },
-                            'Deploy realtime': { helmDeploy('realtime') },
+                            'Deploy starrocks-writer': { helmDeploy('starrocks-writer') },
                             'Deploy rest-api': { helmDeploy('rest-api') }
                     )
                 }

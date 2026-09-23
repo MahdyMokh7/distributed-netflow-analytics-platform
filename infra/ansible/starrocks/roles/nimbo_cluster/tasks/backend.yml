@@ -9,7 +9,7 @@
   ansible.builtin.file:
     path: /opt/starrocks/be
     owner: starrocks
-    group: starrocks
+    group: starrocks  
     recurse: true
 
 - name: Ensure the backend service is running
@@ -46,7 +46,7 @@
     MYSQL_PWD: "{{ starrocks_sql_pw }}"
   changed_when: true
   check_mode: false
-  no_log: false
+  no_log: true
   when:
     - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
     - (starrocks_be_rows | selectattr('Host', 'equalto', starrocks_address) | list | length) == 0

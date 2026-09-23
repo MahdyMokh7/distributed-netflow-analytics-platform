@@ -25,12 +25,11 @@ starrocks_brpc_port: 8060
 starrocks_heartbeat_port: 9050
 starrocks_starlet_port: 9070
 starrocks_database: nimbo
-starrocks_writer: nimbo_realtime
+starrocks_writer: nimbo_starrocks-writer
 starrocks_reader: nimbo_rest_api
 starrocks_account_host: "%"
 
 starrocks_writer_database_privilege: "CREATE TABLE"
-starrocks_min_free_bytes: 10737418240
 starrocks_health_retries: 60
 starrocks_health_delay: 5
 

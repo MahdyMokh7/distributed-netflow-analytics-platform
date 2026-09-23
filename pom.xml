@@ -24,7 +24,7 @@
     <modules>
         <module>batch-ingester</module>
         <module>batch-processor</module>
-        <module>realtime</module>
+        <module>starrocks-writer</module>
         <module>rest-api</module>
     </modules>
 

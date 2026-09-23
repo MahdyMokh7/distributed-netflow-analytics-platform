@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: nimbo-starrockswriter
+
+  datasource:
+    url: jdbc:mysql://10.10.61.53:9030/nimbo
+    username: ${STARROCKS_USERNAME:root}
+    password: ${STARROCKS_PASSWORD:s@hWater12345}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+  endpoint:
+    health:
+      show-details: always
+
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+server:
+  port: ${SERVER_PORT:8082}
+
+  
+starrockswriter:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092}
+    topic: ${KAFKA_TOPIC:netflow}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-starrocks-writer}
+    client-id: ${KAFKA_CLIENT_ID:starrocks-writer}
+    auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+    max-poll-records: ${KAFKA_MAX_POLL_RECORDS:2000}
+    poll-timeout-ms: ${KAFKA_POLL_TIMEOUT_MS:1000}
+    consumer-count: ${KAFKA_CONSUMER_COUNT:3}
+    max-partition-fetch-bytes: ${KAFKA_MAX_PARTITION_FETCH_BYTES:4194304}
+    session-timeout-ms: ${KAFKA_SESSION_TIMEOUT_MS:30000}
+    heartbeat-interval-ms: ${KAFKA_HEARTBEAT_INTERVAL_MS:3000}
+    max-poll-interval-ms: ${KAFKA_MAX_POLL_INTERVAL_MS:900000}
+
+  starrocks:
+    stream-load-backends:
+      - http://10.10.61.51:8040
+      - http://10.10.61.52:8040
+      - http://10.10.61.53:8040
+      - http://10.10.61.54:8040
+    database: ${STARROCKS_DATABASE:nimbo}
+    table: ${STARROCKS_TABLE:netflow}
+    username: ${STARROCKS_USERNAME:root}
+    password: ${STARROCKS_PASSWORD:s@hWater12345}
+    merge-commit-enabled: ${STARROCKS_MERGE_COMMIT_ENABLED:true}
+    merge-commit-async: ${STARROCKS_MERGE_COMMIT_ASYNC:false}
+    merge-commit-interval-ms: ${STARROCKS_MERGE_COMMIT_INTERVAL_MS:1000}
+    merge-commit-parallel: ${STARROCKS_MERGE_COMMIT_PARALLEL:3}
+    max-in-flight-requests: ${STARROCKS_MAX_IN_FLIGHT_REQUESTS:20}
+    retry-backoff-ms: ${STARROCKS_RETRY_BACKOFF_MS:1000}
+    max-batch-size-rows: ${STARROCKS_MAX_BATCH_SIZE_ROWS:8000}
+    max-batch-time-ms: ${STARROCKS_MAX_BATCH_TIME_MS:1000}
+
