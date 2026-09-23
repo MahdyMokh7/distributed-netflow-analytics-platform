@@ -18,6 +18,10 @@
     <name>Nimbo Common</name>
     <description>Shared code used by Nimbo modules.</description>
 
+    <properties>
+        <jib.skip>true</jib.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.avro</groupId>

@@ -51,7 +51,7 @@ pipeline {
     }
 
     environment {
-        KUBECONFIG = '/home/team1/.kube/nimbo-deploy-config'
+        PATH = "/home/team1/.local/bin:${env.PATH}"
     }
 
     stages {
@@ -71,7 +71,6 @@ pipeline {
                         cd infra/ansible/kafka
 
                         ansible-playbook \
-                          -i inventory.ini \
                           deploy.yml
                     '''
                 }
@@ -87,20 +86,19 @@ pipeline {
                         "ANSIBLE_BECOME_PASS=${params.ROOT_PASSWORD}",
                         "STARROCKS_ROOT_PASSWORD=${params.STARROCKS_ROOT_PASSWORD}",
                         "STARROCKS_SUDO_PASSWORD=${params.STARROCKS_SUDO_PASSWORD}"
-                    ]) {
+                ]) {
                     sh '''
-                        set -eu
+                set -eu
 
-                        if [ -f infra/ansible/starrocks/playbooks/starrocks.yml ]; then
-                            cd infra/ansible
+                if [ -f infra/ansible/starrocks/playbooks/deploy-starrocks.yml ]; then
+                    cd infra/ansible/starrocks
 
-                            ansible-playbook \
-                              -i starrocks/inventories/production/hosts.yml \
-                              starrocks/playbooks/starrocks.yml
-                        else
-                            echo "infra/ansible/starrocks/playbooks/starrocks.yml not written yet, skipping."
-                        fi
-                    '''
+                    ansible-playbook \\
+                      playbooks/deploy-starrocks.yml
+                else
+                    echo "infra/ansible/starrocks/playbooks/deploy-starrocks.yml not written yet, skipping."
+                fi
+            '''
                 }
                 script {
                     env.RAN_STARROCKS = 'true'

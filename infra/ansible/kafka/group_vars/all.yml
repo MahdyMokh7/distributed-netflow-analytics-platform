@@ -36,6 +36,9 @@ kafka_controller_jmx_port: 19096
 kafka_default_replication_factor: 3
 kafka_min_insync_replicas: 2
 kafka_num_partitions: 3
+kafka_log_retention_hours: 72
+kafka_log_retention_bytes: 68719476736
+kafka_log_retention_check_interval_ms: 300000
 
 kafka_first_controller: "team1-node2"
 

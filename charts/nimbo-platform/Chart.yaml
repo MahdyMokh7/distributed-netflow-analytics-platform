@@ -1,0 +1,23 @@
+apiVersion: v2
+name: nimbo-platform
+description: Umbrella chart deploying all nimbo-nimbyte modules as a single atomic Helm release
+type: application
+version: 0.1.0
+appVersion: "1.0"
+
+dependencies:
+  - name: batch-ingester
+    version: "0.1.0"
+    repository: "file://../batch-ingester"
+
+  - name: batch-processor
+    version: "0.1.0"
+    repository: "file://../batch-processor"
+
+  - name: starrocks-writer
+    version: "0.1.0"
+    repository: "file://../starrocks-writer"
+
+  - name: rest-api
+    version: "0.1.0"
+    repository: "file://../rest-api"

@@ -1,17 +1,94 @@
-def helmDeploy(moduleName) {
-    withEnv(["MODULE_NAME=${moduleName}"]) {
-        sh '''
-            set -eu
-            echo "Deploying ${MODULE_NAME} via Helm..."
+static def stateDir() {
+    return '/home/team1/.nimbo-cd-state'
+}
 
-            helm upgrade --install "${MODULE_NAME}" "charts/${MODULE_NAME}" \
-              --namespace "${KUBE_NAMESPACE}" \
-              --set image.repository="${NEXUS_PULL_REGISTRY}/${IMAGE_PREFIX}-${MODULE_NAME}" \
-              --set image.tag="${IMAGE_TAG}" \
-              --wait \
-              --timeout 5m
-        '''
+def lastSha(String component) {
+    def path = "${stateDir()}/${component}"
+    def exists = sh(script: "test -f '${path}'", returnStatus: true) == 0
+    if (!exists) { return null }
+    return sh(script: "cat '${path}'", returnStdout: true).trim()
+}
+
+def changed(String component, String pathPrefixes) {
+    if (params.FORCE_ALL) { return true }
+    def sha = lastSha(component)
+    if (sha == null) { return true }
+    def diff = sh(script: "git diff --name-only ${sha}..HEAD -- ${pathPrefixes}", returnStdout: true).trim()
+    return diff.length() > 0
+}
+
+def headShortSha() {
+    return sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+}
+
+def recordState(String component, String sha) {
+    sh """
+        mkdir -p '${stateDir()}'
+        echo '${sha}' > '${stateDir()}/${component}'
+    """
+}
+
+static def modulePathPrefixes(String name) {
+    return "${name}/ charts/${name}/"
+}
+
+static def moduleNames() {
+    return ['batch-ingester', 'batch-processor', 'starrocks-writer', 'rest-api']
+}
+
+def userSelectedModules() {
+    def moduleMap = [
+            'batch-ingester'  : params.DEPLOY_BATCH_INGESTER,
+            'batch-processor' : params.DEPLOY_BATCH_PROCESSOR,
+            'starrocks-writer': params.DEPLOY_STARROCKS_WRITER,
+            'rest-api'        : params.DEPLOY_REST_API
+    ]
+    def selected = moduleMap.findAll { name, isSelected -> isSelected }.keySet() as List
+    if (selected.isEmpty()) {
+        error("No modules selected. Tick at least one.")
     }
+    return selected
+}
+
+def computeModulesToDeploy() {
+    def userSelected = userSelectedModules()
+    def toDeploy = userSelected.findAll { name -> changed(name, modulePathPrefixes(name)) }
+
+    def skipped = userSelected - toDeploy
+    if (skipped) {
+        echo "Skipping unchanged modules (no build, no push, no deploy): ${skipped.join(', ')}"
+    }
+    echo toDeploy.isEmpty()
+            ? "Selected modules (${userSelected.join(', ')}) are unchanged - nothing to build or deploy this run."
+            : "Will build, push, and deploy: ${toDeploy.join(', ')}"
+
+    env.MODULES_TO_DEPLOY = toDeploy.join(',')
+}
+
+def modulesToDeployList() {
+    return env.MODULES_TO_DEPLOY ? env.MODULES_TO_DEPLOY.split(',') as List : []
+}
+
+def buildHelmArgs(List toDeploy) {
+    def allFour = toDeploy.size() == moduleNames().size()
+
+    def releaseExists = sh(
+            script: "helm status nimbo-platform --namespace \"${env.KUBE_NAMESPACE}\" > /dev/null 2>&1",
+            returnStatus: true
+    ) == 0
+
+    if (!allFour && !releaseExists) {
+        echo "WARNING: partial deploy (${toDeploy.join(', ')}) but no existing nimbo-platform release was found. " +
+                "The untouched modules will be created for the first time using their chart defaults (image.tag=latest)."
+    }
+
+    def setArgs = toDeploy.collect { name ->
+        "--set ${name}.image.repository=${env.NEXUS_PULL_REGISTRY}/${env.IMAGE_PREFIX}-${name} --set ${name}.image.tag=${env.IMAGE_TAG}"
+    }.join(' ')
+
+    def reuseFlag = (!allFour && releaseExists) ? '--reuse-values' : ''
+
+    return "${reuseFlag} ${setArgs}".trim()
 }
 
 pipeline {
@@ -27,7 +104,6 @@ pipeline {
     }
 
     parameters {
-
         string(name: 'RELEASE_TAG', defaultValue: '', description: 'Image tag. Empty = Jenkins BUILD_NUMBER.')
 
         string(name: 'NEXUS_HOST', defaultValue: 'zoraq.inside.sahab.ir', description: 'Nexus host/IP')
@@ -37,6 +113,14 @@ pipeline {
         password(name: 'NEXUS_PASSWORD', defaultValue: 'gvFUU0Fxma95w9', description: 'Nexus password')
 
         string(name: 'KUBE_NAMESPACE', defaultValue: 'team1', description: 'Kubernetes namespace to deploy into')
+
+        booleanParam(name: 'RUN_SONAR', defaultValue: false, description: 'Run Sonar analysis and quality gate before build')
+        booleanParam(name: 'FORCE_ALL', defaultValue: false, description: 'Build+deploy all checked modules even if unchanged since last successful deploy')
+
+        booleanParam(name: 'DEPLOY_BATCH_INGESTER', defaultValue: true, description: 'Include batch-ingester in this run')
+        booleanParam(name: 'DEPLOY_BATCH_PROCESSOR', defaultValue: true, description: 'Include batch-processor in this run')
+        booleanParam(name: 'DEPLOY_STARROCKS_WRITER', defaultValue: true, description: 'Include starrocks-writer in this run')
+        booleanParam(name: 'DEPLOY_REST_API', defaultValue: true, description: 'Include rest-api in this run')
     }
 
     environment {
@@ -46,6 +130,7 @@ pipeline {
         IMAGE_PREFIX = 'nimbo-nimbyte'
         SPRING_PROFILES_ACTIVE = 'prod'
         KUBE_NAMESPACE = "${params.KUBE_NAMESPACE}"
+        UMBRELLA_CHART = 'charts/nimbo-platform'
         MAVEN_OPTS = '''
             -Xmx1024m
             -Djavax.net.ssl.trustStore=/certs/cacerts
@@ -54,66 +139,51 @@ pipeline {
 
     stages {
 
-//        stage('Master Sonar Analysis') {
-//            agent {
-//                docker {
-//                    label 'nimbo-nimbyte'
-//                    image 'maven:3.9-eclipse-temurin-17'
-//                    args '''
-//                        --network host
-//                        --add-host sonarqube.inside.sahab.ir:192.168.12.53
-//                        -v /var/run/docker.sock:/var/run/docker.sock
-//                        --group-add 999
-//                        -v /home/team1/.m2:/home/team1/.m2
-//                        -v /opt/jdk-17.0.6/lib/security/cacerts:/certs/cacerts:ro
-//                        -v /etc/passwd:/etc/passwd:ro
-//                        -v /etc/group:/etc/group:ro
-//                    '''
-//                }
-//            }
-//            steps {
-//                checkout scm
-//
-//                withSonarQubeEnv('sonarqube') {
-//                    sh '''
-//                        set -eu
-//                        mkdir -p /tmp/sonar
-//
-//                        mvn \
-//                          --settings jenkins/maven-settings.xml \
-//                          --batch-mode \
-//                          --no-transfer-progress \
-//                          clean verify \
-//
-//                        echo "===== JaCoCo reports ====="
-//                        find . -name "jacoco.xml" -print
-//
-//                        mvn \
-//                          --settings jenkins/maven-settings.xml \
-//                          --batch-mode \
-//                          --no-transfer-progress \
-//                          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-//                          -Dsonar.projectKey=nimbo-nimbyte \
-//                          -Dsonar.projectName=nimbo-nimbyte \
-//                          -Dsonar.branch.name=master \
-//                          -Dsonar.host.url="${SONAR_HOST_URL}" \
-//                          -Dsonar.login="${SONAR_AUTH_TOKEN}" \
-//                          -Dsonar.userHome=/tmp/sonar \
-//                          -Dsonar.coverage.jacoco.xmlReportPaths="**/target/site/jacoco/jacoco.xml"
-//                    '''
-//                }
-//            }
-//        }
-//
-//        stage('Quality Gate') {
-//            steps {
-//                timeout(time: 10, unit: 'MINUTES') {
-//                    waitForQualityGate abortPipeline: false
-//                }
-//            }
-//        }
+        stage('Master Sonar Analysis') {
+            when { expression { return params.RUN_SONAR } }
+            agent {
+                docker {
+                    label 'nimbo-nimbyte'
+                    image 'maven:3.9-eclipse-temurin-17'
+                    args '''
+                        --network host
+                        --add-host sonarqube.inside.sahab.ir:192.168.12.53
+                        -v /var/run/docker.sock:/var/run/docker.sock
+                        --group-add 999
+                        -v /home/team1/.m2:/home/team1/.m2
+                        -v /opt/jdk-17.0.6/lib/security/cacerts:/certs/cacerts:ro
+                        -v /etc/passwd:/etc/passwd:ro
+                        -v /etc/group:/etc/group:ro
+                    '''
+                }
+            }
+            steps {
+                checkout scm
+                withSonarQubeEnv('sonarqube') {
+                    sh 'bash jenkins/scripts/sonar-analysis.sh'
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            when { expression { return params.RUN_SONAR } }
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: false
+                }
+            }
+        }
+
+        stage('Compute Deploy Plan') {
+            agent { label 'nimbo-nimbyte' }
+            steps {
+                checkout scm
+                script { computeModulesToDeploy() }
+            }
+        }
 
         stage('Build & Push Images') {
+            when { expression { return env.MODULES_TO_DEPLOY?.trim() } }
             agent {
                 docker {
                     label 'nimbo-nimbyte'
@@ -128,82 +198,58 @@ pipeline {
                     '''
                 }
             }
-
             steps {
                 checkout scm
+                script {
+                    def modules = modulesToDeployList()
+                    withEnv([
+                            "MODULES_CSV=${modules.join(',')}",
+                            "BUILDS_BATCH_PROCESSOR=${modules.contains('batch-processor')}"
+                    ]) {
+                        sh 'bash jenkins/scripts/build-and-push.sh'
+                    }
+                }
+            }
+        }
 
+        stage('Resolve Umbrella Chart') {
+            when { expression { return env.MODULES_TO_DEPLOY?.trim() } }
+            agent { label 'nimbo-nimbyte' }
+            steps {
+                checkout scm
                 sh '''
                     set -eu
-                    set +x
-
-                    export XDG_CONFIG_HOME="${WORKSPACE}/.config"
-                    export XDG_CACHE_HOME="${WORKSPACE}/.cache"
-                    mkdir -p "${XDG_CONFIG_HOME}" "${XDG_CACHE_HOME}"
-
-                    echo "Building release: ${IMAGE_TAG}"
-                    echo "Pushing images to: ${NEXUS_PUSH_REGISTRY}"
-
-                    mvn \
-                      --settings jenkins/maven-settings.xml \
-                      --batch-mode \
-                      --no-transfer-progress \
-                      clean package \
-                      -DskipTests
-
-                    SPARK_JAR_COUNT="$(find batch-processor/target -maxdepth 1 -type f -name 'batch-processor-*-spark.jar' | wc -l)"
-                    test "${SPARK_JAR_COUNT}" -eq 1
-                    SPARK_JAR="$(find batch-processor/target -maxdepth 1 -type f -name 'batch-processor-*-spark.jar')"
-                    test -s "${SPARK_JAR}"
-                    SPARK_JAR_ENTRIES="$(jar tf "${SPARK_JAR}")"
-                    for REQUIRED_CLASS in \
-                      com/nimbo/batch/BatchProcessorApplication.class \
-                      com/nimbo/batch/writer/PartitionWriter.class \
-                      org/postgresql/Driver.class; do
-                        if ! printf '%s\\n' "${SPARK_JAR_ENTRIES}" | grep -Fx "${REQUIRED_CLASS}" > /dev/null; then
-                            echo "Invalid Spark JAR: missing root-level ${REQUIRED_CLASS}" >&2
-                            exit 1
-                        fi
-                    done
-                    if printf '%s\\n' "${SPARK_JAR_ENTRIES}" | grep '^BOOT-INF/' > /dev/null; then
-                        echo "Invalid Spark JAR: Spring Boot nested layout detected" >&2
-                        exit 1
-                    fi
-
-                    mvn \
-                      --settings jenkins/maven-settings.xml \
-                      --batch-mode \
-                      --no-transfer-progress \
-                      jib:build \
-                      -DskipTests \
-                      -Djib.allowInsecureRegistries=true \
-                      -Djib.image.tag="${IMAGE_TAG}" \
-                      -Djib.from.auth.username="${NEXUS_USERNAME}" \
-                      -Djib.from.auth.password="${NEXUS_PASSWORD}" \
-                      -Djib.to.auth.username="${NEXUS_USERNAME}" \
-                      -Djib.to.auth.password="${NEXUS_PASSWORD}" \
-                      -Djib.applicationCache="${XDG_CACHE_HOME}/jib-application" \
-                      -Djib.baseImageCache="${XDG_CACHE_HOME}/jib-base-image"
+                    rm -rf "${UMBRELLA_CHART}/charts" "${UMBRELLA_CHART}/Chart.lock"
+                    helm dependency update "${UMBRELLA_CHART}"
                 '''
             }
         }
 
-        stage('Deploy to Kubernetes') {
-
-            agent {
-                label 'nimbo-nimbyte'
+        stage('Validate Deploy (dry-run)') {
+            when { expression { return env.MODULES_TO_DEPLOY?.trim() } }
+            agent { label 'nimbo-nimbyte' }
+            steps {
+                checkout scm
+                script {
+                    def deployArgs = buildHelmArgs(modulesToDeployList())
+                    withEnv(["DEPLOY_ARGS=${deployArgs}"]) {
+                        sh 'bash jenkins/scripts/helm-deploy.sh dry-run'
+                    }
+                }
             }
+        }
 
+        stage('Deploy to Kubernetes') {
+            when { expression { return env.MODULES_TO_DEPLOY?.trim() } }
+            agent { label 'nimbo-nimbyte' }
             steps {
                 checkout scm
                 script {
                     sh 'kubectl config current-context'
-
-                    parallel(
-                            'Deploy batch-ingester': { helmDeploy('batch-ingester') },
-                            'Deploy batch-processor': { helmDeploy('batch-processor') },
-                            'Deploy starrocks-writer': { helmDeploy('starrocks-writer') },
-                            'Deploy rest-api': { helmDeploy('rest-api') }
-                    )
+                    def deployArgs = buildHelmArgs(modulesToDeployList())
+                    withEnv(["DEPLOY_ARGS=${deployArgs}"]) {
+                        sh 'bash jenkins/scripts/helm-deploy.sh apply'
+                    }
                 }
             }
         }
@@ -211,10 +257,16 @@ pipeline {
 
     post {
         success {
-            echo "Release deployed successfully : ${IMAGE_TAG}."
+            script {
+                if (env.MODULES_TO_DEPLOY?.trim()) {
+                    def sha = headShortSha()
+                    modulesToDeployList().each { name -> recordState(name, sha) }
+                }
+            }
+            echo "Release pipeline finished successfully."
         }
         failure {
-            echo "Release pipeline failed for : ${IMAGE_TAG}."
+            echo "Release pipeline failed."
         }
     }
 }

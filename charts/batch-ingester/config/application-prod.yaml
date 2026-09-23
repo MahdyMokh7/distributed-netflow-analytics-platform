@@ -62,7 +62,7 @@ storage:
       team1-node1: 10.10.61.51:8020
       team1-node2: 10.10.61.52:8020
   parquet:
-    compression-codec: SNAPPY
+    compression-codec: ZSTD
     block-size-bytes: 134217728
     page-size-bytes: 1048576
     enable-dictionary: true

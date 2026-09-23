@@ -12,6 +12,10 @@ controller.quorum.bootstrap.servers={{ kafka_quorum_bootstrap_servers }}
 log.dirs={{ kafka_broker_log_dir }}
 num.partitions={{ kafka_num_partitions }}
 
+log.retention.hours={{ kafka_log_retention_hours }}
+log.retention.bytes={{ kafka_log_retention_bytes }}
+log.retention.check.interval.ms={{ kafka_log_retention_check_interval_ms }}
+
 default.replication.factor={{ kafka_default_replication_factor }}
 offsets.topic.replication.factor={{ kafka_default_replication_factor }}
 transaction.state.log.replication.factor={{ kafka_default_replication_factor }}

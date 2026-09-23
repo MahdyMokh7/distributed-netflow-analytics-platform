@@ -316,17 +316,27 @@ class BatchIngesterPipelineIT {
         if (!fileSystem.exists(root)) {
             return List.of();
         }
-        List<org.apache.hadoop.fs.Path> files = new ArrayList<>();
-        var iterator = fileSystem.listFiles(root, true);
-        while (iterator.hasNext()) {
-            LocatedFileStatus file = iterator.next();
-            String name = file.getPath().getName();
-            if (!name.startsWith(".") && name.endsWith(".parquet")) {
-                files.add(file.getPath());
+        
+        RuntimeException lastError = null;
+        for (int attempt = 0; attempt < 5; attempt++) {
+            try {
+                List<org.apache.hadoop.fs.Path> files = new ArrayList<>();
+                var iterator = fileSystem.listFiles(root, true);
+                while (iterator.hasNext()) {
+                    LocatedFileStatus file = iterator.next();
+                    String name = file.getPath().getName();
+                    if (!name.startsWith(".") && name.endsWith(".parquet")) {
+                        files.add(file.getPath());
+                    }
+                }
+                files.sort(java.util.Comparator.comparing(org.apache.hadoop.fs.Path::toString));
+                return files;
+            } catch (RuntimeException e) {
+                lastError = e;
+                Thread.sleep(50);
             }
         }
-        files.sort(java.util.Comparator.comparing(org.apache.hadoop.fs.Path::toString));
-        return files;
+        throw lastError;
     }
 
     private List<GenericRecord> readRecords(Configuration configuration, org.apache.hadoop.fs.Path path) throws Exception {

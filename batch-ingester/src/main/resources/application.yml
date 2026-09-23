@@ -23,7 +23,7 @@ rolling:
 
 storage:
   parquet:
-    compression-codec: ${PARQUET_COMPRESSION:SNAPPY}
+    compression-codec: ${PARQUET_COMPRESSION:ZSTD}
     block-size-bytes: ${PARQUET_BLOCK_SIZE:134217728}
     page-size-bytes: ${PARQUET_PAGE_SIZE:1048576}
     enable-dictionary: ${PARQUET_ENABLE_DICTIONARY:true}

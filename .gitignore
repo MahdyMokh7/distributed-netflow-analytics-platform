@@ -112,3 +112,4 @@ temp.txt
 .agents
 *.kilo
 *.ansible
+**/charts/nimbo-platform/charts/
