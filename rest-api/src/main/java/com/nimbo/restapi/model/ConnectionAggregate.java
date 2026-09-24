@@ -26,7 +26,8 @@ import java.util.UUID;
 public class ConnectionAggregate {
 
     @Id
-    private String id;
+    @Column(name = "id", nullable = false, columnDefinition = "BYTEA")
+    private byte[] id;
 
     @Column(name = "src_ip", nullable = false)
     private String srcIp;

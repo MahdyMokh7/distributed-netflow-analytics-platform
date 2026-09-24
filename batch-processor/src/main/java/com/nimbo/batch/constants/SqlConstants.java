@@ -30,7 +30,7 @@ public final class SqlConstants {
             "INSERT INTO connection_aggregates (id, src_ip, dst_ip, window_start, window_end, " +
                     "in_bytes, out_bytes, in_packets, out_packets, " +
                     "batch_id, ingested_at) " +
-                    "VALUES (:id, CAST(:srcIp AS inet), CAST(:dstIp AS inet), :windowStart, :windowEnd, :inBytes, :outBytes, " +
+                    "VALUES (decode(:id, 'hex'), CAST(:srcIp AS inet), CAST(:dstIp AS inet), :windowStart, :windowEnd, :inBytes, :outBytes, " +
                     ":inPackets, :outPackets, :batchId, :ingestedAt)";
 
     public static final String CONNECTION_AGGREGATES_CONFLICT =

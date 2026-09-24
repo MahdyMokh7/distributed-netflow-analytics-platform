@@ -462,8 +462,9 @@
                       "spec": {
                         "editorMode": "code",
                         "expr": "up{job=\"spark-workers\"}",
+                        "instant": true,
                         "legendFormat": "{{instance}}",
-                        "range": true
+                        "range": false
                       }
                     },
                     "refId": "A",
@@ -1248,8 +1249,9 @@
                       "spec": {
                         "editorMode": "code",
                         "expr": "up{job=\"postgresql\"}",
+                        "instant": true,
                         "legendFormat": "{{instance}}",
-                        "range": true
+                        "range": false
                       }
                     },
                     "refId": "A",
@@ -1331,8 +1333,9 @@
                       "spec": {
                         "editorMode": "code",
                         "expr": "up{job=\"patroni\"}",
+                        "instant": true,
                         "legendFormat": "{{pod}}",
-                        "range": true
+                        "range": false
                       }
                     },
                     "refId": "A",

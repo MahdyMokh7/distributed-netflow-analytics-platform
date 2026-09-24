@@ -12,7 +12,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ConnectionAggregateId implements Serializable {
-    private String id;
+    private byte[] id;
     private Instant windowStart;
     private UUID batchId;
 }

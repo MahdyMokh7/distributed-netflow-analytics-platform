@@ -2,5 +2,5 @@ apiVersion: v2
 name: prometheus
 description: Helm chart for Prometheus, migrated in-cluster from the old node4 docker-compose setup
 type: application
-version: 0.1.1
+version: 0.1.2
 appVersion: "1.0"

@@ -30,6 +30,7 @@ public class SparkConfig {
     private Boolean adaptiveCoalescePartitionsEnabled;
     private String serializer;
     private Boolean uiEnabled;
+    private Boolean uiReverseProxyEnabled;
     private int uiPort;
     private String ioModeDefault;
     private String driverHost;
@@ -60,6 +61,7 @@ public class SparkConfig {
 
         setIfPresent(builder, "spark.serializer", serializer);
         setIfPresent(builder, "spark.ui.enabled", uiEnabled);
+        setIfPresent(builder, "spark.ui.reverseProxy", uiReverseProxyEnabled);
         setIfPositive(builder, "spark.ui.port", uiPort);
         setIfPresent(builder, "spark.io.mode.default", ioModeDefault);
         setIfPresent(builder, "spark.driver.host", driverHost);

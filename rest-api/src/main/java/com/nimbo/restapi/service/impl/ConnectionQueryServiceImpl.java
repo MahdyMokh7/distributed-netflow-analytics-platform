@@ -20,8 +20,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.HexFormat;
 import java.util.Set;
 
 @Service
@@ -157,7 +158,7 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
 
     private ConnectionResponseDto toResponse(ConnectionAggregate aggregate) {
         return ConnectionResponseDto.builder()
-                .id(aggregate.getId())
+                .id(HexFormat.of().formatHex(aggregate.getId()))
                 .srcIp(aggregate.getSrcIp())
                 .dstIp(aggregate.getDstIp())
                 .windowStart(aggregate.getWindowStart())

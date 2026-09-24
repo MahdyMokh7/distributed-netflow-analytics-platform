@@ -46,7 +46,7 @@ resources:
       memory: "64Mi"
 
 service:
-  masterLoadBalancerIP: ""
+  masterLoadBalancerIP: "10.10.61.70"
   metallbPoolName: "default"
 
 metrics:

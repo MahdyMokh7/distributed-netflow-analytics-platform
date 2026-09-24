@@ -26,6 +26,8 @@ data:
 
     spark.driver.bindAddress {{ .Values.spark.driverBindAddress }}
 
+    spark.ui.reverseProxy {{ .Values.spark.uiReverseProxyEnabled }}
+
     spark.sql.session.timeZone {{ .Values.spark.timezone }}
 
   {{- if .Values.metrics.enabled }}

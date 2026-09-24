@@ -45,7 +45,7 @@ class ConnectionProcessorIT {
                 .isEqualTo(400L);
         assertThat(fixture.queryLong("SELECT out_bytes FROM connection_aggregates WHERE src_ip = '10.0.0.1' AND dst_ip = '10.0.0.2'"))
                 .isEqualTo(600L);
-        assertThat(fixture.queryString("SELECT id FROM connection_aggregates WHERE src_ip = '10.0.0.1' AND dst_ip = '10.0.0.2'"))
+        assertThat(fixture.queryString("SELECT encode(id, 'hex') FROM connection_aggregates WHERE src_ip = '10.0.0.1' AND dst_ip = '10.0.0.2'"))
                 .hasSize(64);
     }
 

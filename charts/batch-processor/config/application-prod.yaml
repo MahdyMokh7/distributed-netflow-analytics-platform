@@ -50,6 +50,7 @@ spark:
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer
   ui-enabled: true
+  ui-reverse-proxy-enabled: true
   ui-port: 4040
   io-mode-default: NIO
   driver-host: ${DRIVER_HOST}
@@ -66,7 +67,7 @@ output:
   mode: database
 
 postgres:
-  host: postgresql-postgresql-master
+  host: ${POSTGRES_HOST}
   port: 5432
   database: nimbo_db
   username: ${DB_USERNAME}
@@ -93,7 +94,7 @@ postgres:
     max-delay-ms: 30000
 
 batch:
-  schedule: "0 0 * * * ?"
+  schedule: "0 30 * * * ?"
   window-duration: "1 hour"
   enabled: true
   max-files-per-batch: 5

@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS traffic_aggregates (
 );
 
 CREATE TABLE IF NOT EXISTS connection_aggregates (
-    id VARCHAR(64) NOT NULL,
+    id BYTEA NOT NULL,
     src_ip VARCHAR(45) NOT NULL,
     dst_ip VARCHAR(45) NOT NULL,
     window_start TIMESTAMP NOT NULL,

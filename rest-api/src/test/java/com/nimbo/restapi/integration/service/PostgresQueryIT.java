@@ -32,6 +32,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigInteger;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -108,9 +109,11 @@ class PostgresQueryIT {
     @Test
     void givenSimplifiedConnectionsWhenQueriedByEitherIpThenBothDirectionsAreReturned() {
         // Given: bidirectional connections and an unrelated connection
-        connectionRepository.save(connection("a1", "10.0.0.1", "10.0.0.2", RANGE_START.plusSeconds(60), 120, 30, BATCH_ONE));
-        connectionRepository.save(connection("a2", "10.0.0.3", "10.0.0.1", RANGE_START.plusSeconds(120), 80, 20, BATCH_TWO));
-        connectionRepository.save(connection("a3", "10.0.0.4", "10.0.0.5", RANGE_START.plusSeconds(180), 500, 50, BATCH_ONE));
+        String firstId = "a1".repeat(32);
+        String secondId = "a2".repeat(32);
+        connectionRepository.save(connection(firstId, "10.0.0.1", "10.0.0.2", RANGE_START.plusSeconds(60), 120, 30, BATCH_ONE));
+        connectionRepository.save(connection(secondId, "10.0.0.3", "10.0.0.1", RANGE_START.plusSeconds(120), 80, 20, BATCH_TWO));
+        connectionRepository.save(connection("a3".repeat(32), "10.0.0.4", "10.0.0.5", RANGE_START.plusSeconds(180), 500, 50, BATCH_ONE));
 
         // When: connections involving one IP are requested
         var result = new ConnectionQueryServiceImpl(connectionRepository, metrics).queryConnectionsByIp(
@@ -124,7 +127,7 @@ class PostgresQueryIT {
 
         // Then: source and destination matches use the simplified cube shape
         assertThat(result).hasSize(2);
-        assertThat(result.getContent()).extracting("id").containsExactly("a1", "a2");
+        assertThat(result.getContent()).extracting("id").containsExactly(firstId, secondId);
         assertThat(result.getContent().get(0).getTotalBytes()).isEqualTo(BigInteger.valueOf(150));
         assertThat(result.getContent().get(0).getTotalPackets()).isEqualTo(BigInteger.valueOf(37));
     }
@@ -244,7 +247,7 @@ class PostgresQueryIT {
             long bytes, long packets, UUID batchId
     ) {
         return ConnectionAggregate.builder()
-                .id(id).srcIp(srcIp).dstIp(dstIp).windowStart(start).windowEnd(start.plusSeconds(300))
+                .id(HexFormat.of().parseHex(id)).srcIp(srcIp).dstIp(dstIp).windowStart(start).windowEnd(start.plusSeconds(300))
                 .inBytes(number(bytes)).outBytes(number(bytes / 4))
                 .inPackets(number(packets)).outPackets(number(packets / 4))
                 .batchId(batchId).ingestedAt(start.plusSeconds(310))

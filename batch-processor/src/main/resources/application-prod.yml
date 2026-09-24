@@ -24,6 +24,7 @@ spark:
   adaptive-coalesce-partitions-enabled: true
   serializer: org.apache.spark.serializer.KryoSerializer
   ui-enabled: true
+  ui-reverse-proxy-enabled: true
   io-mode-default: NIO
   driver-host: ${DRIVER_HOST:10.10.61.53}
   driver-bind-address: 0.0.0.0

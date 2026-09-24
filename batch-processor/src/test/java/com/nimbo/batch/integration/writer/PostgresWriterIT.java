@@ -27,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PostgresWriterIT {
 
+    private static final long ABOVE_INTEGER_MAX = 4_200_000_000L;
+
     @RegisterExtension
     static final PostgresContainerExtension POSTGRES = new PostgresContainerExtension();
 
@@ -69,7 +71,8 @@ class PostgresWriterIT {
         assertThat(written).isEqualTo(3L);
         assertThat(count("traffic_aggregates")).isEqualTo(3L);
         assertThat(value("SELECT SUM(in_bytes) FROM traffic_aggregates")).isEqualTo(600L);
-        assertThat(value("SELECT SUM(record_count) FROM traffic_aggregates")).isEqualTo(6L);
+        assertThat(value("SELECT MAX(in_packets) FROM traffic_aggregates")).isEqualTo(ABOVE_INTEGER_MAX);
+        assertThat(value("SELECT MAX(record_count) FROM traffic_aggregates")).isEqualTo(ABOVE_INTEGER_MAX);
         assertThat(meterRegistry.get("batch.processor.output.rows").tag("cube", "traffic").counter().count())
                 .isEqualTo(3.0);
         assertThat(meterRegistry.get("batch.processor.stage.duration")
@@ -89,7 +92,8 @@ class PostgresWriterIT {
         // Then: the database contains one row with the original summed connection metrics
         assertThat(count("connection_aggregates")).isEqualTo(1L);
         assertThat(value("SELECT in_bytes FROM connection_aggregates")).isEqualTo(400L);
-        assertThat(value("SELECT out_packets FROM connection_aggregates")).isEqualTo(6L);
+        assertThat(value("SELECT out_packets FROM connection_aggregates")).isEqualTo(ABOVE_INTEGER_MAX);
+        assertThat(value("SELECT octet_length(id) FROM connection_aggregates")).isEqualTo(32L);
     }
 
     @Test
@@ -104,8 +108,10 @@ class PostgresWriterIT {
         // Then: each target table has the expected row and aggregate metric
         assertThat(protocolWritten).isEqualTo(1L);
         assertThat(bandwidthWritten).isEqualTo(1L);
-        assertThat(value("SELECT connection_count FROM protocol_usage_aggregates")).isEqualTo(2L);
+        assertThat(value("SELECT in_packets FROM protocol_usage_aggregates")).isEqualTo(ABOVE_INTEGER_MAX);
+        assertThat(value("SELECT connection_count FROM protocol_usage_aggregates")).isEqualTo(ABOVE_INTEGER_MAX);
         assertThat(value("SELECT inbound_bytes FROM ip_bandwidth_aggregates")).isEqualTo(900L);
+        assertThat(value("SELECT outbound_packets FROM ip_bandwidth_aggregates")).isEqualTo(ABOVE_INTEGER_MAX);
     }
 
     private PostgresConfig postgresConfig() {
@@ -137,24 +143,24 @@ class PostgresWriterIT {
     private Dataset<Row> trafficRows() {
         StructType schema = new StructType().add("src_ip", DataTypes.StringType, false).add("window_start", DataTypes.TimestampType, false).add("window_end", DataTypes.TimestampType, false).add("in_bytes", DataTypes.LongType, false).add("out_bytes", DataTypes.LongType, false).add("in_packets", DataTypes.LongType, false).add("out_packets", DataTypes.LongType, false).add("record_count", DataTypes.LongType, false);
         return spark.createDataFrame(List.of(
-                RowFactory.create("10.0.0.1", timestamp("2026-08-29T08:00:00Z"), timestamp("2026-08-29T09:00:00Z"), 100L, 200L, 1L, 2L, 1L),
+                RowFactory.create("10.0.0.1", timestamp("2026-08-29T08:00:00Z"), timestamp("2026-08-29T09:00:00Z"), 100L, 200L, ABOVE_INTEGER_MAX, 2L, ABOVE_INTEGER_MAX),
                 RowFactory.create("10.0.0.2", timestamp("2026-08-29T08:00:00Z"), timestamp("2026-08-29T09:00:00Z"), 200L, 300L, 2L, 3L, 2L),
                 RowFactory.create("10.0.0.3", timestamp("2026-08-29T08:00:00Z"), timestamp("2026-08-29T09:00:00Z"), 300L, 400L, 3L, 4L, 3L)), schema).repartition(1);
     }
 
     private Dataset<Row> connectionRows() {
         StructType schema = new StructType().add("id", DataTypes.StringType, false).add("src_ip", DataTypes.StringType, false).add("dst_ip", DataTypes.StringType, false).add("window_start", DataTypes.TimestampType, false).add("window_end", DataTypes.TimestampType, false).add("in_bytes", DataTypes.LongType, false).add("out_bytes", DataTypes.LongType, false).add("in_packets", DataTypes.LongType, false).add("out_packets", DataTypes.LongType, false);
-        return spark.createDataFrame(List.of(RowFactory.create("b".repeat(64), "10.0.0.1", "10.0.0.2", timestamp("2026-08-29T08:00:00Z"), timestamp("2026-08-29T09:00:00Z"), 400L, 600L, 4L, 6L)), schema);
+        return spark.createDataFrame(List.of(RowFactory.create("b".repeat(64), "10.0.0.1", "10.0.0.2", timestamp("2026-08-29T08:00:00Z"), timestamp("2026-08-29T09:00:00Z"), 400L, 600L, 4L, ABOVE_INTEGER_MAX)), schema);
     }
 
     private Dataset<Row> protocolRows() {
         StructType schema = new StructType().add("l7_protocol", DataTypes.DoubleType, false).add("window_start", DataTypes.TimestampType, false).add("window_end", DataTypes.TimestampType, false).add("in_bytes", DataTypes.LongType, false).add("out_bytes", DataTypes.LongType, false).add("in_packets", DataTypes.LongType, false).add("out_packets", DataTypes.LongType, false).add("connection_count", DataTypes.LongType, false);
-        return spark.createDataFrame(List.of(RowFactory.create(6.0, timestamp("2026-08-29T08:00:00Z"), timestamp("2026-08-29T09:00:00Z"), 700L, 800L, 7L, 8L, 2L)), schema);
+        return spark.createDataFrame(List.of(RowFactory.create(6.0, timestamp("2026-08-29T08:00:00Z"), timestamp("2026-08-29T09:00:00Z"), 700L, 800L, ABOVE_INTEGER_MAX, 8L, ABOVE_INTEGER_MAX)), schema);
     }
 
     private Dataset<Row> bandwidthRows() {
         StructType schema = new StructType().add("ip", DataTypes.StringType, false).add("window_start", DataTypes.TimestampType, false).add("window_end", DataTypes.TimestampType, false).add("inbound_bytes", DataTypes.LongType, false).add("outbound_bytes", DataTypes.LongType, false).add("inbound_packets", DataTypes.LongType, false).add("outbound_packets", DataTypes.LongType, false);
-        return spark.createDataFrame(List.of(RowFactory.create("10.0.0.2", timestamp("2026-08-29T08:00:00Z"), timestamp("2026-08-29T09:00:00Z"), 900L, 1000L, 9L, 10L)), schema);
+        return spark.createDataFrame(List.of(RowFactory.create("10.0.0.2", timestamp("2026-08-29T08:00:00Z"), timestamp("2026-08-29T09:00:00Z"), 900L, 1000L, 9L, ABOVE_INTEGER_MAX)), schema);
     }
 
     private Timestamp timestamp(String value) {

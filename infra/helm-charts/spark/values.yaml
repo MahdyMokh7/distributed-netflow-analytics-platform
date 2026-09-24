@@ -57,6 +57,7 @@ spark:
   shufflePartitions: 50
   serializer: org.apache.spark.serializer.KryoSerializer
   timezone: UTC
+  uiReverseProxyEnabled: true
   adaptiveEnabled: true
   shuffleCompress: true
   ioCompressionCodec: lz4

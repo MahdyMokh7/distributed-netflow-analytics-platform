@@ -301,19 +301,19 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets:
-          - 'postgresql-postgresql-0.postgresql-postgresql-config:9187'
+          - 'postgresql-ha-postgresql-0.postgresql-ha-postgresql-headless:9187'
         labels:
-          pod: postgresql-postgresql-0
+          pod: postgresql-ha-postgresql-0
           instance: postgresql-0
       - targets:
-          - 'postgresql-postgresql-1.postgresql-postgresql-config:9187'
+          - 'postgresql-ha-postgresql-1.postgresql-ha-postgresql-headless:9187'
         labels:
-          pod: postgresql-postgresql-1
+          pod: postgresql-ha-postgresql-1
           instance: postgresql-1
       - targets:
-          - 'postgresql-postgresql-2.postgresql-postgresql-config:9187'
+          - 'postgresql-ha-postgresql-2.postgresql-ha-postgresql-headless:9187'
         labels:
-          pod: postgresql-postgresql-2
+          pod: postgresql-ha-postgresql-2
           instance: postgresql-2
 
   - job_name: patroni
@@ -321,17 +321,17 @@ scrape_configs:
     scrape_interval: 30s
     static_configs:
       - targets:
-          - 'postgresql-postgresql-0.postgresql-postgresql-config:8000'
+          - 'postgresql-ha-postgresql-0.postgresql-ha-postgresql-headless:8000'
         labels:
-          pod: postgresql-postgresql-0
+          pod: postgresql-ha-postgresql-0
           cluster: postgresql
       - targets:
-          - 'postgresql-postgresql-1.postgresql-postgresql-config:8000'
+          - 'postgresql-ha-postgresql-1.postgresql-ha-postgresql-headless:8000'
         labels:
-          pod: postgresql-postgresql-1
+          pod: postgresql-ha-postgresql-1
           cluster: postgresql
       - targets:
-          - 'postgresql-postgresql-2.postgresql-postgresql-config:8000'
+          - 'postgresql-ha-postgresql-2.postgresql-ha-postgresql-headless:8000'
         labels:
-          pod: postgresql-postgresql-2
+          pod: postgresql-ha-postgresql-2
           cluster: postgresql

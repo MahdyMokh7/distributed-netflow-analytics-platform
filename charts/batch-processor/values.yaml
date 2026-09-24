@@ -24,6 +24,7 @@ hdfs:
   uri: hdfs://10.10.61.53:8020
 
 postgres:
+  host: postgresql-ha-postgresql-master
   executorPool:
     maxPoolSize: 1
     minimumIdle: 0

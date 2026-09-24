@@ -41,6 +41,8 @@ spec:
               value: {{ .Values.containerPort | quote }}
             - name: HDFS_URI
               value: {{ required "hdfs.uri is required" .Values.hdfs.uri | quote }}
+            - name: POSTGRES_HOST
+              value: {{ required "postgres.host is required" .Values.postgres.host | quote }}
             - name: EXECUTOR_POOL_SIZE
               value: {{ required "postgres.executorPool.maxPoolSize is required" .Values.postgres.executorPool.maxPoolSize | quote }}
             - name: EXECUTOR_MINIMUM_IDLE
