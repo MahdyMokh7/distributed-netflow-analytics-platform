@@ -17,7 +17,7 @@ groups:
             datasourceUid: prometheus
             model:
               editorMode: code
-              expr: 1 - min(up{job="batch-ingester"}) or vector(1)
+              expr: 1 - max(up{job="batch-ingester"}) or vector(1)
               instant: true
               intervalMs: 1000
               legendFormat: __auto
@@ -73,10 +73,12 @@ groups:
             model:
               editorMode: code
               expr: |-
-                kafka_consumer_fetch_manager_records_lag{
-                  job="batch-ingester",
-                  topic="netflow"
-                }
+                max by (partition) (
+                  kafka_consumer_fetch_manager_records_lag{
+                    job="batch-ingester",
+                    topic="netflow"
+                  }
+                )
               instant: true
               intervalMs: 1000
               legendFormat: P{{partition}}

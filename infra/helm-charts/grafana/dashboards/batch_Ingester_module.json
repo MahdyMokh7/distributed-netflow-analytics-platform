@@ -579,7 +579,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "ingester_last_batch_record_count{job=\"batch-ingester\"}",
+                        "expr": "max by (exported_instance) (ingester_last_batch_record_count{job=\"batch-ingester\"})",
                         "legendFormat": "Consumer {{exported_instance}}",
                         "range": true
                       },
@@ -814,7 +814,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "ingester_consumer_running{\n  job=\"batch-ingester\"\n}",
+                        "expr": "max by (exported_instance) (\n  ingester_consumer_running{\n    job=\"batch-ingester\"\n  }\n)",
                         "instant": true,
                         "legendFormat": "Consumer {{exported_instance}}",
                         "range": false
@@ -928,7 +928,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(\n  ingester_records_written_total{\n    job=\"batch-ingester\"\n  }\n)",
+                        "expr": "sum(\n  increase(\n    ingester_records_written_total{\n      job=\"batch-ingester\"\n    }[$__range]\n  )\n)",
                         "legendFormat": "__auto",
                         "range": true
                       },
@@ -942,7 +942,7 @@
               "transformations": []
             }
           },
-          "description": "Total number of Netflow records successfully written by all Batch Ingester consumers since startup.",
+          "description": "Number of NetFlow records successfully written by all Batch Ingester consumers over the selected dashboard time range.",
           "id": 5,
           "links": [],
           "title": "Records Written Total",
@@ -1013,7 +1013,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "kafka_consumer_fetch_manager_records_lag{\n  job=\"batch-ingester\",\n  topic=\"netflow\"\n}",
+                        "expr": "max by (partition) (\n  kafka_consumer_fetch_manager_records_lag{\n    job=\"batch-ingester\",\n    topic=\"netflow\"\n  }\n)",
                         "legendFormat": "P{{partition}}",
                         "range": true
                       },

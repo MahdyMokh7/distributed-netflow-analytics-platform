@@ -25,7 +25,7 @@
       "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
       "id": 2,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
-      "targets": [{"expr": "batch_processor_run_in_progress{job=\"batch-processor\"}", "refId": "A"}],
+      "targets": [{"expr": "max without (pod, instance) (batch_processor_run_in_progress{job=\"batch-processor\"})", "refId": "A"}],
       "title": "Run State",
       "type": "stat"
     },
@@ -36,7 +36,7 @@
       "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
       "id": 5,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
-      "targets": [{"expr": "batch_processor_state_fallback_active{job=\"batch-processor\"}", "refId": "A"}],
+      "targets": [{"expr": "max without (pod, instance) (batch_processor_state_fallback_active{job=\"batch-processor\"})", "refId": "A"}],
       "title": "Exactly-Once State",
       "type": "stat"
     },
@@ -47,7 +47,7 @@
       "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
       "id": 6,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
-      "targets": [{"expr": "batch_processor_failed_batch_pending{job=\"batch-processor\"}", "refId": "A"}],
+      "targets": [{"expr": "max without (pod, instance) (batch_processor_failed_batch_pending{job=\"batch-processor\"})", "refId": "A"}],
       "title": "Failed Batch Recovery",
       "type": "stat"
     },
@@ -92,8 +92,8 @@
       "id": 10,
       "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
       "targets": [
-        {"expr": "increase(batch_processor_files_processed_total{job=\"batch-processor\"}[5m])", "legendFormat": "durably recorded files", "refId": "A"},
-        {"expr": "increase(batch_processor_source_records_total{job=\"batch-processor\"}[5m])", "legendFormat": "processed source records", "refId": "B"}
+        {"expr": "sum(increase(batch_processor_files_processed_total{job=\"batch-processor\"}[5m]))", "legendFormat": "durably recorded files", "refId": "A"},
+        {"expr": "sum(increase(batch_processor_source_records_total{job=\"batch-processor\"}[5m]))", "legendFormat": "processed source records", "refId": "B"}
       ],
       "title": "Processed Input",
       "type": "timeseries"
@@ -105,7 +105,7 @@
       "gridPos": {"h": 7, "w": 12, "x": 12, "y": 11},
       "id": 11,
       "options": {"legend": {"calcs": [], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
-      "targets": [{"expr": "increase(batch_processor_output_rows_total{job=\"batch-processor\"}[5m])", "legendFormat": "{{cube}}", "refId": "A"}],
+      "targets": [{"expr": "sum by (cube) (increase(batch_processor_output_rows_total{job=\"batch-processor\"}[5m]))", "legendFormat": "{{cube}}", "refId": "A"}],
       "title": "PostgreSQL Rows Written",
       "type": "timeseries"
     },
@@ -122,8 +122,8 @@
           "id": 12,
           "options": {"legend": {"calcs": [], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
           "targets": [
-            {"expr": "increase(batch_processor_postgres_retries_total{job=\"batch-processor\"}[5m])", "legendFormat": "retry {{cube}}", "refId": "A"},
-            {"expr": "increase(batch_processor_stage_failures_total{job=\"batch-processor\"}[5m])", "legendFormat": "failure {{stage}}", "refId": "B"}
+            {"expr": "sum by (cube) (increase(batch_processor_postgres_retries_total{job=\"batch-processor\"}[5m]))", "legendFormat": "retry {{cube}}", "refId": "A"},
+            {"expr": "sum by (stage) (increase(batch_processor_stage_failures_total{job=\"batch-processor\"}[5m]))", "legendFormat": "failure {{stage}}", "refId": "B"}
           ],
           "title": "Retries and Failures",
           "type": "timeseries"
@@ -135,7 +135,7 @@
           "gridPos": {"h": 7, "w": 6, "x": 12, "y": 19},
           "id": 3,
           "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
-          "targets": [{"expr": "(time() - batch_processor_last_success_timestamp_seconds{job=\"batch-processor\"}) and batch_processor_last_success_timestamp_seconds{job=\"batch-processor\"} > 0", "refId": "A"}],
+          "targets": [{"expr": "time() - max without (pod, instance) (batch_processor_last_success_timestamp_seconds{job=\"batch-processor\"} > 0)", "refId": "A"}],
           "title": "Last Success Age",
           "type": "stat"
         },
@@ -146,7 +146,7 @@
           "gridPos": {"h": 7, "w": 6, "x": 18, "y": 19},
           "id": 4,
           "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
-          "targets": [{"expr": "(time() - batch_processor_last_processed_file_timestamp_seconds{job=\"batch-processor\"}) and batch_processor_last_processed_file_timestamp_seconds{job=\"batch-processor\"} > 0", "refId": "A"}],
+          "targets": [{"expr": "time() - max without (pod, instance) (batch_processor_last_processed_file_timestamp_seconds{job=\"batch-processor\"} > 0)", "refId": "A"}],
           "title": "Processed File Age",
           "type": "stat"
         }

@@ -462,7 +462,7 @@
                       "spec": {
                         "editorMode": "code",
                         "expr": "up{job=\"spark-workers\"}",
-                        "legendFormat": "{{node}}",
+                        "legendFormat": "{{instance}}",
                         "range": true
                       }
                     },

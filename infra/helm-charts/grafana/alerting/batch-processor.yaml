@@ -14,7 +14,7 @@ groups:
             datasourceUid: prometheus
             model:
               editorMode: code
-              expr: 1 - min(up{job="batch-processor"}) or vector(1)
+              expr: 1 - max(up{job="batch-processor"}) or vector(1)
               instant: true
               range: false
               refId: A
@@ -80,7 +80,7 @@ groups:
             datasourceUid: prometheus
             model:
               editorMode: code
-              expr: batch_processor_run_in_progress{job="batch-processor"}
+              expr: max without (pod, instance) (batch_processor_run_in_progress{job="batch-processor"})
               instant: true
               range: false
               refId: A
@@ -113,7 +113,7 @@ groups:
             datasourceUid: prometheus
             model:
               editorMode: code
-              expr: batch_processor_state_fallback_active{job="batch-processor"}
+              expr: max without (pod, instance) (batch_processor_state_fallback_active{job="batch-processor"})
               instant: true
               range: false
               refId: A
