@@ -21,6 +21,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -96,6 +97,91 @@ class BatchIngesterPipelineIT {
             assertThat(pipeline.registry().get("ingester_records_written_total")
                     .tag("instance", "1").counter().count())
                     .isEqualTo(3.0);
+        }
+    }
+
+    @Test
+    void givenRecordsSpanningHourBoundary_whenConsumed_thenEachHourGetsItsOwnFile() throws Exception {
+        String topic = "pipeline-hour-boundary-topic";
+        String dlqTopic = "pipeline-hour-boundary-dlq";
+        String group = "pipeline-hour-boundary-group";
+        String basePath = storageRoot.resolve("netflow/pipeline-hour-boundary").toString();
+        KAFKA.createTopics(topic, dlqTopic);
+
+        long firstHourMillis = Instant.parse("2026-09-18T10:45:00.000Z").toEpochMilli();
+        long secondHourMillis = Instant.parse("2026-09-18T11:15:00.000Z").toEpochMilli();
+
+        try (PipelineFixture pipeline = pipeline(topic, dlqTopic, group, basePath, 10);
+             KafkaProducer<byte[], byte[]> producer = KAFKA.producer()) {
+            pipeline.start();
+            producer.send(new ProducerRecord<>(topic, null, firstHourMillis, null, testData.serialize(
+                    testData.validRecord("192.168.10.1", "10.0.0.1", 1_000L)))).get();
+            producer.send(new ProducerRecord<>(topic, null, secondHourMillis, null, testData.serialize(
+                    testData.validRecord("192.168.10.2", "10.0.0.1", 2_000L)))).get();
+
+
+            await().atMost(Duration.ofMinutes(1)).pollInterval(Duration.ofMillis(100))
+                    .until(() -> finalizedFiles(pipeline.fileSystem(), basePath).size() == 1);
+        }
+
+        await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(100))
+                .until(() -> Long.valueOf(2L).equals(KAFKA.committedOffset(group, topic, 0)));
+
+        FileSystem fs = FileSystem.newInstance(localConfiguration());
+        try {
+            List<org.apache.hadoop.fs.Path> files = finalizedFiles(fs, basePath);
+            assertThat(files).hasSize(2);
+
+            List<String> hourFolders = files.stream().map(f -> f.getParent().getName()).sorted().toList();
+            assertThat(hourFolders).containsExactly("10", "11");
+
+            for (org.apache.hadoop.fs.Path file : files) {
+                assertThat(readRecords(localConfiguration(), file)).hasSize(1);
+            }
+        } finally {
+            fs.close();
+        }
+    }
+
+    @Test
+    void givenRecordsSpanningDayBoundary_whenConsumed_thenEachDayGetsItsOwnFile() throws Exception {
+        String topic = "pipeline-day-boundary-topic";
+        String dlqTopic = "pipeline-day-boundary-dlq";
+        String group = "pipeline-day-boundary-group";
+        String basePath = storageRoot.resolve("netflow/pipeline-day-boundary").toString();
+        KAFKA.createTopics(topic, dlqTopic);
+
+        long lastHourOfDay = Instant.parse("2026-09-18T23:45:00.000Z").toEpochMilli();
+        long firstHourOfNextDay = Instant.parse("2026-09-19T00:15:00.000Z").toEpochMilli();
+
+        try (PipelineFixture pipeline = pipeline(topic, dlqTopic, group, basePath, 10);
+             KafkaProducer<byte[], byte[]> producer = KAFKA.producer()) {
+            pipeline.start();
+            producer.send(new ProducerRecord<>(topic, null, lastHourOfDay, null, testData.serialize(
+                    testData.validRecord("192.168.20.1", "10.0.0.1", 1_000L)))).get();
+            producer.send(new ProducerRecord<>(topic, null, firstHourOfNextDay, null, testData.serialize(
+                    testData.validRecord("192.168.20.2", "10.0.0.1", 2_000L)))).get();
+
+            await().atMost(Duration.ofMinutes(1)).pollInterval(Duration.ofMillis(100))
+                    .until(() -> finalizedFiles(pipeline.fileSystem(), basePath).size() == 1);
+        }
+
+        await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(100))
+                .until(() -> Long.valueOf(2L).equals(KAFKA.committedOffset(group, topic, 0)));
+
+        FileSystem fs = FileSystem.newInstance(localConfiguration());
+        try {
+            List<org.apache.hadoop.fs.Path> files = finalizedFiles(fs, basePath);
+            assertThat(files).hasSize(2);
+
+            List<String> dateFolders = files.stream().map(f -> f.getParent().getParent().getName()).sorted().toList();
+            assertThat(dateFolders).containsExactly("2026-09-18", "2026-09-19");
+
+            for (org.apache.hadoop.fs.Path file : files) {
+                assertThat(readRecords(localConfiguration(), file)).hasSize(1);
+            }
+        } finally {
+            fs.close();
         }
     }
 
