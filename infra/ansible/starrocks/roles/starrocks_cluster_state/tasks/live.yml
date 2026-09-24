@@ -1,0 +1,6 @@
+---
+- name: Fetch live membership from the cluster
+  ansible.builtin.import_tasks: live_fetch.yml
+
+- name: Parse membership and enforce safety invariants
+  ansible.builtin.import_tasks: live_assert.yml

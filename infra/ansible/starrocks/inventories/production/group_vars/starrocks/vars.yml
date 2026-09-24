@@ -1,0 +1,3 @@
+---
+starrocks_bootstrap_host: team1-node1
+starrocks_ntp_servers: []

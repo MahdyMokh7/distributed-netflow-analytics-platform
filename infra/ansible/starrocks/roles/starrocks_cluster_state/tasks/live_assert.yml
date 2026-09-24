@@ -1,0 +1,133 @@
+---
+# Pure logic: parse starrocks_show_frontends/starrocks_show_backends.stdout_lines
+# (whatever set them - live_fetch.yml for real use, a test fixture for
+# tests/cluster_state/) into rows, then enforce every safety invariant and
+# elect the leader. No task here talks to a server, which is what makes this
+# file unit-testable in isolation.
+- name: Parse and normalize live cluster membership
+  ansible.builtin.set_fact:
+    starrocks_fe_rows: []
+    starrocks_be_rows: []
+
+- name: Build frontend dictionaries
+  ansible.builtin.set_fact:
+    starrocks_fe_rows: >-
+      {{ starrocks_fe_rows
+         + [sr_row | combine({'Host': sr_row.IP | default(sr_row.Host | default(''))})] }}
+  vars:
+    sr_tab: "\t"
+    sr_row: >-
+      {{ dict(starrocks_show_frontends.stdout_lines[0].split(sr_tab)
+              | zip(item.split(sr_tab))) }}
+  loop: "{{ (starrocks_show_frontends.stdout_lines | default([]))[1:] }}"
+  loop_control:
+    label: "{{ item.split(sr_tab) | first }}"
+  when: (starrocks_show_frontends.stdout_lines | default([]) | length) > 1
+
+- name: Build backend dictionaries
+  ansible.builtin.set_fact:
+    starrocks_be_rows: >-
+      {{ starrocks_be_rows
+         + [sr_row | combine({'Host': sr_row.IP | default(sr_row.Host | default(''))})] }}
+  vars:
+    sr_tab: "\t"
+    sr_row: >-
+      {{ dict(starrocks_show_backends.stdout_lines[0].split(sr_tab)
+              | zip(item.split(sr_tab))) }}
+  loop: "{{ (starrocks_show_backends.stdout_lines | default([]))[1:] }}"
+  loop_control:
+    label: "{{ item.split(sr_tab) | first }}"
+  when: (starrocks_show_backends.stdout_lines | default([]) | length) > 1
+
+- name: Refuse unknown frontend members
+  ansible.builtin.assert:
+    that: >-
+      (starrocks_expected_frontends
+       | selectattr('host', 'equalto', item.Host)
+       | selectattr('port', 'equalto', item.EditLogPort | int)
+       | list
+       | length) == 1
+    fail_msg: >-
+      Unexpected cluster member {{ item.Host }}:{{ item.EditLogPort }};
+      automatic removal is forbidden
+  loop: "{{ starrocks_fe_rows }}"
+  loop_control:
+    label: "{{ item.Host }}:{{ item.EditLogPort }}"
+  no_log: true
+  when:
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
+
+- name: Refuse unknown backend members
+  ansible.builtin.assert:
+    that: >-
+      (starrocks_expected_backends
+       | selectattr('host', 'equalto', item.Host)
+       | selectattr('port', 'equalto', item.HeartbeatPort | int)
+       | list
+       | length) == 1
+    fail_msg: >-
+      Unexpected cluster member {{ item.Host }}:{{ item.HeartbeatPort }};
+      automatic removal is forbidden
+  loop: "{{ starrocks_be_rows }}"
+  loop_control:
+    label: "{{ item.Host }}:{{ item.HeartbeatPort }}"
+  no_log: true
+  when:
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
+
+- name: Refuse FE roles that conflict with inventory
+  ansible.builtin.assert:
+    that: >-
+      (item.Role if item.Role != 'LEADER' else 'FOLLOWER')
+      ==
+      (starrocks_expected_frontends
+       | selectattr('host', 'equalto', item.Host)
+       | first).role
+    fail_msg: >-
+      Existing FE role conflicts with inventory at {{ item.Host }}:{{ item.EditLogPort }}
+  loop: "{{ starrocks_fe_rows }}"
+  loop_control:
+    label: "{{ item.Host }}:{{ item.EditLogPort }}"
+  no_log: true
+  when:
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
+
+- name: Refuse backends that are being decommissioned
+  ansible.builtin.assert:
+    that:
+      - (item.SystemDecommissioned | default('false') | lower) != 'true'
+      - (item.ClusterDecommissioned | default('false') | lower) != 'true'
+    fail_msg: "Backend {{ item.Host }}:{{ item.HeartbeatPort }} is being decommissioned"
+  loop: "{{ starrocks_be_rows }}"
+  loop_control:
+    label: "{{ item.Host }}:{{ item.HeartbeatPort }}"
+  no_log: true
+  when:
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
+
+- name: Require a single live frontend leader with one cluster identity
+  ansible.builtin.assert:
+    that:
+      - >-
+        (starrocks_fe_rows | selectattr('Role', 'equalto', 'LEADER')
+         | selectattr('Alive', 'equalto', 'true') | list | length) == 1
+      - (starrocks_fe_rows | map(attribute='ClusterId') | unique | list | length) == 1
+    fail_msg: >-
+      A single live FE leader with one agreed cluster ID is required;
+      never force a new cluster over existing metadata
+  no_log: true
+  when:
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
+
+- name: Record the elected frontend leader
+  ansible.builtin.set_fact:
+    starrocks_leader_host: >-
+      {{ starrocks_fe_rows | selectattr('Role', 'equalto', 'LEADER')
+         | selectattr('Alive', 'equalto', 'true') | map(attribute='Host') | first }}
+    # start_fe.sh --helper takes host:edit_log_port, so the port travels with it.
+    starrocks_leader_edit_log_port: >-
+      {{ starrocks_fe_rows | selectattr('Role', 'equalto', 'LEADER')
+         | selectattr('Alive', 'equalto', 'true')
+         | map(attribute='EditLogPort') | first }}
+  when:
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)

@@ -1,53 +1,42 @@
 ---
-- name: Inspect every host and validate the inventory before any mutation
+- name: Preflight - validate inventory, prerequisites and persisted state before any mutation
   hosts: starrocks
   become: true
   any_errors_fatal: true
-  tasks:
-    - name: Validate inventory and preserved data on each host
-      ansible.builtin.import_role:
-        name: nimbo_cluster
-        tasks_from: preflight
+  roles:
+    - starrocks_preflight
 
-- name: Validate the whole cluster identity before any mutation
-  hosts: "{{ starrocks_bootstrap_host }}"
-  become: true
-  any_errors_fatal: true
-  gather_facts: false
-  tasks:
-    - name: Validate cross-host cluster identity
-      ansible.builtin.import_role:
-        name: nimbo_cluster
-        tasks_from: cluster
-
-- name: Prepare runtime and services
+- name: Prepare hosts
   hosts: starrocks
   become: true
   any_errors_fatal: true
   gather_facts: false
-  tasks:
-    - name: Prepare runtime, services and firewall
-      ansible.builtin.import_role:
-        name: nimbo_cluster
-        tasks_from: prepare
-    - name: Recover previously initialized frontends together
-      ansible.builtin.systemd_service:
-        name: starrocks-fe
-        state: started
-        enabled: true
-        daemon_reload: true
-      when:
-        - inventory_hostname in groups['starrocks_fe']
-        - starrocks_disk.has_metadata
-    - name: Bootstrap one frontend on an empty cluster
-      ansible.builtin.include_role:
-        name: nimbo_cluster
-        tasks_from: bootstrap
-      when:
-        - inventory_hostname == starrocks_bootstrap_host
-        - >-
-          0 == (groups['starrocks'] | map('extract', hostvars, 'starrocks_disk')
-                | selectattr('has_metadata') | list | length)
+  roles:
+    - starrocks_host_baseline
+
+- name: Configure frontends
+  hosts: starrocks_fe
+  become: true
+  any_errors_fatal: true
+  gather_facts: false
+  roles:
+    - starrocks_fe
+
+- name: Configure backends
+  hosts: starrocks_be
+  become: true
+  any_errors_fatal: true
+  gather_facts: false
+  roles:
+    - starrocks_be
+
+- name: Form the frontend quorum
+  hosts: starrocks_fe
+  become: true
+  any_errors_fatal: true
+  gather_facts: false
+  roles:
+    - starrocks_cluster_formation
 
 - name: Reconcile frontends one at a time
   hosts: starrocks_fe
@@ -55,11 +44,9 @@
   serial: 1
   any_errors_fatal: true
   gather_facts: false
-  tasks:
-    - name: Join and configure the frontend
-      ansible.builtin.import_role:
-        name: nimbo_cluster
-        tasks_from: frontend
+  roles:
+    - role: starrocks_fe
+      tasks_from: join
 
 - name: Reconcile backends one at a time
   hosts: starrocks_be
@@ -67,12 +54,9 @@
   serial: 1
   any_errors_fatal: true
   gather_facts: false
-  tasks:
-    - name: Register and configure the backend
-      ansible.builtin.import_role:
-        name: nimbo_cluster
-        tasks_from: backend
-
+  roles:
+    - role: starrocks_be
+      tasks_from: join
 
 - name: Verify the resulting deployment
   ansible.builtin.import_playbook: verify-deploy-starrocks.yml

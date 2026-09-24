@@ -1,0 +1,15 @@
+---
+# Everything that prepares a host before it's a frontend or a backend:
+# service account + release install, kernel/limits/THP, clock sync.
+# All three always run together, on the same hosts, in the same play
+# ("Prepare hosts" in deploy-starrocks.yml) - split into files, not roles,
+# because none of them is reused anywhere else the way starrocks_cluster_state
+# or starrocks_fe/starrocks_be are.
+- name: Service account, directories and pinned release
+  ansible.builtin.import_tasks: install.yml
+
+- name: Kernel parameters, swap, limits and THP
+  ansible.builtin.import_tasks: system.yml
+
+- name: Clock synchronization
+  ansible.builtin.import_tasks: timesync.yml

@@ -46,8 +46,6 @@ pipeline {
             description: 'Run every stage regardless of what changed')
         password(name: 'ROOT_PASSWORD', defaultValue: '', description: 'Become/root password for the ansible-managed nodes ')
         password(name: 'STARROCKS_ROOT_PASSWORD', defaultValue: '', description: 'StarRocks root DB password')
-        password(name: 'STARROCKS_WRITER_PASSWORD', defaultValue: '', description: 'StarRocks writer DB password')
-        password(name: 'STARROCKS_READER_PASSWORD', defaultValue: '', description: 'StarRocks reader DB password')
         password(name: 'STARROCKS_SUDO_PASSWORD', defaultValue: '', description: 'StarRocks node sudo password')
         string(name: 'KUBE_NAMESPACE', defaultValue: 'team1', description: 'Namespace for helm releases')
     }
@@ -88,8 +86,6 @@ pipeline {
                 withEnv([
                         "ANSIBLE_BECOME_PASS=${params.ROOT_PASSWORD}",
                         "STARROCKS_ROOT_PASSWORD=${params.STARROCKS_ROOT_PASSWORD}",
-                        "STARROCKS_WRITER_PASSWORD=${params.STARROCKS_WRITER_PASSWORD}",
-                        "STARROCKS_READER_PASSWORD=${params.STARROCKS_READER_PASSWORD}",
                         "STARROCKS_SUDO_PASSWORD=${params.STARROCKS_SUDO_PASSWORD}"
                     ]) {
                     sh '''

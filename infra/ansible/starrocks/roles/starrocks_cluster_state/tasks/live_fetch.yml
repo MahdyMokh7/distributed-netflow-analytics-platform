@@ -1,0 +1,42 @@
+---
+- name: Read the live frontend membership
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - --batch
+      - --raw
+      - --column-names
+      - "--host={{ starrocks_sql_host }}"
+      - "--port={{ starrocks_connection.login_port }}"
+      - "--user=root"
+      - -e
+      - "SHOW FRONTENDS"
+  environment:
+    MYSQL_PWD: "{{ starrocks_sql_pw }}"
+  register: starrocks_show_frontends
+  changed_when: false
+  check_mode: false
+  no_log: true
+  when:
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
+
+- name: Read the live backend membership
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - --connect-timeout=3
+      - "-h{{ starrocks_sql_host }}"
+      - "-P{{ starrocks_connection.login_port }}"
+      - "-uroot"
+      - -B
+      - --column-names
+      - -e
+      - "SHOW BACKENDS"
+  environment:
+    MYSQL_PWD: "{{ starrocks_sql_pw }}"
+  register: starrocks_show_backends
+  changed_when: false
+  check_mode: false
+  no_log: true
+  when:
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)

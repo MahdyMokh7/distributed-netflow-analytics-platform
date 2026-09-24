@@ -1,0 +1,4 @@
+---
+starrocks_fe_heap_mb: 2048
+starrocks_fe_launcher: /usr/local/libexec/nimbo-starrocks-fe
+starrocks_fe_helper_file: /etc/starrocks-fe-helper

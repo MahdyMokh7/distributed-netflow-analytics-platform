@@ -1,0 +1,12 @@
+---
+- name: Validate the inventory
+  ansible.builtin.import_tasks: inventory.yml
+
+- name: Verify host prerequisites
+  ansible.builtin.import_tasks: prerequisites.yml
+
+- name: Inspect the persisted StarRocks state on each host
+  ansible.builtin.import_tasks: disk_identity.yml
+
+- name: Validate the cluster identity across all hosts
+  ansible.builtin.import_tasks: cluster_identity.yml

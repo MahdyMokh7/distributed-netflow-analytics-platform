@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  role_name: starrocks_cluster_state
+  author: Nimbo
+  description: "Helper: connect to the live cluster, read membership, enforce topology safety invariants"
+  license: proprietary
+  min_ansible_version: "2.17"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+  galaxy_tags: []
+dependencies:
+  - role: starrocks_common

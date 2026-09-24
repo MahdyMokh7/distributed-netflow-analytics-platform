@@ -1,0 +1,56 @@
+---
+- name: Inspect persisted StarRocks state
+  ansible.builtin.command:
+    argv:
+      - bash
+      - -euo
+      - pipefail
+      - -c
+      - |
+        meta_dir="{{ starrocks_meta_dir }}"
+        storage_dir="{{ starrocks_storage_dir }}"
+        has_meta=0
+        cluster_id='-'
+        node_role='-'
+
+        if [ -f "$meta_dir/image/VERSION" ]; then
+          has_meta=1
+          cluster_id=$(sed -n 's/^clusterId[[:space:]]*=[[:space:]]*//p' "$meta_dir/image/VERSION" | head -1)
+          if [ -f "$meta_dir/image/ROLE" ]; then
+            node_role=$(sed -n 's/^role[[:space:]]*=[[:space:]]*//p' "$meta_dir/image/ROLE" | head -1)
+          fi
+          [ -n "$cluster_id" ] || cluster_id='-'
+          [ -n "$node_role" ] || node_role='-'
+        fi
+
+        has_be=0
+        if [ -d "$storage_dir" ] && [ -n "$(ls -A -- "$storage_dir" 2>/dev/null)" ]; then
+          has_be=1
+        fi
+        printf 'meta %s clusterId %s role %s be %s\n' "$has_meta" "$cluster_id" "$node_role" "$has_be"
+  register: starrocks_disk_probe
+  changed_when: false
+  check_mode: false
+
+- name: Parse the disk identity probe
+  ansible.builtin.set_fact:
+    starrocks_disk_probe_map: >-
+      {{ dict(starrocks_disk_probe.stdout.split()[0::2]
+              | zip(starrocks_disk_probe.stdout.split()[1::2])) }}
+
+- name: Record disk identity
+  ansible.builtin.set_fact:
+    starrocks_disk:
+      has_metadata: "{{ starrocks_disk_probe_map['meta'] == '1' }}"
+      has_be_data: "{{ starrocks_disk_probe_map['be'] == '1' }}"
+      cluster_id: "{{ starrocks_disk_probe_map['clusterId'] if starrocks_disk_probe_map['meta'] == '1' else none }}"
+      node_role: "{{ starrocks_disk_probe_map['role'] if starrocks_disk_probe_map['meta'] == '1' else none }}"
+
+- name: Refuse incomplete or unrecognized FE identity
+  ansible.builtin.assert:
+    that:
+      - not (starrocks_disk.has_metadata | bool) or ((starrocks_disk.cluster_id | string) is match('^[0-9]+$'))
+      - not (starrocks_disk.has_metadata | bool) or (starrocks_disk.node_role in ['FOLLOWER', 'OBSERVER'])
+    fail_msg: >-
+      Incomplete or unrecognized FE identity at {{ starrocks_meta_dir }};
+      preserve it and recover before deployment

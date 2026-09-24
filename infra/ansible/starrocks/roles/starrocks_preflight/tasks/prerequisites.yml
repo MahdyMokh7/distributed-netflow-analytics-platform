@@ -1,0 +1,14 @@
+---
+- name: Verify Java runtime exists
+  ansible.builtin.command:
+    cmd: java --version
+  register: starrocks_java_check
+  changed_when: false
+  failed_when: starrocks_java_check.rc != 0
+
+- name: Verify MySQL client exists
+  ansible.builtin.command:
+    cmd: mysql --version
+  register: starrocks_mysql_check
+  changed_when: false
+  failed_when: starrocks_mysql_check.rc != 0

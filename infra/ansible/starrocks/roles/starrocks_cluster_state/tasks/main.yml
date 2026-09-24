@@ -1,0 +1,17 @@
+---
+- name: Require the preflight facts
+  ansible.builtin.assert:
+    that:
+      - starrocks_disk is defined
+      - starrocks_fe_metadata_present is defined
+    fail_msg: Run the starrocks_preflight role before any task that talks to the cluster
+    quiet: true
+
+- name: Build the expected membership from the inventory
+  ansible.builtin.import_tasks: expected.yml
+
+- name: Connect to the live cluster
+  ansible.builtin.import_tasks: connect.yml
+
+- name: Read the live membership and enforce the safety invariants
+  ansible.builtin.import_tasks: live.yml
