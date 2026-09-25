@@ -32,6 +32,36 @@ scrape_configs:
           node: node4
           instance: node4
 
+  # KUBELET VOLUME METRICS
+  - job_name: kubelets
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tls_config:
+      insecure_skip_verify: true
+    static_configs:
+      - targets:
+        - '10.10.61.51:10250'
+        labels:
+          node: node1
+          instance: node1
+      - targets:
+        - '10.10.61.52:10250'
+        labels:
+          node: node2
+          instance: node2
+      - targets:
+        - '10.10.61.53:10250'
+        labels:
+          node: node3
+          instance: node3
+      - targets:
+        - '10.10.61.54:10250'
+        labels:
+          node: node4
+          instance: node4
+
   - job_name: batch-ingester
     metrics_path: /actuator/prometheus
     kubernetes_sd_configs:

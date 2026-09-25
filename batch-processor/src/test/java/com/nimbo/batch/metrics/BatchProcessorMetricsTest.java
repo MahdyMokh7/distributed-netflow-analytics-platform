@@ -77,6 +77,7 @@ class BatchProcessorMetricsTest {
         metrics.postgresRetries(CONNECTION, 2);
         metrics.stateFallbackActive(true);
         metrics.failedBatchPending(true);
+        metrics.hdfsParquetFiles(12);
 
         // Then: each metric exposes its exact expected value
         assertThat(registry.get("batch.processor.files.processed").counter().count()).isEqualTo(2.0);
@@ -89,6 +90,7 @@ class BatchProcessorMetricsTest {
                 .isEqualTo(newestFileTimestamp.getEpochSecond());
         assertThat(registry.get("batch.processor.state.fallback.active").gauge().value()).isEqualTo(1.0);
         assertThat(registry.get("batch.processor.failed.batch.pending").gauge().value()).isEqualTo(1.0);
+        assertThat(registry.get("batch.processor.hdfs.parquet.files").gauge().value()).isEqualTo(12.0);
     }
 
     @Test
@@ -101,6 +103,7 @@ class BatchProcessorMetricsTest {
         metrics.sourceRecordsProcessed(noWork);
         metrics.outputRows(CONNECTION, noWork);
         metrics.postgresRetries(CONNECTION, noWork);
+        metrics.hdfsParquetFiles(noWork);
 
         // Then: all monotonic metrics and the file timestamp remain unchanged
         assertThat(registry.get("batch.processor.files.processed").counter().count()).isZero();
@@ -110,5 +113,6 @@ class BatchProcessorMetricsTest {
         assertThat(registry.get("batch.processor.postgres.retries").tag("cube", "connection").counter().count())
                 .isZero();
         assertThat(registry.get("batch.processor.last.processed.file.timestamp.seconds").gauge().value()).isZero();
+        assertThat(registry.get("batch.processor.hdfs.parquet.files").gauge().value()).isZero();
     }
 }

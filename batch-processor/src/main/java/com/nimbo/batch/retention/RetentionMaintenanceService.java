@@ -16,7 +16,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.regex.Pattern;
 
 @Component
 @Slf4j
@@ -28,8 +27,6 @@ public class RetentionMaintenanceService {
             "protocol_usage_aggregates",
             "ip_bandwidth_aggregates");
     private static final DateTimeFormatter PARTITION_SUFFIX = DateTimeFormatter.ofPattern("uuuu_MM_dd");
-    private static final DateTimeFormatter DIRECTORY_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
-    private static final Pattern HOUR_DIRECTORY = Pattern.compile("(?:[01]\\d|2[0-3])");
 
     private final BatchConfig batchConfig;
     private final RetentionPolicy retentionPolicy;
@@ -57,11 +54,6 @@ public class RetentionMaintenanceService {
         }
 
         maintainDatabasePartitions(window);
-        try {
-            deleteExpiredParquetFiles(window);
-        } catch (RuntimeException exception) {
-            log.error("Parquet retention failed; expired files will remain excluded from discovery", exception);
-        }
         try {
             deleteExpiredSparkHistory(window);
         } catch (RuntimeException exception) {
@@ -151,46 +143,6 @@ public class RetentionMaintenanceService {
         }
     }
 
-    private void deleteExpiredParquetFiles(RetentionWindow window) {
-        Path root = new Path(hdfsConfig.getFullParquetPath());
-        try {
-            if (!fileSystem.exists(root)) {
-                return;
-            }
-            for (FileStatus dateStatus : fileSystem.listStatus(root)) {
-                if (!dateStatus.isDirectory()) {
-                    continue;
-                }
-                LocalDate directoryDate = parseDirectoryDate(dateStatus.getPath().getName());
-                if (directoryDate == null) {
-                    continue;
-                }
-                deleteExpiredFilesInsideDateDirectory(dateStatus.getPath(), window);
-                deleteIfEmpty(dateStatus.getPath());
-            }
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to apply Parquet retention in " + root, exception);
-        }
-    }
-
-    private void deleteExpiredFilesInsideDateDirectory(Path dateDirectory, RetentionWindow window) throws IOException {
-        for (FileStatus hourStatus : fileSystem.listStatus(dateDirectory)) {
-            if (!hourStatus.isDirectory()
-                    || !HOUR_DIRECTORY.matcher(hourStatus.getPath().getName()).matches()) {
-                continue;
-            }
-            for (FileStatus fileStatus : fileSystem.listStatus(hourStatus.getPath())) {
-                if (fileStatus.isDirectory()) {
-                    continue;
-                }
-                NetflowFileTimestampParser.parse(fileStatus.getPath().getName())
-                        .filter(timestamp -> timestamp.isBefore(window.cutoffInstant()))
-                        .ifPresent(timestamp -> deleteRequired(fileStatus.getPath()));
-            }
-            deleteIfEmpty(hourStatus.getPath());
-        }
-    }
-
     private void deleteExpiredSparkHistory(RetentionWindow window) {
         Path root = new Path(hdfsConfig.getFullSparkHistoryPath());
         try {
@@ -223,21 +175,6 @@ public class RetentionMaintenanceService {
             inProgress |= childStatus.inProgress();
         }
         return new HistoryStatus(latest, inProgress);
-    }
-
-    private LocalDate parseDirectoryDate(String value) {
-        try {
-            return LocalDate.parse(value, DIRECTORY_DATE);
-        } catch (DateTimeParseException exception) {
-            return null;
-        }
-    }
-
-    private void deleteIfEmpty(Path directory) throws IOException {
-        if (fileSystem.exists(directory) && fileSystem.listStatus(directory).length == 0
-                && !fileSystem.delete(directory, false)) {
-            throw new IOException("HDFS refused to delete empty directory " + directory);
-        }
     }
 
     private void deleteRequired(Path path) {

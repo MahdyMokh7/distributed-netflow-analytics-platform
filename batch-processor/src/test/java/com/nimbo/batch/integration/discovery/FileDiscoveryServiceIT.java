@@ -80,6 +80,7 @@ class FileDiscoveryServiceIT {
                 "netflow-p02-2026-09-07T13-45-00-000Z-second.parquet",
                 "netflow-p01-2026-09-07T14-40-00-000Z-third.parquet"
         );
+        assertThat(meterRegistry.get("batch.processor.hdfs.parquet.files").gauge().value()).isEqualTo(4.0);
     }
 
     @Test

@@ -13,7 +13,7 @@ public class HdfsConfig {
 
     private String uri;
     private String parquetPath;
-    private String sparkHistoryPath = "/spark-history";
+    private String sparkHistoryPath;
 
     public String getFullParquetPath() {
         return uri + parquetPath;

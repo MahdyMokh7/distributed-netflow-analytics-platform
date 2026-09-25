@@ -1,0 +1,211 @@
+{
+  "annotations": {"list": []},
+  "description": "Current retained data footprint. Kafka, HDFS, and StarRocks values are physical storage measurements and may include replicated data.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current logical size of nimbo_db. The maximum is used because every HA replica contains the same database.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "max(pg_database_size_bytes{datname=\"nimbo_db\"}) / 1024^3", "instant": true, "range": false, "refId": "A"}],
+      "title": "PostgreSQL — Current Database Size",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current physical Kafka log bytes across all brokers, including replicated partitions and internal topics.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "sum(kafka_log_log_value{job=\"kafka-brokers\",name=\"Size\"}) / 1024^3", "instant": true, "range": false, "refId": "A"}],
+      "title": "Kafka — Current Retained Log Size",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current physical HDFS bytes across DataNodes, including block replication.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "sum(hadoop_datanode_dfs_used{job=\"hdfs-datanodes\",name=\"FSDatasetState\"}) / 1024^3", "instant": true, "range": false, "refId": "A"}],
+      "title": "HDFS — Current Data Used",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current physical data bytes reported by all StarRocks BE disks; replicated data is included.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "sum(starrocks_be_disks_data_used_capacity{job=\"starrocks-be\"}) / 1024^3", "instant": true, "range": false, "refId": "A"}],
+      "title": "StarRocks — Current BE Data Used",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Logical nimbo_db size reported independently by each PostgreSQL replica.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 4},
+      "id": 5,
+      "options": {"displayMode": "basic", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+      "targets": [{"expr": "pg_database_size_bytes{datname=\"nimbo_db\"} / 1024^3", "instant": true, "legendFormat": "{{instance}}", "range": false, "refId": "A"}],
+      "title": "PostgreSQL by Replica",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current physical Kafka logs on each broker, including replica copies.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 4},
+      "id": 6,
+      "options": {"displayMode": "basic", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+      "targets": [{"expr": "sum by (node) (kafka_log_log_value{job=\"kafka-brokers\",name=\"Size\"}) / 1024^3", "instant": true, "legendFormat": "{{node}}", "range": false, "refId": "A"}],
+      "title": "Kafka by Broker",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current physical HDFS bytes on each DataNode.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 4},
+      "id": 7,
+      "options": {"displayMode": "basic", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+      "targets": [{"expr": "hadoop_datanode_dfs_used{job=\"hdfs-datanodes\",name=\"FSDatasetState\"} / 1024^3", "instant": true, "legendFormat": "{{node}}", "range": false, "refId": "A"}],
+      "title": "HDFS by DataNode",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current physical data bytes on each StarRocks BE node.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 4},
+      "id": 8,
+      "options": {"displayMode": "basic", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+      "targets": [{"expr": "starrocks_be_disks_data_used_capacity{job=\"starrocks-be\"} / 1024^3", "instant": true, "legendFormat": "{{node}}", "range": false, "refId": "A"}],
+      "title": "StarRocks by BE Node",
+      "type": "bargauge"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 11},
+      "id": 9,
+      "panels": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Exact current count of completed Parquet files under the Batch Processor HDFS input path.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 0, "noValue": "NO DATA", "unit": "short"}, "overrides": []},
+          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 12},
+          "id": 10,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "max(batch_processor_hdfs_parquet_files{job=\"batch-processor\"})", "instant": true, "range": false, "refId": "A"}],
+          "title": "HDFS Parquet Files",
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "PostgreSQL statistics estimate of current retained rows, summed across daily leaf partitions. This avoids repeated COUNT(*) table scans.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 0, "unit": "short"}, "overrides": []},
+          "gridPos": {"h": 6, "w": 9, "x": 6, "y": 12},
+          "id": 11,
+          "options": {"displayMode": "basic", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+          "targets": [{"expr": "sum by (aggregate) (label_replace(pg_stat_user_tables_n_live_tup{datname=\"nimbo_db\",schemaname=\"public\",relname=~\"(traffic|connection|ip_bandwidth|protocol_usage)_aggregates_[0-9]{4}_[0-9]{2}_[0-9]{2}\"}, \"aggregate\", \"$1\", \"relname\", \"(.*)_aggregates_[0-9]{4}_[0-9]{2}_[0-9]{2}\"))", "instant": true, "legendFormat": "{{aggregate}}", "range": false, "refId": "A"}],
+          "title": "PostgreSQL Estimated Retained Rows",
+          "type": "bargauge"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Current physical Kafka log bytes grouped by topic, including replica copies.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+          "gridPos": {"h": 6, "w": 9, "x": 15, "y": 12},
+          "id": 12,
+          "options": {"displayMode": "basic", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+          "targets": [{"expr": "sum by (topic) (kafka_log_log_value{job=\"kafka-brokers\",name=\"Size\"}) / 1024^3", "instant": true, "legendFormat": "{{topic}}", "range": false, "refId": "A"}],
+          "title": "Kafka Current Data by Topic",
+          "type": "bargauge"
+        },
+        {
+          "datasource": {"type": "mysql", "uid": "starrocks"},
+          "description": "Current StarRocks table metadata. Row counts are metadata estimates; no full COUNT(*) scans are executed.",
+          "fieldConfig": {"defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}, "footer": {"reducers": []}, "inspect": false}}, "overrides": []},
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 18},
+          "id": 13,
+          "options": {"cellHeight": "sm", "showHeader": true},
+          "targets": [{"dataset": "information_schema", "editorMode": "code", "format": "table", "rawQuery": true, "rawSql": "SELECT TABLE_NAME AS `Table`, TABLE_ROWS AS `Approximate Rows`, ROUND(DATA_LENGTH / 1073741824, 3) AS `Data GiB` FROM information_schema.tables WHERE TABLE_SCHEMA = 'nimbo' AND TABLE_TYPE = 'BASE TABLE' ORDER BY DATA_LENGTH DESC, TABLE_NAME", "refId": "A"}],
+          "title": "StarRocks Current Tables",
+          "type": "table"
+        }
+      ],
+      "title": "Current Retained Contents",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 12},
+      "id": 14,
+      "panels": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Current Prometheus TSDB blocks, head chunks, and WAL stored on disk.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+          "gridPos": {"h": 6, "w": 8, "x": 0, "y": 13},
+          "id": 15,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "(prometheus_tsdb_storage_blocks_bytes + prometheus_tsdb_head_chunks_storage_size_bytes + prometheus_tsdb_wal_storage_size_bytes) / 1024^3", "instant": true, "range": false, "refId": "A"}],
+          "title": "Prometheus TSDB — Current Size",
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Current used and allocated space for the Prometheus persistent volume.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+          "gridPos": {"h": 6, "w": 8, "x": 8, "y": 13},
+          "id": 16,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [
+            {"expr": "max(kubelet_volume_stats_used_bytes{namespace=\"team1\",persistentvolumeclaim=\"prometheus-data\"}) / 1024^3", "instant": true, "legendFormat": "used", "range": false, "refId": "A"},
+            {"expr": "max(kubelet_volume_stats_capacity_bytes{namespace=\"team1\",persistentvolumeclaim=\"prometheus-data\"}) / 1024^3", "instant": true, "legendFormat": "allocated", "range": false, "refId": "B"}
+          ],
+          "title": "Prometheus PVC — Used / Allocated",
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Current used and allocated space for the Grafana persistent volume.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+          "gridPos": {"h": 6, "w": 8, "x": 16, "y": 13},
+          "id": 17,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [
+            {"expr": "max(kubelet_volume_stats_used_bytes{namespace=\"team1\",persistentvolumeclaim=\"grafana-data\"}) / 1024^3", "instant": true, "legendFormat": "used", "range": false, "refId": "A"},
+            {"expr": "max(kubelet_volume_stats_capacity_bytes{namespace=\"team1\",persistentvolumeclaim=\"grafana-data\"}) / 1024^3", "instant": true, "legendFormat": "allocated", "range": false, "refId": "B"}
+          ],
+          "title": "Grafana PVC — Used / Allocated",
+          "type": "stat"
+        }
+      ],
+      "title": "Monitoring Storage",
+      "type": "row"
+    }
+  ],
+  "refresh": "2m",
+  "schemaVersion": 39,
+  "tags": ["nimbo", "storage", "data-footprint", "PostgreSQL", "Kafka", "HDFS", "StarRocks"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "Asia/Tehran",
+  "title": "Nimbyte Current Data Footprint",
+  "uid": "nimbyte-current-data-footprint",
+  "version": 1,
+  "weekStart": ""
+}

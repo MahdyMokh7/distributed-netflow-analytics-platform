@@ -61,9 +61,9 @@ class RetentionMaintenanceServiceIT {
     }
 
     @Test
-    void givenExpiredAndRetainedDatabaseAndHdfsEntries_whenMaintained_thenOnlyExpiredEntriesAreRemoved()
+    void givenExpiredAndRetainedDatabaseAndHdfsEntries_whenMaintained_thenOnlyExpiredDatabaseAndHistoryEntriesAreRemoved()
             throws IOException {
-        // Given: daily partitions, Parquet files, completed histories, and an active history around the cutoff
+        // Given: daily partitions, retained and expired Parquet files, completed histories, and an active history
         java.nio.file.Path expiredParquet = createParquet(
                 "2026-09-21", "23", "netflow-p01-2026-09-21T23-59-59-999Z-expired.parquet");
         java.nio.file.Path retainedParquet = createParquet(
@@ -78,9 +78,9 @@ class RetentionMaintenanceServiceIT {
         RetentionWindow window = service.maintain();
         service.ensurePartitionsForFiles(window, List.of(new Path(futureParquet.toUri())));
 
-        // Then: expired data is removed while the boundary and active entries remain
+        // Then: expired database partitions and completed history are removed; Parquet is retained for discovery filtering
         assertThat(window.cutoffInstant()).isEqualTo(Instant.parse("2026-09-22T00:00:00Z"));
-        assertThat(expiredParquet).doesNotExist();
+        assertThat(expiredParquet).exists();
         assertThat(retainedParquet).exists();
         assertThat(expiredHistory).doesNotExist();
         assertThat(retainedHistory).exists();

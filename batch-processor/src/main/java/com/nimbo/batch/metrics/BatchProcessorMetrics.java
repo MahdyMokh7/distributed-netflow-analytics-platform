@@ -79,6 +79,7 @@ public class BatchProcessorMetrics {
     private final AtomicInteger failedBatchPending = new AtomicInteger();
     private final AtomicLong lastSuccessTimestamp = new AtomicLong();
     private final AtomicLong lastProcessedFileTimestamp = new AtomicLong();
+    private final AtomicLong hdfsParquetFiles = new AtomicLong();
 
     public BatchProcessorMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -137,6 +138,9 @@ public class BatchProcessorMetrics {
                 .register(registry);
         Gauge.builder("batch.processor.failed.batch.pending", failedBatchPending, AtomicInteger::get)
                 .description("Whether a failed batch identifier is pending retry")
+                .register(registry);
+        Gauge.builder("batch.processor.hdfs.parquet.files", hdfsParquetFiles, AtomicLong::get)
+                .description("Current number of Parquet files under the configured HDFS input path")
                 .register(registry);
     }
 
@@ -202,5 +206,11 @@ public class BatchProcessorMetrics {
 
     public void failedBatchPending(boolean pending) {
         failedBatchPending.set(pending ? 1 : 0);
+    }
+
+    public void hdfsParquetFiles(long files) {
+        if (files >= 0) {
+            hdfsParquetFiles.set(files);
+        }
     }
 }

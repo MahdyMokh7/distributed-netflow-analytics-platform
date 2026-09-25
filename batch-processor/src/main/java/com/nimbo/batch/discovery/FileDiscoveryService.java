@@ -12,7 +12,9 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -93,6 +95,7 @@ public class FileDiscoveryService {
 
             int maxFiles = batchConfig.getMaxFilesPerBatch();
             List<Path> newFiles = listOldestNewFiles(processedFileNames, maxFiles, window);
+            refreshParquetFileCount();
 
             if (newFiles.isEmpty()) {
                 log.info("No new files to process (batch: {})", batchId);
@@ -206,6 +209,28 @@ public class FileDiscoveryService {
             return result;
         } catch (IOException e) {
             throw new RuntimeException("Failed to list HDFS files", e);
+        }
+    }
+
+    private void refreshParquetFileCount() {
+        Path root = new Path(hdfsConfig.getFullParquetPath());
+        try {
+            if (!fileSystem.exists(root)) {
+                metrics.hdfsParquetFiles(0);
+                return;
+            }
+
+            long count = 0;
+            RemoteIterator<LocatedFileStatus> files = fileSystem.listFiles(root, true);
+            while (files.hasNext()) {
+                String fileName = files.next().getPath().getName();
+                if (!fileName.startsWith(".") && fileName.endsWith(".parquet")) {
+                    count++;
+                }
+            }
+            metrics.hdfsParquetFiles(count);
+        } catch (IOException exception) {
+            log.warn("Failed to refresh the HDFS Parquet-file count for {}", root, exception);
         }
     }
 

@@ -21,6 +21,6 @@ public class BatchConfig {
     @Setter
     public static class Retention {
         private boolean enabled;
-        private int previousDays = 3;
+        private int previousDays;
     }
 }

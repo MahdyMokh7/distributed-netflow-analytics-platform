@@ -74,4 +74,4 @@ batch:
   max-files-per-batch: 2
   retention:
     enabled: true
-    previous-days: 3
+    previous-days: 7

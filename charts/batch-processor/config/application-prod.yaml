@@ -101,7 +101,7 @@ batch:
   max-files-per-batch: 5
   retention:
     enabled: true
-    previous-days: 3
+    previous-days: 7
 
 server:
   port: ${SERVER_PORT:18081}
