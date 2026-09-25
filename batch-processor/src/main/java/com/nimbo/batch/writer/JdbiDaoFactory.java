@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -84,6 +86,10 @@ public class JdbiDaoFactory implements Serializable {
 
     public IpBandwidthAggregateDao createIpBandwidthDao() {
         return createJdbi().onDemand(IpBandwidthAggregateDao.class);
+    }
+
+    public Connection openConnection() throws SQLException {
+        return getDataSource().getConnection();
     }
 
     private Jdbi createJdbi() {

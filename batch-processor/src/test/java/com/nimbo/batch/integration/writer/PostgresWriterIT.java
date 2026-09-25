@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -44,12 +45,13 @@ class PostgresWriterIT {
     void resetDatabase() {
         spark = SPARK.spark();
         jdbi = POSTGRES.jdbi();
+        POSTGRES.ensureDailyPartitions(LocalDate.of(2026, 8, 29));
         jdbi.useHandle(handle -> handle.execute("TRUNCATE traffic_aggregates, connection_aggregates, protocol_usage_aggregates, ip_bandwidth_aggregates"));
         meterRegistry = new SimpleMeterRegistry();
         PostgresConfig postgresConfig = postgresConfig();
         writer = new PostgresWriter(new TableRowMapper(), new BatchExecutor(),
                 new JdbiDaoFactory(postgresConfig, executorPoolConfig()), postgresConfig,
-                new BatchProcessorMetrics(meterRegistry));
+                new BatchProcessorMetrics(meterRegistry), jdbi);
     }
 
     @AfterEach

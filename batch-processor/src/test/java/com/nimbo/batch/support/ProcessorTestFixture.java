@@ -19,6 +19,7 @@ import org.apache.spark.sql.types.StructType;
 import org.jdbi.v3.core.Jdbi;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 public final class ProcessorTestFixture {
@@ -47,6 +48,7 @@ public final class ProcessorTestFixture {
     }
 
     public void resetDatabase() {
+        postgres.ensureDailyPartitions(LocalDate.of(2026, 8, 29));
         jdbi.useHandle(handle -> handle.execute(
                 "TRUNCATE traffic_aggregates, connection_aggregates, protocol_usage_aggregates, ip_bandwidth_aggregates"));
     }
@@ -108,7 +110,8 @@ public final class ProcessorTestFixture {
                 new BatchExecutor(),
                 new JdbiDaoFactory(postgresConfig, executorPool),
                 postgresConfig,
-                new BatchProcessorMetrics(new SimpleMeterRegistry()));
+                new BatchProcessorMetrics(new SimpleMeterRegistry()),
+                jdbi);
     }
 
     public long countRows(String table) {

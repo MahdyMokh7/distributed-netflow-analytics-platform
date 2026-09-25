@@ -1,10 +1,7 @@
 package com.nimbo.batch.writer;
 
 import com.nimbo.batch.config.PostgresConfig;
-import com.nimbo.batch.dao.ConnectionAggregateDao;
-import com.nimbo.batch.dao.IpBandwidthAggregateDao;
 import com.nimbo.batch.dao.ProtocolAggregateDao;
-import com.nimbo.batch.dao.TrafficAggregateDao;
 import com.nimbo.batch.metrics.BatchProcessorMetrics;
 import com.nimbo.batch.metrics.BatchProcessorMetrics.Cube;
 import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
@@ -13,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.util.LongAccumulator;
+import org.jdbi.v3.core.Jdbi;
 import org.springframework.stereotype.Component;
 
 import java.io.Serial;
@@ -40,13 +38,15 @@ public class PostgresWriter implements Serializable {
     private final long initialRetryDelayMs;
     private final long maxDelayMs;
     private final BatchProcessorMetrics metrics;
+    private final transient Jdbi driverJdbi;
 
     public PostgresWriter(
             TableRowMapper rowMapper,
             BatchExecutor batchExecutor,
             JdbiDaoFactory daoFactory,
             PostgresConfig postgresConfig,
-            BatchProcessorMetrics metrics) {
+            BatchProcessorMetrics metrics,
+            Jdbi driverJdbi) {
 
         this.rowMapper = rowMapper;
         this.batchExecutor = batchExecutor;
@@ -57,6 +57,7 @@ public class PostgresWriter implements Serializable {
         this.initialRetryDelayMs = postgresConfig.getRetry().getInitialDelayMs();
         this.maxDelayMs = postgresConfig.getRetry().getMaxDelayMs();
         this.metrics = metrics;
+        this.driverJdbi = driverJdbi;
 
         log.info(
                 "PostgresWriter initialized - batchSize: {}, writerPartitions: {}, maxRetries: {}, retryDelayMs: {}, maxDelayMs: {}",
@@ -65,31 +66,14 @@ public class PostgresWriter implements Serializable {
     }
 
     public long writeTrafficAggregates(Dataset<Row> dataset, UUID batchId) {
-        return writeAggregates(
-                dataset,
-                batchId,
-                "records_written_traffic_",
-                TABLE_TRAFFIC_AGGREGATES,
-                Cube.TRAFFIC,
-                Stage.POSTGRES_TRAFFIC,
-                JdbiDaoFactory::createTrafficDao,
-                TrafficAggregateDao::upsertBatch,
-                rowMapper::toTrafficAggregate
-        );
+        return writeStagedAggregates(dataset, batchId, TABLE_TRAFFIC_AGGREGATES,
+                Cube.TRAFFIC, Stage.POSTGRES_TRAFFIC, StagingTable.TRAFFIC);
     }
 
     public long writeConnectionAggregates(Dataset<Row> dataset, UUID batchId) {
-        return writeAggregates(
-                dataset,
-                batchId,
-                "records_written_connection_",
-                TABLE_CONNECTION_AGGREGATES,
-                Cube.CONNECTION,
-                Stage.POSTGRES_CONNECTION,
-                JdbiDaoFactory::createConnectionDao,
-                ConnectionAggregateDao::upsertBatch,
-                rowMapper::toConnectionAggregate
-        );
+        return writeStagedAggregates(dataset, batchId, TABLE_CONNECTION_AGGREGATES,
+                Cube.CONNECTION, Stage.POSTGRES_CONNECTION,
+                StagingTable.CONNECTION);
     }
 
     public long writeProtocolAggregates(Dataset<Row> dataset, UUID batchId) {
@@ -107,17 +91,73 @@ public class PostgresWriter implements Serializable {
     }
 
     public long writeIpBandwidthAggregates(Dataset<Row> dataset, UUID batchId) {
-        return writeAggregates(
-                dataset,
-                batchId,
-                "records_written_ipbandwidth_",
-                TABLE_IP_BANDWIDTH_AGGREGATES,
-                Cube.TOP_IP,
-                Stage.POSTGRES_TOP_IP,
-                JdbiDaoFactory::createIpBandwidthDao,
-                IpBandwidthAggregateDao::upsertBatch,
-                rowMapper::toIpBandwidthAggregate
-        );
+        return writeStagedAggregates(dataset, batchId, TABLE_IP_BANDWIDTH_AGGREGATES,
+                Cube.TOP_IP, Stage.POSTGRES_TOP_IP,
+                StagingTable.BANDWIDTH);
+    }
+
+    private long writeStagedAggregates(
+            Dataset<Row> dataset,
+            UUID batchId,
+            String tableName,
+            Cube cube,
+            Stage writeStage,
+            StagingTable stagingTable) {
+
+        Timestamp ingestedAt = Timestamp.from(Instant.now());
+
+        driverJdbi.useHandle(handle -> handle.createUpdate(
+                        "DELETE FROM " + stagingTable.stagingTable() + " WHERE batch_id = :batchId")
+                .bind("batchId", batchId)
+                .execute());
+
+        StagingPartitionWriter stagingWriter = new StagingPartitionWriter(
+                stagingTable, daoFactory, batchId, ingestedAt);
+
+        Timer.Sample writeTimer = metrics.startTimer();
+        try {
+            dataset.repartition(writerPartitions).foreachPartition(stagingWriter::call);
+            long stagedRows = driverJdbi.withHandle(handle -> handle.createQuery(
+                            "SELECT COUNT(*) FROM " + stagingTable.stagingTable()
+                                    + " WHERE batch_id = :batchId")
+                    .bind("batchId", batchId)
+                    .mapTo(Long.class)
+                    .one());
+            int mergedRows = driverJdbi.inTransaction(handle -> {
+                int merged = handle.createUpdate(stagingTable.mergeSql())
+                        .bind("batchId", batchId)
+                        .execute();
+                handle.createUpdate("DELETE FROM " + stagingTable.stagingTable()
+                                + " WHERE batch_id = :batchId")
+                        .bind("batchId", batchId)
+                        .execute();
+                return merged;
+            });
+            if (mergedRows != stagedRows) {
+                throw new IllegalStateException("Staged row count " + stagedRows
+                        + " does not match merged row count " + mergedRows + " for " + tableName);
+            }
+        } catch (RuntimeException | Error exception) {
+            metrics.stageFailed(writeStage);
+            throw exception;
+        } finally {
+            metrics.stageFinished(writeTimer, writeStage);
+            metrics.postgresRetries(cube, 0L);
+        }
+
+        long totalWritten = mergedRowsForBatch(tableName, batchId);
+        metrics.outputRows(cube, totalWritten);
+        log.info("Staged and merged {} records into {} with batch_id: {}",
+                totalWritten, tableName, batchId);
+        return totalWritten;
+    }
+
+    private long mergedRowsForBatch(String tableName, UUID batchId) {
+        return driverJdbi.withHandle(handle -> handle.createQuery(
+                        "SELECT COUNT(*) FROM " + tableName + " WHERE batch_id = :batchId")
+                .bind("batchId", batchId)
+                .mapTo(Long.class)
+                .one());
     }
 
     private <T, D> long writeAggregates(
