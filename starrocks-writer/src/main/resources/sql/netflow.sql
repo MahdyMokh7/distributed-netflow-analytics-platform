@@ -80,5 +80,9 @@ CREATE TABLE IF NOT EXISTS nimbo.netflow
                                from_unixtime_ms(kafka_timestamp)
     )
 
-    DISTRIBUTED BY HASH(ipv4_src_addr,ipv4_dst_addr)
+    DISTRIBUTED BY HASH(ipv4_src_addr, ipv4_dst_addr)
     BUCKETS 8
+
+--     PROPERTIES (
+--                    "partition_live_number" = "7"
+--                );
