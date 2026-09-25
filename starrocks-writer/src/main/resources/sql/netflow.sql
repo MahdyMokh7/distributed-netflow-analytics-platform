@@ -83,8 +83,3 @@ CREATE TABLE IF NOT EXISTS nimbo.netflow
     DISTRIBUTED BY HASH(ipv4_src_addr, ipv4_dst_addr)
     BUCKETS 8
 
-    PROPERTIES (
-                   "partition_live_number" = "7",
-                   "replication_num" = "2",
-                   "compression" = "ZSTD"
-               );
