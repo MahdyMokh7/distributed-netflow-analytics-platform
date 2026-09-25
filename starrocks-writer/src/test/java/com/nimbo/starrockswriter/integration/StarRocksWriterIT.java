@@ -66,6 +66,20 @@ class StarRocksWriterIT {
         assertPersistedRow("192.0.2.22", 1, 2L, firstTimestamp + 12, 2200L);
     }
 
+    @Test
+    void flushesBatchOnTimeThresholdWhenBelowMaxBatchSize() throws Exception {
+        infrastructure.kafka().awaitConsumerGroupMembers(2);
+
+        Schema schema = loadAvroSchema();
+        long timestamp = 1_726_000_000_000L;
+        GenericRecord genericRecord = validNetflowRecord(schema, "192.0.2.30", 4242L);
+        assertThat(produce(genericRecord, schema, timestamp)).isZero();
+
+        infrastructure.starRocks().awaitRowCount(1);
+        infrastructure.kafka().awaitCommittedOffset(0, 1L);
+        assertPersistedRow("192.0.2.30", 0, 0L, timestamp, 4242L);
+    }
+
     private long produce(GenericRecord record, Schema schema, long timestamp) throws Exception {
         return produce(record, schema, timestamp, 0);
     }

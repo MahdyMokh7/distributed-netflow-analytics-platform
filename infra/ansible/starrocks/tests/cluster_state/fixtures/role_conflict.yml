@@ -1,0 +1,26 @@
+---
+name: role_conflict
+description: >-
+  10.0.0.12 is live as FOLLOWER but inventory says it should be OBSERVER.
+  Must be refused - a role mismatch usually means the inventory changed
+  without the node actually being reconfigured yet.
+
+frontends_stdout_lines:
+  - "Name\tIP\tEditLogPort\tRole\tAlive\tClusterId"
+  - "fe_1\t10.0.0.11\t9010\tLEADER\ttrue\t111222333"
+  - "fe_2\t10.0.0.12\t9010\tFOLLOWER\ttrue\t111222333"
+
+backends_stdout_lines:
+  - "IP\tHeartbeatPort\tSystemDecommissioned\tClusterDecommissioned"
+  - "10.0.0.21\t9050\tfalse\tfalse"
+
+expected_frontends:
+  - {host: "10.0.0.11", port: 9010, role: FOLLOWER}
+  - {host: "10.0.0.12", port: 9010, role: OBSERVER}
+
+expected_backends:
+  - {host: "10.0.0.21", port: 9050}
+
+expect:
+  result: fail
+  fail_msg_contains: "Existing FE role conflicts with inventory at 10.0.0.12:9010"

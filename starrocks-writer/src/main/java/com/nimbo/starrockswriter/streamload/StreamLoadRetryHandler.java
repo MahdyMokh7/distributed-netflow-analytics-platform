@@ -45,8 +45,7 @@ public class StreamLoadRetryHandler {
         if (error == null && success(result)) {
             return CompletableFuture.completedFuture(result);
         }
-
-        log.error("Stream Load failed. label={}", label, error);
+        log.error("Stream Load failed. label={}, error={}, result={}",  label,error,result);
         metrics.loadRetry(workerNumber, retryReason(result, error));
         return retry(rows, label);
     }

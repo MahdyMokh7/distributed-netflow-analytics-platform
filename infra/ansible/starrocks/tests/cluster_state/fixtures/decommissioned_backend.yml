@@ -1,0 +1,25 @@
+---
+name: decommissioned_backend
+description: >-
+  10.0.0.22 is mid-decommission (SystemDecommissioned=true). Must be refused
+  so automation doesn't proceed while a BE is draining.
+
+frontends_stdout_lines:
+  - "Name\tIP\tEditLogPort\tRole\tAlive\tClusterId"
+  - "fe_1\t10.0.0.11\t9010\tLEADER\ttrue\t111222333"
+
+backends_stdout_lines:
+  - "IP\tHeartbeatPort\tSystemDecommissioned\tClusterDecommissioned"
+  - "10.0.0.21\t9050\tfalse\tfalse"
+  - "10.0.0.22\t9050\ttrue\tfalse"
+
+expected_frontends:
+  - {host: "10.0.0.11", port: 9010, role: FOLLOWER}
+
+expected_backends:
+  - {host: "10.0.0.21", port: 9050}
+  - {host: "10.0.0.22", port: 9050}
+
+expect:
+  result: fail
+  fail_msg_contains: "Backend 10.0.0.22:9050 is being decommissioned"

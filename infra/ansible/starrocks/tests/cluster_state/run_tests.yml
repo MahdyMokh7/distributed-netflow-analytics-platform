@@ -1,0 +1,41 @@
+---
+- name: Unit test starrocks_cluster_state (leader discovery + join safety)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Find fixture files
+      ansible.builtin.find:
+        paths: "{{ playbook_dir }}/fixtures"
+        patterns: "*.yml"
+      register: sr_fixture_files
+
+    - name: Run every fixture as an isolated test case
+      ansible.builtin.include_tasks: run_case.yml
+      loop: "{{ sr_fixture_files.files | map(attribute='path') | sort }}"
+      loop_control:
+        loop_var: sr_fixture_path
+        label: "{{ sr_fixture_path | basename }}"
+
+    - name: Print results
+      ansible.builtin.debug:
+        msg: >-
+          [{{ 'PASS' if item.ok else 'FAIL' }}] {{ item.name }}
+          {{ '' if item.ok else '-- ' + item.detail }}
+      loop: "{{ sr_results }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          {{ sr_results | selectattr('ok') | list | length }}/{{ sr_results | length }}
+          test case(s) passed
+
+    - name: Fail the run if any test case did not match its expectation
+      ansible.builtin.assert:
+        that: sr_results | rejectattr('ok') | list | length == 0
+        fail_msg: >-
+          Failed case(s): {{ sr_results | rejectattr('ok') | map(attribute='name') | list }}
+        success_msg: All cluster_state test cases passed
