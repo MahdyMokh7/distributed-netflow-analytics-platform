@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: grafana-alerting
+  name: {{ include "grafana.fullname" . }}-alerting
 data:
 {{- range $path, $bytes := .Files.Glob "alerting/*.yaml" }}
   {{ regexReplaceAll "[^A-Za-z0-9._-]" (base $path) "_" }}: |

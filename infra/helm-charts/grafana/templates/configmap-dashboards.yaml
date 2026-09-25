@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: grafana-dashboards
+  name: {{ include "grafana.fullname" . }}-dashboards
 data:
 {{- range $path, $bytes := .Files.Glob "dashboards/*.json" }}
   {{ regexReplaceAll "[^A-Za-z0-9._-]" (base $path) "_" }}: |

@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: grafana-dashboard-provider
+  name: {{ include "grafana.fullname" . }}-dashboard-provider
 data:
   dashboards.yaml: |
     apiVersion: 1

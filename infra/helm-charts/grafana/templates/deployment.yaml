@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: grafana
+  name: {{ include "grafana.fullname" . }}
   labels:
-    app: grafana
+    app: {{ include "grafana.fullname" . }}
 spec:
   replicas: {{ .Values.replicaCount }}
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: grafana
+      app: {{ include "grafana.fullname" . }}
   template:
     metadata:
       labels:
-        app: grafana
+        app: {{ include "grafana.fullname" . }}
       annotations:
         checksum/datasource: {{ include (print $.Template.BasePath "/configmap-datasources.yaml") . | sha256sum }}
         checksum/dashboard-provider: {{ include (print $.Template.BasePath "/configmap-dashboard-provider.yaml") . | sha256sum }}
@@ -74,17 +74,17 @@ spec:
         {{- if .Values.persistence.enabled }}
         - name: data
           persistentVolumeClaim:
-            claimName: grafana-data
+            claimName: {{ include "grafana.fullname" . }}-data
         {{- end }}
         - name: datasources
           configMap:
-            name: grafana-datasources
+            name: {{ include "grafana.fullname" . }}-datasources
         - name: dashboard-provider
           configMap:
-            name: grafana-dashboard-provider
+            name: {{ include "grafana.fullname" . }}-dashboard-provider
         - name: dashboards
           configMap:
-            name: grafana-dashboards
+            name: {{ include "grafana.fullname" . }}-dashboards
         - name: alerting
           configMap:
-            name: grafana-alerting
+            name: {{ include "grafana.fullname" . }}-alerting
