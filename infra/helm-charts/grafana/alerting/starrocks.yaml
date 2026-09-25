@@ -1,115 +1,461 @@
 apiVersion: 1
 groups:
-    - orgId: 1
-      name: starrocks
-      folder: Nimbyte
-      interval: 1m
-      rules:
-        - uid: dfyq0zdm278cgc
-          title: High compaction pressure alert
-          condition: C
-          data:
-            - refId: A
-              relativeTimeRange:
-                from: 600
-                to: 0
-              datasourceUid: starrocks
-              model:
-                dataset: nimbo
-                datasource:
-                    type: mysql
-                    uid: starrocks
-                editorMode: code
-                format: table
-                hide: false
-                instant: true
-                intervalMs: 1000
-                maxDataPoints: 43200
-                rawQuery: true
-                rawSql: |-
-                    SELECT
-                        MAX(CANDIDATE_MAX_SCORE) AS compaction_score
-                    FROM information_schema.be_compactions;
-                refId: A
-                sql:
-                    columns:
-                        - parameters: []
-                          type: function
-                    groupBy:
-                        - property:
-                            type: string
-                          type: groupBy
-                    limit: 50
-            - refId: reducer
-              queryType: expression
-              datasourceUid: __expr__
-              model:
-                conditions:
-                    - evaluator:
-                        params:
-                            - 0
-                            - 0
-                        type: gt
-                      operator:
-                        type: and
-                      query:
-                        params: []
-                      reducer:
-                        params: []
-                        type: avg
-                      type: query
-                datasource:
-                    name: Expression
-                    type: __expr__
-                    uid: __expr__
-                expression: A
-                intervalMs: 1000
-                maxDataPoints: 43200
-                reducer: last
-                refId: reducer
-                type: reduce
-            - refId: C
-              queryType: expression
-              datasourceUid: __expr__
-              model:
-                conditions:
-                    - evaluator:
-                        params:
-                            - 100
-                        type: gt
-                      operator:
-                        type: and
-                      query:
-                        params:
-                            - C
-                      reducer:
-                        params: []
-                        type: last
-                      type: query
-                datasource:
-                    type: __expr__
-                    uid: __expr__
-                expression: reducer
-                intervalMs: 1000
-                maxDataPoints: 43200
-                refId: C
-                type: threshold
-          noDataState: NoData
-          execErrState: Error
-          for: 1m
-          keepFiringFor: 5m
-          annotations:
-            StarRocks compaction pressure is high: |-
-                Backend compaction candidate score is above threshold.
+  - orgId: 1
+    name: starrocks
+    folder: Nimbyte
+    interval: 1m
+    rules:
+      - uid: dfyq0zdm278cgc
+        title: High compaction pressure alert
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: starrocks
+            model:
+              dataset: nimbo
+              datasource:
+                type: mysql
+                uid: starrocks
+              editorMode: code
+              format: table
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              rawSql: |-
+                SELECT
+                    MAX(CANDIDATE_MAX_SCORE) AS compaction_score
+                FROM information_schema.be_compactions;
+              refId: A
+              sql:
+                columns:
+                  - parameters: []
+                    type: function
+                groupBy:
+                  - property:
+                      type: string
+                    type: groupBy
+                limit: 50
+          - refId: reducer
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: []
+                  reducer:
+                    params: []
+                    type: avg
+                  type: query
+              datasource:
+                name: Expression
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: reducer
+              type: reduce
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 100
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: reducer
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        keepFiringFor: 5m
+        annotations:
+          StarRocks compaction pressure is high: |-
+            Backend compaction candidate score is above threshold.
+            
+            Current value: {{ $values.A }}
+            Check:
+            - information_schema.be_compactions
+            - BE CPU
+            - ingestion rate
+            - disk usage
+        labels:
+          severity: warning
+        isPaused: false
+        notification_settings:
+          receiver: empty
 
-                Current value: {{ $values.A }}
-                Check:
-                - information_schema.be_compactions
-                - BE CPU
-                - ingestion rate
-                - disk usage
-          labels:
-            severity: warning
-          isPaused: false
-          notification_settings:
-            receiver: empty
+      - uid: sr02tabletbklg
+        title: Tablet repair/rebalance backlog
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: starrocks
+            model:
+              dataset: nimbo
+              datasource:
+                type: mysql
+                uid: starrocks
+              editorMode: code
+              format: table
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              rawSql: |-
+                SELECT
+                    COUNT(*) AS pending_tasks
+                FROM information_schema.fe_tablet_schedules;
+              refId: A
+              sql:
+                columns:
+                  - parameters: []
+                    type: function
+                groupBy:
+                  - property:
+                      type: string
+                    type: groupBy
+                limit: 50
+          - refId: reducer
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: []
+                  reducer:
+                    params: []
+                    type: avg
+                  type: query
+              datasource:
+                name: Expression
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: reducer
+              type: reduce
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 20
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: reducer
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        keepFiringFor: 5m
+        annotations:
+          StarRocks tablet repair queue is backed up: |-
+            The FE has more than 20 tablet repair/rebalance tasks queued or running.
+            This threshold is a starting point — tune it to your cluster's normal queue depth.
+            
+            Current value: {{ $values.A }}
+            Check:
+            - information_schema.fe_tablet_schedules for stuck SRC/DEST backends
+            - whether a BE recently went down or was decommissioned
+            - disk usage skew across backends
+        labels:
+          severity: warning
+        isPaused: false
+        notification_settings:
+          receiver: empty
+
+      - uid: sr03bekcpuhigh
+        title: Backend CPU high
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: starrocks
+            model:
+              dataset: nimbo
+              datasource:
+                type: mysql
+                uid: starrocks
+              editorMode: code
+              format: table
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              rawSql: |-
+                SELECT
+                    MAX(cpu_percent) AS max_cpu_percent
+                FROM (
+                    SELECT
+                        BE_ID,
+                        ROUND(
+                            100 *
+                            SUM(
+                                CASE
+                                    WHEN LABELS NOT IN (
+                                        'mode=idle',
+                                        'mode=guest',
+                                        'mode=guest_nice'
+                                    )
+                                    THEN VALUE
+                                    ELSE 0
+                                END
+                            )
+                            /
+                            SUM(VALUE),
+                            2
+                        ) AS cpu_percent
+                    FROM information_schema.be_metrics
+                    WHERE NAME='cpu'
+                    GROUP BY BE_ID
+                ) per_be;
+              refId: A
+              sql:
+                columns:
+                  - parameters: []
+                    type: function
+                groupBy:
+                  - property:
+                      type: string
+                    type: groupBy
+                limit: 50
+          - refId: reducer
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: []
+                  reducer:
+                    params: []
+                    type: avg
+                  type: query
+              datasource:
+                name: Expression
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: reducer
+              type: reduce
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 90
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: reducer
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        keepFiringFor: 5m
+        annotations:
+          StarRocks backend CPU is high: |-
+            At least one backend's CPU usage is above 90%, sustained for 5 minutes.
+            
+            Current value: {{ $values.A }}
+            Check:
+            - StarRocks Backend CPU Usage panel for which BE is hot
+            - concurrent query load / heavy scans
+            - ongoing compaction or ingestion on that node
+        labels:
+          severity: warning
+        isPaused: false
+        notification_settings:
+          receiver: empty
+
+      - uid: sr04impbacklog
+        title: Active import job backlog
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: starrocks
+            model:
+              dataset: nimbo
+              datasource:
+                type: mysql
+                uid: starrocks
+              editorMode: code
+              format: table
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              rawSql: |-
+                SELECT
+                    COUNT(*) AS active_jobs
+                FROM information_schema.loads
+                WHERE STATE IN ('PENDING','ETL','LOADING','QUEUEING','COMMITTED');
+              refId: A
+              sql:
+                columns:
+                  - parameters: []
+                    type: function
+                groupBy:
+                  - property:
+                      type: string
+                    type: groupBy
+                limit: 50
+          - refId: reducer
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: []
+                  reducer:
+                    params: []
+                    type: avg
+                  type: query
+              datasource:
+                name: Expression
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: reducer
+              type: reduce
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 50
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: reducer
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 10m
+        keepFiringFor: 5m
+        annotations:
+          StarRocks import jobs are backing up: |-
+            More than 50 load jobs have been PENDING/LOADING/QUEUEING/COMMITTED at once for 10+ minutes.
+            This threshold is a starting point — tune it to your normal concurrent load volume.
+            
+            Current value: {{ $values.A }}
+            Check:
+            - Active Import Jobs / Import Jobs by Database panels for which DB is queuing
+            - backend CPU and compaction score (ingestion may be throttled)
+            - whether a single stuck job is blocking others
+        labels:
+          severity: warning
+        isPaused: false
+        notification_settings:
+          receiver: empty
