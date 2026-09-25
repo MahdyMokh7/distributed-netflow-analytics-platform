@@ -27,7 +27,7 @@ postgresql:
     maxConnections: 100
     sharedBuffers: 512MB
     effectiveCacheSize: 3GB
-    maxWalSize: 2GB
+    maxWalSize: 16GB
     checkpointTimeout: 15min
     checkpointCompletionTarget: 0.9
     walCompression: "on"
