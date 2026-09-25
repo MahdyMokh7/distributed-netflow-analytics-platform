@@ -1,0 +1,61 @@
+---
+- name: Load fixture
+  ansible.builtin.include_vars:
+    file: "{{ sr_fixture_path }}"
+    name: sr_case
+
+- name: Reset per-case facts
+  ansible.builtin.set_fact:
+    starrocks_show_frontends:
+      stdout_lines: "{{ sr_case.frontends_stdout_lines }}"
+    starrocks_show_backends:
+      stdout_lines: "{{ sr_case.backends_stdout_lines }}"
+    starrocks_expected_frontends: "{{ sr_case.expected_frontends }}"
+    starrocks_expected_backends: "{{ sr_case.expected_backends }}"
+    starrocks_fe_metadata_present: true
+    starrocks_fe_rows: []
+    starrocks_be_rows: []
+    starrocks_leader_host: ""
+    starrocks_leader_edit_log_port: ""
+    sr_case_error: ""
+
+- name: Run the logic under test (live_assert.yml only - no real mysql call)
+  block:
+    - ansible.builtin.import_role:
+        name: starrocks_cluster_state
+        tasks_from: live_assert.yml
+  rescue:
+    - name: Capture why it failed
+      ansible.builtin.set_fact:
+        sr_case_error: >-
+          {{
+            (ansible_failed_result.results | default([])
+             | selectattr('failed', 'defined') | selectattr('failed')
+             | map(attribute='msg') | list | first)
+            | default(ansible_failed_result.msg | default(ansible_failed_task.name), true)
+          }}
+
+- name: Judge the outcome against the fixture's expectation
+  ansible.builtin.set_fact:
+    sr_this_result:
+      name: "{{ sr_case.name }}"
+      ok: >-
+        {{
+          (sr_case.expect.result == 'pass' and sr_case_error == ''
+           and (sr_case.expect.leader_host is not defined
+                or starrocks_leader_host == sr_case.expect.leader_host)
+           and (sr_case.expect.leader_edit_log_port is not defined
+                or starrocks_leader_edit_log_port == sr_case.expect.leader_edit_log_port))
+          or
+          (sr_case.expect.result == 'fail' and sr_case_error != ''
+           and sr_case.expect.fail_msg_contains in sr_case_error)
+        }}
+      detail: >-
+        expected {{ sr_case.expect.result }}{{
+          (' (leader=' ~ sr_case.expect.leader_host ~ ')') if sr_case.expect.leader_host is defined else '' }},
+        got {{ ('error: ' ~ sr_case_error) if sr_case_error else
+               ('pass (leader=' ~ starrocks_leader_host ~ ')') }}
+
+- name: Record result
+  ansible.builtin.set_fact:
+    sr_results: "{{ (sr_results | default([])) + [sr_this_result] }}"
