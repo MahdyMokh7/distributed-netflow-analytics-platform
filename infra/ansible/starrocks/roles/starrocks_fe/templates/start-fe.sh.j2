@@ -1,0 +1,8 @@
+#!/bin/bash
+set -euo pipefail
+# A restarted FE reads its persisted identity. The helper is only for first join.
+if [[ ! -s {{ (starrocks_meta_dir ~ '/image/VERSION') | quote }} && -s {{ starrocks_fe_helper_file | quote }} ]]; then
+    IFS= read -r helper < {{ starrocks_fe_helper_file | quote }}
+    exec {{ (starrocks_link ~ '/fe/bin/start_fe.sh') | quote }} --helper "$helper"
+fi
+exec {{ (starrocks_link ~ '/fe/bin/start_fe.sh') | quote }}

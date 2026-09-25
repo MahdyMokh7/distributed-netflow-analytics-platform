@@ -1,7 +1,0 @@
----
-- name: The starrocks role has no standalone task entry point
-  ansible.builtin.fail:
-    msg: >-
-      Run ansible/playbooks/starrocks.yml or ansible/playbooks/verify-starrocks.yml;
-      the role's task files (preflight, cluster, prepare, bootstrap, frontend,
-      backend, provision, verify) are composed by those playbooks.

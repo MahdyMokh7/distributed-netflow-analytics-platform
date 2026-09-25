@@ -1,10 +1,8 @@
 ---
-- name: Verify service and application readiness without mutations
+- name: Verify services and cluster membership without mutations
   hosts: starrocks
   become: true
   any_errors_fatal: true
-  tasks:
-    - name: Verify StarRocks
-      ansible.builtin.import_role:
-        name: nimbo_cluster
-        tasks_from: verify
+  roles:
+    - starrocks_preflight
+    - starrocks_verify

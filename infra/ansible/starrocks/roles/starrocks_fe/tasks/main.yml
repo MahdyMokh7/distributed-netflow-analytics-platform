@@ -1,0 +1,48 @@
+---
+- name: Install initial frontend configuration only when missing
+  ansible.builtin.template:
+    src: fe.conf.j2
+    dest: "{{ starrocks_install_dir }}/fe/conf/fe.conf"
+    owner: root
+    group: "{{ starrocks_group }}"
+    mode: '0640'
+    force: false
+
+- name: Install managed frontend configuration on an uninitialized node
+  ansible.builtin.template:
+    src: fe.conf.j2
+    dest: "{{ starrocks_install_dir }}/fe/conf/fe.conf"
+    owner: root
+    group: "{{ starrocks_group }}"
+    mode: '0640'
+  when: not starrocks_disk.has_metadata and not starrocks_disk.has_be_data
+
+- name: Create the service launcher directory
+  ansible.builtin.file:
+    path: "{{ starrocks_fe_launcher | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install the frontend launcher
+  ansible.builtin.template:
+    src: start-fe.sh.j2
+    dest: "{{ starrocks_fe_launcher }}"
+    owner: root
+    group: root
+    mode: '0755'
+    validate: /bin/bash -n %s
+
+- name: Install the frontend service unit
+  ansible.builtin.template:
+    src: starrocks-fe.service.j2
+    dest: /etc/systemd/system/starrocks-fe.service
+    owner: root
+    group: root
+    mode: '0644'
+  register: starrocks_fe_unit
+
+- name: Record the frontend unit change for the rolling restart
+  ansible.builtin.set_fact:
+    starrocks_fe_unit_changed: "{{ starrocks_fe_unit.changed | bool }}"

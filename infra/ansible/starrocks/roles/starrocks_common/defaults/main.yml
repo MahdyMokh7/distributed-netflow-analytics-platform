@@ -1,0 +1,31 @@
+---
+starrocks_version: 4.0.12
+starrocks_install_dir: "/opt/StarRocks-{{ starrocks_version }}-ubuntu-amd64"
+starrocks_link: /opt/starrocks
+starrocks_java_home: /opt/jdk-17.0.6
+
+starrocks_user: starrocks
+starrocks_group: starrocks
+
+starrocks_mount: /mnt/disk1
+starrocks_meta_dir: "{{ starrocks_mount }}/starrocks_fe/meta"
+starrocks_storage_dir: "{{ starrocks_mount }}/starrocks_be"
+starrocks_log_dir: "{{ starrocks_mount }}/starrocks_logs"
+
+starrocks_http_port: 8030
+starrocks_query_port: 9030
+starrocks_rpc_port: 9020
+starrocks_edit_log_port: 9010
+starrocks_be_http_port: 8040
+starrocks_be_port: 9060
+starrocks_brpc_port: 8060
+starrocks_heartbeat_port: 9050
+starrocks_starlet_port: 9070
+
+starrocks_bootstrap_host: "{{ groups['starrocks_fe_voters'][0] }}"
+starrocks_login_hosts: "{{ groups['starrocks_fe'] | map('extract', hostvars, 'starrocks_address') | list }}"
+
+starrocks_health_retries: 60
+starrocks_health_delay: 5
+
+starrocks_chrony_service: "{{ 'chrony' if ansible_facts.os_family == 'Debian' else 'chronyd' }}"

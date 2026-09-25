@@ -1,0 +1,55 @@
+---
+- name: Install the time synchronization service
+  ansible.builtin.package:
+    name: "{{ starrocks_chrony_package }}"
+    state: present
+
+- name: Disable the conflicting systemd time client
+  ansible.builtin.systemd_service:
+    name: systemd-timesyncd
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Install the managed time synchronization configuration
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: "{{ starrocks_chrony_conf }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart StarRocks time synchronization
+
+- name: Enable the time synchronization service
+  ansible.builtin.systemd_service:
+    name: "{{ starrocks_chrony_service }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Apply time configuration before checking readiness
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the clock to synchronize
+  ansible.builtin.command:
+    argv:
+      - bash
+      - -o
+      - pipefail
+      - -c
+      - |
+        {% if not starrocks_ntp_servers %}
+        if chronyc -n sources | awk '
+          /^MS / { header = 1; next }
+          header && /^=+$/ { start = 1; next }
+          start && NF >= 5 && ($5 + 0) > 0 { ok = 1 }
+          END { exit !ok }
+        '; then
+          exit 0
+        fi
+        {% endif %}
+
+        chronyc waitsync {{ starrocks_clock_sync_tries | int }} {{ starrocks_max_clock_correction }}
+  register: starrocks_clock_sync
+  changed_when: false
+  check_mode: false

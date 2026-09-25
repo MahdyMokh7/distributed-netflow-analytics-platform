@@ -1,0 +1,11 @@
+---
+- name: Validate the inventory contract
+  ansible.builtin.assert:
+    that:
+      - groups['starrocks_fe_voters'] | length in [1, 3, 5]
+      - starrocks_bootstrap_host in groups['starrocks_fe_voters']
+      - groups['starrocks'] | map('extract', hostvars, 'starrocks_address') | list | unique | length == groups['starrocks'] | length
+    fail_msg: >-
+      Invalid or inconsistent inventory — voter count, bootstrap host,
+      or duplicate addresses.
+  run_once: true

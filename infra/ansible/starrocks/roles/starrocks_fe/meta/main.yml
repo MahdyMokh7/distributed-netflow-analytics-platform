@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  role_name: starrocks_fe
+  author: Nimbo
+  description: "StarRocks frontend node: configuration, launcher, systemd unit, and cluster join"
+  license: proprietary
+  min_ansible_version: "2.17"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+  galaxy_tags: []
+dependencies:
+  - role: starrocks_common

@@ -1,0 +1,60 @@
+---
+- name: Set the services this host must run
+  ansible.builtin.set_fact:
+    starrocks_expected_services: >-
+      {{ ([starrocks_chrony_service]
+          + (['starrocks-fe'] if inventory_hostname in groups['starrocks_fe'] else [])
+          + (['starrocks-be'] if inventory_hostname in groups['starrocks_be'] else [])) }}
+
+- name: Read service state
+  ansible.builtin.service_facts:
+  when: not ansible_check_mode or starrocks_fe_metadata_present
+
+- name: Assert the required services are running
+  ansible.builtin.assert:
+    that:
+      - >-
+        (item == 'starrocks-thp' and
+         (sr_svc.state | default('')) in ['running', 'exited'])
+        or
+        (item != 'starrocks-thp' and
+         (sr_svc.state | default('')) == 'running')
+    fail_msg: "Service {{ item }} is not active"
+  vars:
+    sr_svc: >-
+      {{ ansible_facts.services[item ~ '.service']
+         | default(ansible_facts.services[item] | default({})) }}
+  loop: "{{ starrocks_expected_services }}"
+  no_log: true
+  when: not ansible_check_mode or starrocks_fe_metadata_present
+
+- name: Read the live cluster state (first voting frontend only)
+  ansible.builtin.import_role:
+    name: starrocks_cluster_state
+  when:
+    - inventory_hostname == (groups['starrocks_fe_voters'] | first)
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
+
+- name: Require complete cluster membership
+  ansible.builtin.assert:
+    that:
+      - (starrocks_expected_frontends | length) == (starrocks_fe_rows | length)
+      - (starrocks_expected_backends | length) == (starrocks_be_rows | length)
+    fail_msg: "Cluster membership is incomplete"
+  when:
+    - inventory_hostname == (groups['starrocks_fe_voters'] | first)
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)
+
+- name: Require every cluster member to be alive and on the pinned version
+  ansible.builtin.assert:
+    that:
+      - (item.Alive | lower) == 'true'
+      - (item.Version | split('-') | first) == (starrocks_version | string)
+    fail_msg: "Cluster member {{ item.Host }} is not alive or is on an unexpected version"
+  loop: "{{ starrocks_fe_rows + starrocks_be_rows }}"
+  loop_control:
+    label: "{{ item.Host }} ({{ item.Version }})"
+  no_log: true
+  when:
+    - inventory_hostname == (groups['starrocks_fe_voters'] | first)
+    - not ansible_check_mode or (starrocks_fe_metadata_present | bool)

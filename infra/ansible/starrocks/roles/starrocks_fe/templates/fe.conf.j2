@@ -1,0 +1,18 @@
+JAVA_HOME = {{ starrocks_java_home }}
+LOG_DIR = {{ starrocks_log_dir }}/fe
+PID_DIR = /run/starrocks-fe
+JAVA_OPTS="-Dlog4j2.formatMsgNoLookups=true -Xms{{ starrocks_fe_heap_mb }}m -Xmx{{ starrocks_fe_heap_mb }}m -XX:+UseG1GC -Duser.timezone=UTC -Xlog:gc*:{{ starrocks_log_dir }}/fe/fe.gc.log:time:filecount=5,filesize=32M -XX:ErrorFile={{ starrocks_log_dir }}/fe/hs_err_pid%p.log -Djava.security.policy=${STARROCKS_HOME}/conf/udf_security.policy"
+meta_dir = {{ starrocks_meta_dir }}
+priority_networks = {{ starrocks_address }}/32
+run_mode = shared_nothing
+http_port = {{ starrocks_http_port }}
+query_port = {{ starrocks_query_port }}
+rpc_port = {{ starrocks_rpc_port }}
+edit_log_port = {{ starrocks_edit_log_port }}
+sys_log_level = INFO
+sys_log_dir = {{ starrocks_log_dir }}/fe
+audit_log_dir = {{ starrocks_log_dir }}/fe
+log_roll_size_mb = 128
+sys_log_roll_num = 5
+audit_log_roll_num = 5
+enable_auth_check = true

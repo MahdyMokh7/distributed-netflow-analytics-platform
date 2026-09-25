@@ -1,0 +1,37 @@
+[Unit]
+Description=Nimbo StarRocks FE
+Wants=network-online.target
+After=network-online.target chrony.service starrocks-thp.service
+RequiresMountsFor={{ starrocks_mount }}
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User={{ starrocks_user }}
+Group={{ starrocks_group }}
+Environment=JAVA_HOME={{ starrocks_java_home }}
+Environment=TZ=UTC
+Environment=LANG=C.UTF-8
+RuntimeDirectory=starrocks-fe
+RuntimeDirectoryMode=0750
+WorkingDirectory={{ starrocks_link }}/fe
+ExecStart={{ starrocks_fe_launcher }}
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=180
+KillSignal=SIGTERM
+KillMode=control-group
+LimitNOFILE=655350
+LimitNPROC=65535
+LimitMEMLOCK=infinity
+LimitSTACK=infinity
+TasksMax=65535
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
