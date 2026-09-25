@@ -82,6 +82,37 @@ class PostgresQueryIT {
     }
 
     @Test
+    void aggregateSchemaMatchesProductionIdentityAndInetColumns() {
+        Integer obsoleteIdColumns = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name IN (
+                    'traffic_aggregates',
+                    'ip_bandwidth_aggregates',
+                    'protocol_usage_aggregates'
+                  )
+                  AND column_name = 'id'
+                """, Integer.class);
+
+        var inetColumns = jdbcTemplate.queryForList("""
+                SELECT table_name || '.' || column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND udt_name = 'inet'
+                ORDER BY table_name, column_name
+                """, String.class);
+
+        assertThat(obsoleteIdColumns).isZero();
+        assertThat(inetColumns).containsExactly(
+                "connection_aggregates.dst_ip",
+                "connection_aggregates.src_ip",
+                "ip_bandwidth_aggregates.ip",
+                "traffic_aggregates.src_ip"
+        );
+    }
+
+    @Test
     void givenTrafficAcrossWindowsWhenQueriedBySourceThenRangeSortAndTotalsAreCorrect() {
         // Given: traffic inside and at the exclusive range boundary
         trafficRepository.save(traffic("10.0.0.1", RANGE_START.plusSeconds(600), 100, 40, 10, 4, BATCH_ONE));

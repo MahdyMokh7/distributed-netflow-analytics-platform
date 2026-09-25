@@ -14,6 +14,17 @@ service:
   port: 18083
   loadBalancerIP: 10.10.61.75
 
+database:
+  jdbcUrl: jdbc:postgresql://postgresql-ha-postgresql-master:5432/nimbo_db
+  pool:
+    maximumSize: 10
+    minimumIdle: 2
+    leakDetectionThresholdMs: 180000
+
+starrocksQuery:
+  jdbcUrl: jdbc:mysql://10.10.61.53:9030/nimbo
+  poolSize: 10
+
 resources:
   requests:
     cpu: 250m
@@ -24,23 +35,24 @@ resources:
 
 probes:
   startup:
-    path: /api/actuator/health
+    path: /api/actuator/health/readiness
     timeoutSeconds: 3
     failureThreshold: 30
     periodSeconds: 5
   readiness:
-    path: /api/actuator/health
+    path: /api/actuator/health/readiness
     timeoutSeconds: 3
     failureThreshold: 3
     periodSeconds: 5
   liveness:
-    path: /api/actuator/health
+    path: /api/actuator/health/liveness
     timeoutSeconds: 3
     failureThreshold: 3
     periodSeconds: 10
 
 secret:
   enabled: false
+  existingName: rest-api-secret
   data:
     DB_USERNAME: "CHANGE_ME"
     DB_PASSWORD: "CHANGE_ME"

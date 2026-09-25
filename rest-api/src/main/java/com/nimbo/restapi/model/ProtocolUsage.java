@@ -25,9 +25,6 @@ import java.util.UUID;
 @IdClass(ProtocolUsageId.class)
 public class ProtocolUsage {
 
-    @Column(name = "id", insertable = false, updatable = false)
-    private Long id;
-
     @Id
     @Column(name = "l7_protocol", nullable = false)
     private Double l7Protocol;

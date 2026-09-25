@@ -6,8 +6,7 @@ CREATE TABLE protocol_dim (
 );
 
 CREATE TABLE IF NOT EXISTS traffic_aggregates (
-    id BIGSERIAL,
-    src_ip VARCHAR(45) NOT NULL,
+    src_ip INET NOT NULL,
     window_start TIMESTAMP NOT NULL,
     window_end TIMESTAMP NOT NULL,
     in_bytes BIGINT NOT NULL CHECK (in_bytes >= 0),
@@ -22,8 +21,8 @@ CREATE TABLE IF NOT EXISTS traffic_aggregates (
 
 CREATE TABLE IF NOT EXISTS connection_aggregates (
     id BYTEA NOT NULL,
-    src_ip VARCHAR(45) NOT NULL,
-    dst_ip VARCHAR(45) NOT NULL,
+    src_ip INET NOT NULL,
+    dst_ip INET NOT NULL,
     window_start TIMESTAMP NOT NULL,
     window_end TIMESTAMP NOT NULL,
     in_bytes BIGINT NOT NULL CHECK (in_bytes >= 0),
@@ -36,7 +35,6 @@ CREATE TABLE IF NOT EXISTS connection_aggregates (
 );
 
 CREATE TABLE IF NOT EXISTS protocol_usage_aggregates (
-    id BIGSERIAL,
     l7_protocol DOUBLE PRECISION NOT NULL,
     window_start TIMESTAMP NOT NULL,
     window_end TIMESTAMP NOT NULL,
@@ -51,8 +49,7 @@ CREATE TABLE IF NOT EXISTS protocol_usage_aggregates (
 );
 
 CREATE TABLE IF NOT EXISTS ip_bandwidth_aggregates (
-    id BIGSERIAL,
-    ip VARCHAR(45) NOT NULL,
+    ip INET NOT NULL,
     window_start TIMESTAMP NOT NULL,
     window_end TIMESTAMP NOT NULL,
     inbound_bytes BIGINT NOT NULL CHECK (inbound_bytes >= 0),

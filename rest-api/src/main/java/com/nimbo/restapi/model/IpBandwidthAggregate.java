@@ -25,11 +25,9 @@ import java.util.UUID;
 @IdClass(IpBandwidthAggregateId.class)
 public class IpBandwidthAggregate {
 
-    @Column(name = "id", insertable = false, updatable = false)
-    private Long id;
-
     @Id
-    @Column(name = "ip", nullable = false)
+    @Column(name = "ip", nullable = false, columnDefinition = "INET")
+    @JdbcTypeCode(SqlTypes.INET)
     private String ip;
 
     @Id

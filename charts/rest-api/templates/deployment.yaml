@@ -38,6 +38,18 @@ spec:
               value: {{ .Values.containerPort | quote }}
             - name: SPRING_CONFIG_ADDITIONAL_LOCATION
               value: "file:/config/application-prod.yaml"
+            - name: DB_URL
+              value: {{ .Values.database.jdbcUrl | quote }}
+            - name: DB_POOL_MAX_SIZE
+              value: {{ .Values.database.pool.maximumSize | quote }}
+            - name: DB_POOL_MIN_IDLE
+              value: {{ .Values.database.pool.minimumIdle | quote }}
+            - name: DB_LEAK_DETECTION_THRESHOLD_MS
+              value: {{ .Values.database.pool.leakDetectionThresholdMs | quote }}
+            - name: STARROCKS_QUERY_JDBC_URL
+              value: {{ .Values.starrocksQuery.jdbcUrl | quote }}
+            - name: STARROCKS_QUERY_POOL_SIZE
+              value: {{ .Values.starrocksQuery.poolSize | quote }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -48,7 +60,7 @@ spec:
           {{- else }}
           envFrom:
             - secretRef:
-                name: rest-api-secret
+                name: {{ .Values.secret.existingName }}
           {{- end }}
           volumeMounts:
             - name: config

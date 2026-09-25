@@ -7,8 +7,8 @@ spring:
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://10.10.61.70:5432/nimbo_db}
-    username: ${DB_USERNAME:nimbo_user}
-    password: ${DB_PASSWORD:123456}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     hikari:
       maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
       minimum-idle: ${DB_POOL_MIN_IDLE:2}
@@ -81,6 +81,13 @@ management:
     health:
       show-details: always
       show-components: always
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
 
   metrics:
     distribution:
@@ -137,8 +144,8 @@ resilience4j:
 nimbo:
   starrocks-query:
     jdbc-url: ${STARROCKS_QUERY_JDBC_URL:jdbc:mysql://10.10.61.53:9030/nimbo}
-    username: ${STARROCKS_QUERY_USERNAME:root}
-    password: ${STARROCKS_QUERY_PASSWORD:s@hWater}
+    username: ${STARROCKS_QUERY_USERNAME}
+    password: ${STARROCKS_QUERY_PASSWORD}
     database: ${STARROCKS_QUERY_DATABASE:nimbo}
     table: ${STARROCKS_QUERY_TABLE:netflow}
 

@@ -4,17 +4,17 @@ spring:
   profiles:
     active: prod
   datasource:
-    url: jdbc:postgresql://10.10.61.70:5432/nimbo_db
+    url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 20
-      minimum-idle: 10
+      maximum-pool-size: ${DB_POOL_MAX_SIZE}
+      minimum-idle: ${DB_POOL_MIN_IDLE}
       idle-timeout: 300000
       connection-timeout: 30000
       max-lifetime: 1800000
-      leak-detection-threshold: 2000
+      leak-detection-threshold: ${DB_LEAK_DETECTION_THRESHOLD_MS}
       pool-name: NimboHikariPool
       auto-commit: false
       connection-test-query: SELECT 1
@@ -71,6 +71,13 @@ management:
     health:
       show-details: always
       show-components: always
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
   metrics:
     distribution:
       percentiles-histogram:
@@ -118,11 +125,11 @@ resilience4j:
           - org.hibernate.exception.JDBCConnectionException
 nimbo:
   starrocks-query:
-    jdbc-url: jdbc:mysql://10.10.61.53:9030/nimbo
+    jdbc-url: ${STARROCKS_QUERY_JDBC_URL}
     username: ${STARROCKS_QUERY_USERNAME}
     password: ${STARROCKS_QUERY_PASSWORD}
     database: nimbo
     table: netflow
-    maximum-pool-size: 10
+    maximum-pool-size: ${STARROCKS_QUERY_POOL_SIZE}
     query-timeout-seconds: 30
     max-rows: 1000

@@ -25,11 +25,9 @@ import java.util.UUID;
 @IdClass(TrafficAggregateId.class)
 public class TrafficAggregate {
 
-    @Column(name = "id", insertable = false, updatable = false)
-    private Long id;
-
     @Id
-    @Column(name = "src_ip", nullable = false)
+    @Column(name = "src_ip", nullable = false, columnDefinition = "INET")
+    @JdbcTypeCode(SqlTypes.INET)
     private String srcIp;
 
     @Id

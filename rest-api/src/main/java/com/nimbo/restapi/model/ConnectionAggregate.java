@@ -29,10 +29,12 @@ public class ConnectionAggregate {
     @Column(name = "id", nullable = false, columnDefinition = "BYTEA")
     private byte[] id;
 
-    @Column(name = "src_ip", nullable = false)
+    @Column(name = "src_ip", nullable = false, columnDefinition = "INET")
+    @JdbcTypeCode(SqlTypes.INET)
     private String srcIp;
 
-    @Column(name = "dst_ip", nullable = false)
+    @Column(name = "dst_ip", nullable = false, columnDefinition = "INET")
+    @JdbcTypeCode(SqlTypes.INET)
     private String dstIp;
 
     @Id
