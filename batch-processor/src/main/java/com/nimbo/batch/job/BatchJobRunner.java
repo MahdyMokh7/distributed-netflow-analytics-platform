@@ -8,6 +8,8 @@ import com.nimbo.batch.metrics.BatchProcessorMetrics;
 import com.nimbo.batch.metrics.BatchProcessorMetrics.RunOutcome;
 import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
 import com.nimbo.batch.processor.BaseProcessor;
+import com.nimbo.batch.retention.RetentionMaintenanceService;
+import com.nimbo.batch.retention.RetentionWindow;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
@@ -17,10 +19,16 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
+
+import static com.nimbo.batch.constants.ColumnConstants.NETFLOW_PROCESS_TIME;
+import static org.apache.spark.sql.functions.col;
+import static org.apache.spark.sql.functions.lit;
+import static org.apache.spark.sql.functions.timestamp_micros;
 
 @Slf4j
 @Component
@@ -32,6 +40,24 @@ public class BatchJobRunner {
     private final FileDiscoveryService fileDiscoveryService;
     private final SparkSession spark;
     private final BatchProcessorMetrics metrics;
+    private final RetentionMaintenanceService retentionMaintenanceService;
+
+    @Autowired
+    public BatchJobRunner(List<BaseProcessor> processors,
+                          BatchConfig batchConfig,
+                          OutputConfig outputConfig,
+                          FileDiscoveryService fileDiscoveryService,
+                          SparkSession spark,
+                          BatchProcessorMetrics metrics,
+                          RetentionMaintenanceService retentionMaintenanceService) {
+        this.processors = processors;
+        this.batchConfig = batchConfig;
+        this.outputConfig = outputConfig;
+        this.fileDiscoveryService = fileDiscoveryService;
+        this.spark = spark;
+        this.metrics = metrics;
+        this.retentionMaintenanceService = retentionMaintenanceService;
+    }
 
     public BatchJobRunner(List<BaseProcessor> processors,
                           BatchConfig batchConfig,
@@ -39,12 +65,7 @@ public class BatchJobRunner {
                           FileDiscoveryService fileDiscoveryService,
                           SparkSession spark,
                           BatchProcessorMetrics metrics) {
-        this.processors = processors;
-        this.batchConfig = batchConfig;
-        this.outputConfig = outputConfig;
-        this.fileDiscoveryService = fileDiscoveryService;
-        this.spark = spark;
-        this.metrics = metrics;
+        this(processors, batchConfig, outputConfig, fileDiscoveryService, spark, metrics, null);
     }
 
     @Scheduled(cron = "${batch.schedule}")
@@ -68,8 +89,11 @@ public class BatchJobRunner {
         metrics.runStarted();
 
         try {
+            RetentionWindow retentionWindow = retentionMaintenanceService == null
+                    ? RetentionWindow.unbounded()
+                    : retentionMaintenanceService.maintain();
             List<Path> files = executeStage(Stage.DISCOVERY,
-                    () -> fileDiscoveryService.discoverNewFiles(batchId));
+                    () -> fileDiscoveryService.discoverNewFiles(batchId, retentionWindow));
 
             if (files.isEmpty()) {
                 log.info("No new files to process. Batch {} complete.", batchId);
@@ -77,9 +101,13 @@ public class BatchJobRunner {
                 return;
             }
 
+            if (retentionMaintenanceService != null) {
+                retentionMaintenanceService.ensurePartitionsForFiles(retentionWindow, files);
+            }
+
             log.info("Found {} new files to process (batch: {})", files.size(), batchId);
 
-            cachedDf = readAndCacheFiles(files);
+            cachedDf = readAndCacheFiles(files, retentionWindow);
             long sourceRecordCount = executeStage(Stage.PARQUET_MATERIALIZATION, cachedDf::count);
 
             if (!hasValidRecords(sourceRecordCount, files, batchId)) {
@@ -121,16 +149,19 @@ public class BatchJobRunner {
         return UUID.randomUUID();
     }
 
-    private Dataset<Row> readAndCacheFiles(List<Path> files) {
+    private Dataset<Row> readAndCacheFiles(List<Path> files, RetentionWindow retentionWindow) {
         String[] paths = files.stream()
                 .map(Path::toString)
                 .toArray(String[]::new);
 
         log.info("Reading {} Parquet files into shared batch Dataset", paths.length);
 
-        return spark.read()
-                .parquet(paths)
-                .persist(StorageLevel.MEMORY_AND_DISK());
+        Dataset<Row> source = spark.read().parquet(paths);
+        if (retentionWindow.isBounded()) {
+            source = source.filter(timestamp_micros(col(NETFLOW_PROCESS_TIME))
+                    .geq(lit(java.sql.Timestamp.from(retentionWindow.cutoffInstant()))));
+        }
+        return source.persist(StorageLevel.MEMORY_AND_DISK());
     }
 
     private boolean hasValidRecords(long sourceRecordCount, List<Path> files, UUID batchId) {

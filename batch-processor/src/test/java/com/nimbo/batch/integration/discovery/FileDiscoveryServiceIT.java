@@ -20,10 +20,12 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.nimbo.batch.retention.RetentionWindow;
 
 class FileDiscoveryServiceIT {
 
@@ -139,6 +141,23 @@ class FileDiscoveryServiceIT {
 
         // Then: the infrastructure failure is exposed with its discovery context
         assertThat(failure).isInstanceOf(RuntimeException.class).hasMessageContaining("File discovery failed");
+    }
+
+    @Test
+    void givenFilesAroundTheRetentionBoundary_whenDiscovered_thenOnlyRetainedFilesAreEligible() throws IOException {
+        // Given: one expired file and one file exactly on the UTC retention boundary
+        createFile("2026-09-21", "23", "netflow-p01-2026-09-21T23-59-59-999Z-expired.parquet");
+        String retained = "netflow-p02-2026-09-22T00-00-00-000Z-retained.parquet";
+        createFile("2026-09-22", "00", retained);
+        RetentionWindow window = new RetentionWindow(
+                LocalDate.parse("2026-09-22"), Instant.parse("2026-09-22T00:00:00Z"));
+
+        // When: discovery applies the captured retention window
+        List<Path> files = service.discoverNewFiles(
+                UUID.fromString("10000000-0000-0000-0000-000000000007"), window);
+
+        // Then: the boundary file remains and the older file is excluded
+        assertThat(files).extracting(Path::getName).containsExactly(retained);
     }
 
     private Path createFile(String date, String hour, String name) throws IOException {

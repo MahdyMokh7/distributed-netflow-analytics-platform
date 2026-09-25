@@ -62,6 +62,7 @@ spark:
 hdfs:
   uri: ${HDFS_URI}
   parquet-path: /netflow/parquetFiles/
+  spark-history-path: /spark-history
 
 output:
   mode: database
@@ -98,6 +99,9 @@ batch:
   window-duration: "1 hour"
   enabled: true
   max-files-per-batch: 5
+  retention:
+    enabled: true
+    previous-days: 3
 
 server:
   port: ${SERVER_PORT:18081}

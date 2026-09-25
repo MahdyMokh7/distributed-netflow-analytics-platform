@@ -6,18 +6,20 @@ import com.nimbo.batch.dao.BatchStateDao;
 import com.nimbo.batch.metrics.BatchProcessorMetrics;
 import com.nimbo.batch.metrics.BatchProcessorMetrics.Stage;
 import com.nimbo.batch.model.BatchStateRecord;
+import com.nimbo.batch.retention.RetentionPolicy;
+import com.nimbo.batch.retention.RetentionWindow;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -25,7 +27,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -37,6 +38,7 @@ public class FileDiscoveryService {
     private final BatchConfig batchConfig;
     private final BatchStateDao stateDao;
     private final BatchProcessorMetrics metrics;
+    private final RetentionPolicy retentionPolicy;
 
     private final Set<String> inMemoryProcessedFiles = ConcurrentHashMap.newKeySet();
     @Getter
@@ -45,14 +47,26 @@ public class FileDiscoveryService {
     @Getter
     private volatile UUID failedBatchId = null;
 
-    private static final Pattern FILE_NAME_PATTERN =
-            Pattern.compile("netflow-p\\d{2,}-(\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z)-.*\\.parquet");
-
-    private static final DateTimeFormatter FILENAME_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss-SSS'Z'").withZone(ZoneOffset.UTC);
-    private static final DateTimeFormatter DATE_DIRECTORY_FORMATTER =
-            DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(java.time.format.ResolverStyle.STRICT);
+    private static final java.time.format.DateTimeFormatter DATE_DIRECTORY_FORMATTER =
+            java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd")
+                    .withResolverStyle(java.time.format.ResolverStyle.STRICT);
     private static final Pattern HOUR_DIRECTORY_PATTERN = Pattern.compile("(?:[01]\\d|2[0-3])");
+
+    @Autowired
+    public FileDiscoveryService(
+            FileSystem fileSystem,
+            HdfsConfig hdfsConfig,
+            BatchConfig batchConfig,
+            BatchStateDao stateDao,
+            BatchProcessorMetrics metrics,
+            RetentionPolicy retentionPolicy) {
+        this.fileSystem = fileSystem;
+        this.hdfsConfig = hdfsConfig;
+        this.batchConfig = batchConfig;
+        this.stateDao = stateDao;
+        this.metrics = metrics;
+        this.retentionPolicy = retentionPolicy;
+    }
 
     public FileDiscoveryService(
             FileSystem fileSystem,
@@ -60,14 +74,17 @@ public class FileDiscoveryService {
             BatchConfig batchConfig,
             BatchStateDao stateDao,
             BatchProcessorMetrics metrics) {
-        this.fileSystem = fileSystem;
-        this.hdfsConfig = hdfsConfig;
-        this.batchConfig = batchConfig;
-        this.stateDao = stateDao;
-        this.metrics = metrics;
+        this(fileSystem, hdfsConfig, batchConfig, stateDao, metrics, null);
     }
 
     public List<Path> discoverNewFiles(UUID batchId) {
+        RetentionWindow window = retentionPolicy == null
+                ? RetentionWindow.unbounded()
+                : retentionPolicy.currentWindow();
+        return discoverNewFiles(batchId, window);
+    }
+
+    public List<Path> discoverNewFiles(UUID batchId, RetentionWindow window) {
         log.info("Discovering new files for batch: {}", batchId);
 
         try {
@@ -75,7 +92,7 @@ public class FileDiscoveryService {
             log.debug("Found {} already processed files", processedFileNames.size());
 
             int maxFiles = batchConfig.getMaxFilesPerBatch();
-            List<Path> newFiles = listOldestNewFiles(processedFileNames, maxFiles);
+            List<Path> newFiles = listOldestNewFiles(processedFileNames, maxFiles, window);
 
             if (newFiles.isEmpty()) {
                 log.info("No new files to process (batch: {})", batchId);
@@ -156,7 +173,8 @@ public class FileDiscoveryService {
         }
     }
 
-    private List<Path> listOldestNewFiles(Set<String> processedFileNames, int maxFiles) {
+    private List<Path> listOldestNewFiles(
+            Set<String> processedFileNames, int maxFiles, RetentionWindow window) {
         if (maxFiles <= 0) {
             return List.of();
         }
@@ -172,7 +190,8 @@ public class FileDiscoveryService {
 
                 for (FileStatus hourDirectory : hourDirectories) {
                     int hour = Integer.parseInt(hourDirectory.getPath().getName());
-                    List<FileInfo> files = validFiles(fileSystem.listStatus(hourDirectory.getPath()), date, hour);
+                    List<FileInfo> files = validFiles(
+                            fileSystem.listStatus(hourDirectory.getPath()), date, hour, window);
 
                     for (FileInfo file : files) {
                         if (!processedFileNames.contains(file.path.getName())) {
@@ -212,7 +231,11 @@ public class FileDiscoveryService {
         return directories;
     }
 
-    private List<FileInfo> validFiles(FileStatus[] statuses, LocalDate directoryDate, int directoryHour) {
+    private List<FileInfo> validFiles(
+            FileStatus[] statuses,
+            LocalDate directoryDate,
+            int directoryHour,
+            RetentionWindow window) {
         List<FileInfo> files = new ArrayList<>();
         for (FileStatus status : statuses) {
             String fileName = status.getPath().getName();
@@ -223,6 +246,11 @@ public class FileDiscoveryService {
             Instant timestamp = extractTimestamp(fileName);
             if (timestamp == null) {
                 log.warn("Could not parse timestamp from filename: {}", fileName);
+                continue;
+            }
+
+            if (!window.retains(timestamp)) {
+                log.info("Excluding expired Parquet file from discovery: {}", status.getPath());
                 continue;
             }
 
@@ -246,18 +274,7 @@ public class FileDiscoveryService {
     }
 
     private Instant extractTimestamp(String fileName) {
-        try {
-            Matcher matcher = FILE_NAME_PATTERN.matcher(fileName);
-            if (!matcher.matches()) {
-                log.debug("Filename does not match expected pattern: {}", fileName);
-                return null;
-            }
-            String timestampStr = matcher.group(1);
-            return Instant.from(FILENAME_FORMATTER.parse(timestampStr));
-        } catch (DateTimeParseException e) {
-            log.debug("Failed to parse timestamp from: {}", fileName);
-            return null;
-        }
+        return NetflowFileTimestampParser.parse(fileName).orElse(null);
     }
 
     private static class FileInfo {

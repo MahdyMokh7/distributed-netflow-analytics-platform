@@ -15,4 +15,12 @@ public class BatchConfig {
     private String windowDuration;
     private boolean enabled;
     private int maxFilesPerBatch;
+    private Retention retention = new Retention();
+
+    @Getter
+    @Setter
+    public static class Retention {
+        private boolean enabled;
+        private int previousDays = 3;
+    }
 }

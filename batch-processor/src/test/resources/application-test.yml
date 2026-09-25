@@ -39,6 +39,7 @@ spark:
 hdfs:
   uri: file://${java.io.tmpdir}/nimbo-test/parquet
   parquet-path: /
+  spark-history-path: /spark-history
 
 output:
   mode: both
@@ -76,6 +77,9 @@ batch:
   window-duration: "1 hour"
   enabled: true
   max-files-per-batch: 5
+  retention:
+    enabled: false
+    previous-days: 3
 
 test:
   parquet:

@@ -12,6 +12,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 public final class PostgresContainerExtension implements BeforeAllCallback {
 
@@ -60,6 +62,21 @@ public final class PostgresContainerExtension implements BeforeAllCallback {
 
     public String password() {
         return database().container.getPassword();
+    }
+
+    public void ensureDailyPartitions(LocalDate date) {
+        String suffix = DateTimeFormatter.ofPattern("uuuu_MM_dd").format(date);
+        jdbi().useHandle(handle -> {
+            for (String table : new String[]{
+                    "traffic_aggregates",
+                    "connection_aggregates",
+                    "protocol_usage_aggregates",
+                    "ip_bandwidth_aggregates"}) {
+                handle.execute("CREATE TABLE IF NOT EXISTS " + table + "_" + suffix
+                        + " PARTITION OF " + table
+                        + " FOR VALUES FROM ('" + date + "') TO ('" + date.plusDays(1) + "')");
+            }
+        });
     }
 
     private SharedPostgres database() {

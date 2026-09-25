@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,6 +47,7 @@ class PartitionWriterIT {
     @BeforeEach
     void resetDatabase() {
         jdbi = POSTGRES.jdbi();
+        POSTGRES.ensureDailyPartitions(LocalDate.of(2026, 8, 29));
         jdbi.useHandle(handle -> handle.execute("TRUNCATE traffic_aggregates"));
     }
 
