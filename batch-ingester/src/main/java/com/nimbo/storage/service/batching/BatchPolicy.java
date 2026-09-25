@@ -29,8 +29,14 @@ public record BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBa
         this.maxSizeBytes = maxSizeBytes;
     }
 
-    public enum FlushReason { RECORD_COUNT, SIZE, AGE, NONE }
-
+    public enum FlushReason {
+        RECORD_COUNT,
+        SIZE,
+        AGE,
+        TIME_BUCKET_BOUNDARY,
+        LIFECYCLE,
+        NONE
+    }
     public boolean shouldFlush(
             long recordCount,
             long totalSizeBytes,

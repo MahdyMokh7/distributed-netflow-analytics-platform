@@ -33,7 +33,7 @@ class BatchIngesterMetricsTest {
         assertThat(registry.find("ingester_consumer_running").tag("instance", "1").gauges())
                 .hasSize(1);
         assertThat(registry.find("ingester_rollover_total").tag("instance", "1").counters())
-                .hasSize(3);
+                .hasSize(5);
     }
 
     @Test

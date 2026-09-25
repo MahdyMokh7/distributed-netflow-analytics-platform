@@ -93,7 +93,16 @@ public final class NetFlowStorage {
             Map<TopicPartitionKey, Long> boundaryOffsets = Map.of();
 
             if (writerOpen && !recordBucket.equals(currentBucketHour)) {
-                boundaryOffsets = commitCurrentBatch();
+
+                log.info(
+                        "Batch flush triggered: reason=TIME_BUCKET_BOUNDARY, recordCount={}," +
+                                " accumulatedSizeBytes={}, firstRecordAt={}",
+                        batchAccumulator.getRecordCount(),
+                        batchAccumulator.getAccumulatedSizeBytes(),
+                        batchAccumulator.getFirstRecordAt()
+                );
+
+                boundaryOffsets = commitCurrentBatch(BatchPolicy.FlushReason.TIME_BUCKET_BOUNDARY);
             }
 
             if (!writerOpen) {
@@ -109,7 +118,7 @@ public final class NetFlowStorage {
             batchAccumulator.add(ingestedRecord);
 
             if (batchAccumulator.shouldFlush()) {
-                Map<TopicPartitionKey, Long> offsets = commitCurrentBatch();
+                Map<TopicPartitionKey, Long> offsets = commitCurrentBatch(batchAccumulator.flushReason());
                 return Optional.of(mergeOffsets(boundaryOffsets, offsets));
             }
 
@@ -145,7 +154,7 @@ public final class NetFlowStorage {
         log.info("Executing lifecycle flush for {} records", batchAccumulator.getRecordCount());
 
         try {
-            return commitCurrentBatch();
+            return commitCurrentBatch(BatchPolicy.FlushReason.LIFECYCLE);
         } catch (StorageException e) {
             handleWriteFailure();
             throw e;
@@ -168,7 +177,7 @@ public final class NetFlowStorage {
         );
 
         try {
-            return commitCurrentBatch();
+            return commitCurrentBatch(batchAccumulator.flushReason());
         } catch (StorageException e) {
             handleWriteFailure();
             throw e;
@@ -196,14 +205,13 @@ public final class NetFlowStorage {
         log.debug("Opened streaming writer for partition {} at {}", primaryPartition, currentTempPath);
     }
 
-    private Map<TopicPartitionKey, Long> commitCurrentBatch() {
+    private Map<TopicPartitionKey, Long> commitCurrentBatch(BatchPolicy.FlushReason reason) {
         if (!writerOpen) {
             return Map.of();
         }
 
         long recordCount = batchAccumulator.getRecordCount();
         long sizeBytes = batchAccumulator.getAccumulatedSizeBytes();
-        BatchPolicy.FlushReason reason = batchAccumulator.flushReason();
 
         Timer.Sample sample = metrics.startRolloverTimer();
 

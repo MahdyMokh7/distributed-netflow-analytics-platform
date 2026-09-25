@@ -27,7 +27,8 @@ public class BatchIngesterMetrics {
     private final Map<Integer, InstanceState> instances = new ConcurrentHashMap<>();
     private static final String INSTANCE_TAG = "instance";
     private static final String REASON_TAG = "reason";
-    private static final List<String> ROLLOVER_REASONS = List.of("record_count", "size", "age");
+    private static final List<String> ROLLOVER_REASONS =
+            List.of("record_count", "size", "age", "time_bucket_boundary", "lifecycle");
     private static final List<String> DLQ_REASONS = List.of("VALIDATION_ERROR", "DESERIALIZATION_ERROR");
 
     public BatchIngesterMetrics(MeterRegistry registry) {
