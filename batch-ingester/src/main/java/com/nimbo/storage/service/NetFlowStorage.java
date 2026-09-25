@@ -21,6 +21,8 @@ import org.apache.parquet.hadoop.ParquetWriter;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -43,6 +45,7 @@ public final class NetFlowStorage {
 
     private final BatchIngesterMetrics metrics;
     private final int instanceId;
+    private Instant currentBucketHour;
 
     public NetFlowStorage(
             BatchPolicy batchPolicy,
@@ -77,43 +80,60 @@ public final class NetFlowStorage {
         return firstRecordAt == null ? 0 : Duration.between(firstRecordAt, Instant.now()).getSeconds();
     }
 
+    private static Instant hourBucket(long kafkaTimestampMillis) {
+        return Instant.ofEpochMilli(kafkaTimestampMillis).truncatedTo(ChronoUnit.HOURS);
+    }
+
     public Optional<Map<TopicPartitionKey, Long>> accept(IngestedRecord ingestedRecord) {
+
         Objects.requireNonNull(ingestedRecord, "ingestedRecord must not be null");
 
         try {
+            Instant recordBucket = hourBucket(ingestedRecord.kafkaTimestamp());
+            Map<TopicPartitionKey, Long> boundaryOffsets = Map.of();
+
+            if (writerOpen && !recordBucket.equals(currentBucketHour)) {
+                boundaryOffsets = commitCurrentBatch();
+            }
+
             if (!writerOpen) {
                 openWriter(ingestedRecord);
+                currentBucketHour = recordBucket;
             }
 
             GenericRecord enrichedRecord = enrichWithKafkaTime(
-                    ingestedRecord.record(),
-                    ingestedRecord.kafkaTimestamp()
-            );
-            
+                    ingestedRecord.record(), ingestedRecord.kafkaTimestamp());
+
             parquetFileWriter.write(currentWriter, enrichedRecord);
             metrics.recordWritten(instanceId);
             batchAccumulator.add(ingestedRecord);
 
             if (batchAccumulator.shouldFlush()) {
                 Map<TopicPartitionKey, Long> offsets = commitCurrentBatch();
-                return Optional.of(offsets);
+                return Optional.of(mergeOffsets(boundaryOffsets, offsets));
             }
 
-            return Optional.empty();
+            return boundaryOffsets.isEmpty() ? Optional.empty() : Optional.of(boundaryOffsets);
 
         } catch (StorageException e) {
             handleWriteFailure();
-
-            log.error(
-                    "Failed writing record: topic={}, partition={}, offset={}",
-                    ingestedRecord.topic(),
-                    ingestedRecord.partition(),
-                    ingestedRecord.offset(),
-                    e
-            );
-
+            log.error("Failed writing record: topic={}, partition={}, offset={}",
+                    ingestedRecord.topic(), ingestedRecord.partition(), ingestedRecord.offset(), e);
             throw e;
         }
+    }
+
+    private static Map<TopicPartitionKey, Long> mergeOffsets(
+            Map<TopicPartitionKey, Long> a, Map<TopicPartitionKey, Long> b) {
+        if (a.isEmpty()) {
+            return b;
+        }
+        if (b.isEmpty()) {
+            return a;
+        }
+        Map<TopicPartitionKey, Long> merged = new HashMap<>(a);
+        b.forEach((k, v) -> merged.merge(k, v, Math::max));
+        return merged;
     }
 
     public Map<TopicPartitionKey, Long> flush() {

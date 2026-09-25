@@ -87,10 +87,8 @@ public class NetflowConsumer {
     }
 
     public void start() {
-        log.info("Starting consumer instance #{} for topic: {}",
-                instanceId, kafkaProperties.getTopic());
-        this.consumerThread = new Thread(this::consumeLoop,
-                "consumer-instance-" + instanceId);
+        log.info("Starting consumer instance #{} for topic: {}", instanceId, kafkaProperties.getTopic());
+        this.consumerThread = new Thread(this::consumeLoop, "consumer-instance-" + instanceId);
         this.consumerThread.setDaemon(true);
         this.consumerThread.start();
     }
@@ -109,6 +107,7 @@ public class NetflowConsumer {
             log.error("Instance #{}: Fatal error in consumer loop", instanceId, e);
             throw new KafkaConsumerException("Consumer loop failed", e);
         } finally {
+            flushAndCommitOnShutdown();
             metrics.consumerStopped(instanceId);
             closeConsumer();
         }
@@ -156,8 +155,7 @@ public class NetflowConsumer {
 
         for (ConsumerRecord<byte[], byte[]> consumerRecord : records) {
             processRecord(consumerRecord).ifPresent(offsets ->
-                    offsets.forEach((key, offset) ->
-                            offsetsToCommit.merge(key, offset, Math::max)));
+                    offsets.forEach((key, offset) -> offsetsToCommit.merge(key, offset, Math::max)));
         }
 
         return offsetsToCommit;
@@ -219,27 +217,28 @@ public class NetflowConsumer {
         }
     }
 
-    public void shutdown() {
-        log.info("Instance #{}: Shutting down...", instanceId);
-        running.set(false);
-
+    private void flushAndCommitOnShutdown() {
+        log.info("Instance #{}: Flushing remaining buffered records before shutdown...", instanceId);
         try {
-            log.info("Flushing remaining buffered records before shutdown...");
             Map<TopicPartitionKey, Long> flushedOffsets = dataProcessingService.flush();
 
             if (!flushedOffsets.isEmpty()) {
                 kafkaOffsetCommitter.commit(kafkaConsumer, flushedOffsets);
-                log.info("Instance #{}: Flushed {} offsets during shutdown",
-                        instanceId, flushedOffsets.size());
+                log.info("Instance #{}: Flushed {} offsets during shutdown", instanceId, flushedOffsets.size());
             }
 
         } catch (StorageException | KafkaException | IllegalStateException e) {
             log.error("Instance #{}: Error flushing during shutdown", instanceId, e);
         }
+    }
+
+    public void shutdown() {
+        log.info("Instance #{}: Shutting down...", instanceId);
+        running.set(false);
         kafkaConsumer.wakeup();
+
         if (consumerThread != null) {
             try {
-//                consumerThread.interrupt();
                 consumerThread.join(5000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
