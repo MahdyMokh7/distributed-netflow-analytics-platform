@@ -1,5 +1,6 @@
 package com.nimbo.starrockswriter.support;
 
+import org.awaitility.core.ConditionTimeoutException;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.StreamUtils;
 import org.testcontainers.containers.GenericContainer;
@@ -15,6 +16,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.awaitility.Awaitility.await;
 
@@ -111,26 +113,44 @@ public final class TestStarRocks {
     }
 
     void resetSchema() {
-        await().alias("StarRocks BE capacity and integration-test schema")
-                .ignoreExceptions()
-                .pollInterval(Duration.ofSeconds(1))
-                .atMost(Duration.ofMinutes(2))
-                .until(() -> {
-                    try (Connection connection = DriverManager.getConnection(adminJdbcUrl(), "root", "");
-                         Statement statement = connection.createStatement()) {
-                        statement.execute("CREATE DATABASE IF NOT EXISTS " + DATABASE);
-                        statement.execute("DROP TABLE IF EXISTS " + qualifiedTable());
-                        statement.execute(loadCreateTableSql());
-                        return true;
-                    }
-                });
+        String createTableSql = loadCreateTableSql();
+        AtomicReference<SQLException> lastFailure = new AtomicReference<>();
+        try {
+            await().alias("StarRocks BE capacity and integration-test schema")
+                    .pollInterval(Duration.ofSeconds(1))
+                    .atMost(Duration.ofMinutes(2))
+                    .until(() -> {
+                        try (Connection connection = DriverManager.getConnection(adminJdbcUrl(), "root", "");
+                             Statement statement = connection.createStatement()) {
+                            statement.execute("DROP DATABASE IF EXISTS " + DATABASE);
+                            statement.execute("CREATE DATABASE " + DATABASE);
+                            statement.execute(createTableSql);
+                            return true;
+                        } catch (SQLException exception) {
+                            lastFailure.set(exception);
+                            return false;
+                        }
+                    });
+        } catch (ConditionTimeoutException exception) {
+            throw new IllegalStateException(
+                    "StarRocks integration-test schema was not created",
+                    lastFailure.get() == null ? exception : lastFailure.get());
+        }
     }
 
-    private String loadCreateTableSql() throws IOException {
-        String sql = StreamUtils.copyToString(
-                new ClassPathResource("sql/netflow.sql").getInputStream(),
-                StandardCharsets.UTF_8);
-        return sql.replace("BUCKETS 8", "BUCKETS 1\nPROPERTIES (\"replication_num\" = \"1\")");
+    private String loadCreateTableSql() {
+        try {
+            String sql = StreamUtils.copyToString(
+                    new ClassPathResource("sql/netflow.sql").getInputStream(),
+                    StandardCharsets.UTF_8);
+            if (!sql.contains("BUCKETS 8") || !sql.contains("\"replication_num\" = \"2\"")) {
+                throw new IllegalStateException("StarRocks test schema overrides no longer match netflow.sql");
+            }
+            return sql.replace("BUCKETS 8", "BUCKETS 1")
+                    .replace("\"replication_num\" = \"2\"", "\"replication_num\" = \"1\"");
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to load StarRocks schema", exception);
+        }
     }
 
     @FunctionalInterface
