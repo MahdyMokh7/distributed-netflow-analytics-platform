@@ -10,6 +10,8 @@ import com.nimbo.restapi.service.ConnectionQueryService;
 import com.nimbo.restapi.validation.ValidIpAddress;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.Parameters;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,14 +39,31 @@ public class ConnectionController {
             summary = "Get connections for an IP",
             description = "Retrieves connection aggregates for a given IP (as source or destination)"
     )
+    @Parameters({
+            @Parameter(name = "startTime", description = "Start of the query time range", required = true,
+                    in = ParameterIn.QUERY, example = "2026-09-07T04:47:15.772Z"),
+            @Parameter(name = "endTime", description = "End of the query time range", required = true,
+                    in = ParameterIn.QUERY, example = "2026-09-09T04:47:15.772Z"),
+            @Parameter(name = "page", description = "Zero-based page number", required = true,
+                    in = ParameterIn.QUERY, example = "0"),
+            @Parameter(name = "size", description = "Page size (1-100)", required = true,
+                    in = ParameterIn.QUERY, example = "10"),
+            @Parameter(name = "sortBy", description = "Response field used for sorting",
+                    in = ParameterIn.QUERY, example = "inBytes"),
+            @Parameter(name = "sortDirection", description = "Sort direction (ASC or DESC)",
+                    in = ParameterIn.QUERY, example = "DESC")
+    })
     public ResponseEntity<ApiResponseDto<List<ConnectionResponseDto>>> getConnectionsByIp(
-            @Parameter(description = "IP address (source or destination)", required = true)
+            @Parameter(
+                    description = "IP address (source or destination)",
+                    required = true,
+                    example = "172.31.69.23")
             @PathVariable @ValidIpAddress String ip,
 
-            @Parameter(description = "Time range parameters")
+            @Parameter(hidden = true)
             @Valid TimeRangeRequestDto timeRange,
 
-            @Parameter(description = "Pagination parameters")
+            @Parameter(hidden = true)
             @Valid PaginationRequestDto pagination
     ) {
         log.debug("Connection query for IP: {}, time range: {} to {}, page: {}, size: {}",
@@ -69,20 +88,34 @@ public class ConnectionController {
             summary = "List connections with filters",
             description = "Retrieves connection aggregates with optional filters and pagination"
     )
+    @Parameters({
+            @Parameter(name = "startTime", description = "Start of the query time range", required = true,
+                    in = ParameterIn.QUERY, example = "2026-09-07T04:47:15.772Z"),
+            @Parameter(name = "endTime", description = "End of the query time range", required = true,
+                    in = ParameterIn.QUERY, example = "2026-09-09T04:47:15.772Z"),
+            @Parameter(name = "page", description = "Zero-based page number", required = true,
+                    in = ParameterIn.QUERY, example = "0"),
+            @Parameter(name = "size", description = "Page size (1-100)", required = true,
+                    in = ParameterIn.QUERY, example = "10"),
+            @Parameter(name = "sortBy", description = "Response field used for sorting",
+                    in = ParameterIn.QUERY, example = "inBytes"),
+            @Parameter(name = "sortDirection", description = "Sort direction (ASC or DESC)",
+                    in = ParameterIn.QUERY, example = "DESC")
+    })
     public ResponseEntity<ApiResponseDto<List<ConnectionResponseDto>>> queryConnections(
-            @Parameter(description = "Source IP filter")
+            @Parameter(description = "Optional source IP filter", example = "172.31.69.23")
             @ValidIpAddress
             String srcIp,
 
-            @Parameter(description = "Destination IP filter")
+            @Parameter(description = "Optional destination IP filter", example = "18.219.211.138")
             @ValidIpAddress
             String dstIp,
 
-            @Parameter(description = "Time range parameters")
+            @Parameter(hidden = true)
             @Valid
             TimeRangeRequestDto timeRange,
 
-            @Parameter(description = "Pagination parameters")
+            @Parameter(hidden = true)
             @Valid
             PaginationRequestDto pagination
     ) {

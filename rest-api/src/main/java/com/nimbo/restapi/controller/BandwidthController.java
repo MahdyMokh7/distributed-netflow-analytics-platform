@@ -8,6 +8,8 @@ import com.nimbo.restapi.service.BandwidthQueryService;
 import com.nimbo.restapi.validation.ValidIpAddress;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.Parameters;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,11 +36,25 @@ public class BandwidthController {
             summary = "Get top IPs by bandwidth",
             description = "Retrieves top bandwidth consuming IPs within a time range"
     )
+    @Parameters({
+            @Parameter(
+                    name = "startTime",
+                    description = "Start of the query time range",
+                    required = true,
+                    in = ParameterIn.QUERY,
+                    example = "2026-09-07T04:47:15.772Z"),
+            @Parameter(
+                    name = "endTime",
+                    description = "End of the query time range",
+                    required = true,
+                    in = ParameterIn.QUERY,
+                    example = "2026-09-09T04:47:15.772Z")
+    })
     public ResponseEntity<ApiResponseDto<List<BandwidthResponseDto>>> getTopBandwidthIps(
-            @Parameter(description = "Limit results (default: 10, max: 100)")
+            @Parameter(description = "Limit results (default: 10, valid range: 1-100)", example = "10")
             @Valid Integer limit,
 
-            @Parameter(description = "Time range parameters")
+            @Parameter(hidden = true)
             @Valid TimeRangeRequestDto timeRange
     ) {
         int effectiveLimit = limit != null && limit > 0 && limit <= 100 ? limit : 10;
@@ -62,11 +78,25 @@ public class BandwidthController {
             summary = "Get bandwidth for specific IP",
             description = "Retrieves bandwidth statistics for a specific IP within a time range"
     )
+    @Parameters({
+            @Parameter(
+                    name = "startTime",
+                    description = "Start of the query time range",
+                    required = true,
+                    in = ParameterIn.QUERY,
+                    example = "2026-09-07T04:47:15.772Z"),
+            @Parameter(
+                    name = "endTime",
+                    description = "End of the query time range",
+                    required = true,
+                    in = ParameterIn.QUERY,
+                    example = "2026-09-09T04:47:15.772Z")
+    })
     public ResponseEntity<ApiResponseDto<BandwidthResponseDto>> getBandwidthByIp(
-            @Parameter(description = "IP address", required = true)
+            @Parameter(description = "IP address", required = true, example = "192.168.1.152")
             @PathVariable @ValidIpAddress String ip,
 
-            @Parameter(description = "Time range parameters")
+            @Parameter(hidden = true)
             @Valid TimeRangeRequestDto timeRange
     ) {
         log.debug("Bandwidth query for IP: {}, time range: {} to {}",

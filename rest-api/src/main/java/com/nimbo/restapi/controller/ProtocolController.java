@@ -7,6 +7,8 @@ import com.nimbo.restapi.dto.response.ProtocolResponseDto;
 import com.nimbo.restapi.service.ProtocolQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.Parameters;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,8 +35,22 @@ public class ProtocolController {
             summary = "Get protocol usage statistics",
             description = "Retrieves protocol usage aggregates within a time range"
     )
+    @Parameters({
+            @Parameter(
+                    name = "startTime",
+                    description = "Start of the query time range",
+                    required = true,
+                    in = ParameterIn.QUERY,
+                    example = "2026-09-07T04:47:15.772Z"),
+            @Parameter(
+                    name = "endTime",
+                    description = "End of the query time range",
+                    required = true,
+                    in = ParameterIn.QUERY,
+                    example = "2026-09-09T04:47:15.772Z")
+    })
     public ResponseEntity<ApiResponseDto<List<ProtocolResponseDto>>> getProtocolUsage(
-            @Parameter(description = "Time range parameters")
+            @Parameter(hidden = true)
             @Valid
             TimeRangeRequestDto timeRange
     ) {
@@ -55,11 +71,28 @@ public class ProtocolController {
             summary = "Get protocol usage for specific protocol",
             description = "Retrieves usage statistics for a specific protocol within a time range"
     )
+    @Parameters({
+            @Parameter(
+                    name = "startTime",
+                    description = "Start of the query time range",
+                    required = true,
+                    in = ParameterIn.QUERY,
+                    example = "2026-09-07T04:47:15.772Z"),
+            @Parameter(
+                    name = "endTime",
+                    description = "End of the query time range",
+                    required = true,
+                    in = ParameterIn.QUERY,
+                    example = "2026-09-09T04:47:15.772Z")
+    })
     public ResponseEntity<ApiResponseDto<ProtocolResponseDto>> getProtocolUsageByProtocol(
-            @Parameter(description = "Layer 7 protocol identifier", required = true)
+            @Parameter(
+                    description = "Layer 7 protocol identifier (TCP: 6.0, UDP: 5.0)",
+                    required = true,
+                    example = "5.0")
             @PathVariable Double l7Protocol,
 
-            @Parameter(description = "Time range parameters")
+            @Parameter(hidden = true)
             @Valid TimeRangeRequestDto timeRange
     ) {
         log.debug("Protocol query for l7Protocol: {}, time range: {} to {}",

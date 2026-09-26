@@ -10,6 +10,8 @@ import com.nimbo.restapi.service.TrafficQueryService;
 import com.nimbo.restapi.validation.ValidIpAddress;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.Parameters;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,16 +39,30 @@ public class TrafficController {
             summary = "Get traffic for specific source IP",
             description = "Retrieves traffic aggregates for a given source IP within a time range"
     )
+    @Parameters({
+            @Parameter(name = "startTime", description = "Start of the query time range", required = true,
+                    in = ParameterIn.QUERY, example = "2026-09-07T04:47:15.772Z"),
+            @Parameter(name = "endTime", description = "End of the query time range", required = true,
+                    in = ParameterIn.QUERY, example = "2026-09-09T04:47:15.772Z"),
+            @Parameter(name = "page", description = "Zero-based page number", required = true,
+                    in = ParameterIn.QUERY, example = "0"),
+            @Parameter(name = "size", description = "Page size (1-100)", required = true,
+                    in = ParameterIn.QUERY, example = "10"),
+            @Parameter(name = "sortBy", description = "Response field used for sorting",
+                    in = ParameterIn.QUERY, example = "inBytes"),
+            @Parameter(name = "sortDirection", description = "Sort direction (ASC or DESC)",
+                    in = ParameterIn.QUERY, example = "DESC")
+    })
     public ResponseEntity<ApiResponseDto<List<TrafficResponseDto>>> getTrafficByIp(
-            @Parameter(description = "Source IP address", required = true)
+            @Parameter(description = "Source IP address", required = true, example = "70.192.246.222")
             @PathVariable @ValidIpAddress
             String srcIp,
 
-            @Parameter(description = "Time range parameters")
+            @Parameter(hidden = true)
             @Valid
             TimeRangeRequestDto timeRange,
 
-            @Parameter(description = "Pagination parameters")
+            @Parameter(hidden = true)
             @Valid
             PaginationRequestDto pagination
 
@@ -74,14 +90,28 @@ public class TrafficController {
             summary = "List traffic with filters",
             description = "Retrieves traffic aggregates with optional filters and pagination"
     )
+    @Parameters({
+            @Parameter(name = "startTime", description = "Start of the query time range", required = true,
+                    in = ParameterIn.QUERY, example = "2026-09-07T04:47:15.772Z"),
+            @Parameter(name = "endTime", description = "End of the query time range", required = true,
+                    in = ParameterIn.QUERY, example = "2026-09-09T04:47:15.772Z"),
+            @Parameter(name = "page", description = "Zero-based page number", required = true,
+                    in = ParameterIn.QUERY, example = "0"),
+            @Parameter(name = "size", description = "Page size (1-100)", required = true,
+                    in = ParameterIn.QUERY, example = "10"),
+            @Parameter(name = "sortBy", description = "Response field used for sorting",
+                    in = ParameterIn.QUERY, example = "inBytes"),
+            @Parameter(name = "sortDirection", description = "Sort direction (ASC or DESC)",
+                    in = ParameterIn.QUERY, example = "DESC")
+    })
     public ResponseEntity<ApiResponseDto<List<TrafficResponseDto>>> queryTraffic(
-            @Parameter(description = "Source IP filter")
+            @Parameter(description = "Optional source IP filter", example = "70.192.246.222")
             @ValidIpAddress String srcIp,
 
-            @Parameter(description = "Time range parameters")
+            @Parameter(hidden = true)
             @Valid TimeRangeRequestDto timeRange,
 
-            @Parameter(description = "Pagination parameters")
+            @Parameter(hidden = true)
             @Valid PaginationRequestDto pagination
     ) {
         log.debug("Traffic query with filters - srcIp: {}, page: {}, size: {}",
