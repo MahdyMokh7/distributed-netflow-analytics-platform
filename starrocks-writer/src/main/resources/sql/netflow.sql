@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS nimbo.netflow2
+CREATE TABLE IF NOT EXISTS nimbo.netflow
 (
 
     ipv4_src_addr VARCHAR(15) NOT NULL,
@@ -87,4 +87,3 @@ CREATE TABLE IF NOT EXISTS nimbo.netflow2
                    "replication_num" = "2",
                    "compression" = "ZSTD"
                )
-
