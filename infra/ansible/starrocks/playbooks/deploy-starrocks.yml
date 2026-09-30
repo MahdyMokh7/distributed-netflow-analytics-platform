@@ -46,7 +46,8 @@
   gather_facts: false
   roles:
     - role: starrocks_fe
-      tasks_from: join
+      vars:
+        starrocks_role_phase: join
 
 - name: Reconcile backends one at a time
   hosts: starrocks_be
@@ -56,7 +57,8 @@
   gather_facts: false
   roles:
     - role: starrocks_be
-      tasks_from: join
+      vars:
+        starrocks_role_phase: join
 
 - name: Verify the resulting deployment
   ansible.builtin.import_playbook: verify-deploy-starrocks.yml
