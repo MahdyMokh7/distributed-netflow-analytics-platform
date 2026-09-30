@@ -11,7 +11,7 @@ import java.util.List;
 
 public interface StarRocksQueryService {
 
-    StarrocksTrafficResponseDto getTrafficByIp(
+    List<StarrocksTrafficResponseDto> getTrafficByIp(
             String ip,
             Instant startTime,
             Instant endTime

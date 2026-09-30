@@ -15,13 +15,13 @@ import lombok.NoArgsConstructor;
 public class StarrocksTrafficResponseDto {
 
   @Schema(example = "192.0.2.10")
-  private String ip;
+  private String srcIp;
 
   @Schema(example = "2026-09-21T08:00:00Z")
-  private Instant startTime;
+  private Instant windowStart;
 
   @Schema(example = "2026-09-21T09:00:00Z")
-  private Instant endTime;
+  private Instant windowEnd;
 
   @Schema(example = "1250000")
   private BigInteger inBytes;
@@ -42,5 +42,5 @@ public class StarrocksTrafficResponseDto {
   private BigInteger totalPackets;
 
   @Schema(example = "42")
-  private long flowCount;
+  private BigInteger recordCount;
 }

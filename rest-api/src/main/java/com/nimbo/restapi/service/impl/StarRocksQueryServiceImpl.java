@@ -24,7 +24,7 @@ public class StarRocksQueryServiceImpl
     private final StarrocksQueryRepository repository;
 
     @Override
-    public StarrocksTrafficResponseDto getTrafficByIp(
+    public List<StarrocksTrafficResponseDto> getTrafficByIp(
             String ip,
             Instant startTime,
             Instant endTime

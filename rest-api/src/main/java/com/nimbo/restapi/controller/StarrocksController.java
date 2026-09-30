@@ -55,13 +55,13 @@ public class StarrocksController {
         in = ParameterIn.QUERY,
         example = END_TIME_EXAMPLE)
   })
-  public ResponseEntity<ApiResponseDto<StarrocksTrafficResponseDto>> getTrafficByIp(
+  public ResponseEntity<ApiResponseDto<List<StarrocksTrafficResponseDto>>> getTrafficByIp(
       @Parameter(description = "IP address", required = true, example = IP_EXAMPLE)
           @PathVariable
           @ValidIpAddress
           String ip,
       @Parameter(hidden = true) @Valid TimeRangeRequestDto timeRange) {
-    StarrocksTrafficResponseDto result =
+    List<StarrocksTrafficResponseDto> result =
         queryService.getTrafficByIp(ip, timeRange.getStartTime(), timeRange.getEndTime());
 
     return ResponseEntity.ok(ApiResponseDto.success(result));
