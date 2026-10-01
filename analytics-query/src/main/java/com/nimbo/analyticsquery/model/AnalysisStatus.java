@@ -1,0 +1,12 @@
+package com.nimbo.analyticsquery.model;
+
+public enum AnalysisStatus {
+    SUCCESS,
+    NEEDS_CLARIFICATION,
+    UNSUPPORTED_ANALYSIS,
+    OUT_OF_SCOPE,
+    REJECTED,
+    QUERY_REJECTED,
+    DEPENDENCY_UNAVAILABLE,
+    EXECUTION_FAILED
+}

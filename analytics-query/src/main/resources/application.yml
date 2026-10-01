@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: analytics-query
+
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+  packages-to-scan: com.nimbo.analyticsquery.controller
+  paths-to-match: /analytics/**
+
+analytics-query:
+  intent:
+    max-time-range: ${ANALYTICS_QUERY_MAX_TIME_RANGE:7d}
+
+llm:
+  base-url: ${ANALYTICS_QUERY_LLM_BASE_URL:http://saca-api.inside.sahab.ir:3100}
+  api-key: ${ANALYTICS_QUERY_LLM_API_KEY}
+  model: ${ANALYTICS_QUERY_LLM_MODEL:AliBaba/Qwen3.8-27B}
+  chat-completions-path: ${ANALYTICS_QUERY_LLM_CHAT_COMPLETIONS_PATH:/v1/chat/completions}
+
+  timeout:
+    connect: ${ANALYTICS_QUERY_LLM_CONNECT_TIMEOUT:10s}
+    read: ${ANALYTICS_QUERY_LLM_READ_TIMEOUT:240s}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+  servlet:
+    context-path: /api
+
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true

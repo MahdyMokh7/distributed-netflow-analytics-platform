@@ -27,6 +27,7 @@
         <module>batch-processor</module>
         <module>starrocks-writer</module>
         <module>rest-api</module>
+        <module>analytics-query</module>
     </modules>
 
     <properties>

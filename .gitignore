@@ -56,11 +56,18 @@ terminal.log
 /starrocks-writer/docs/
 /starrocks-writer/code-extracter.py
 
+/analytics-query/docs/
+/analytics-query/code-extracter.py
+
 /charts/docs/
 /charts/code-extracter.py
+/charts/charts_contents.txt
 
 /docs/plan
+AGENTS.md
 
+/docs/project-content-extracter.py
+/docs/project-content.txt
 
 exporter.py
 temp.txt
