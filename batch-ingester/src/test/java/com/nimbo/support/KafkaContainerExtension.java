@@ -21,7 +21,10 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
 import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 public final class KafkaContainerExtension implements BeforeAllCallback {
@@ -40,6 +43,11 @@ public final class KafkaContainerExtension implements BeforeAllCallback {
 
     public String bootstrapServers() {
         return kafka().container.getBootstrapServers();
+    }
+
+    public String schemaRegistryUrl() {
+        GenericContainer<?> schemaRegistry = kafka().schemaRegistry;
+        return "http://" + schemaRegistry.getHost() + ':' + schemaRegistry.getMappedPort(8081);
     }
 
     public void createTopics(String... topics) {
@@ -118,16 +126,32 @@ public final class KafkaContainerExtension implements BeforeAllCallback {
     }
 
     private static final class SharedKafka implements ExtensionContext.Store.CloseableResource {
+        private final Network network = Network.newNetwork();
         private final KafkaContainer container =
-                new KafkaContainer(DockerImageName.parse("apache/kafka-native:3.8.0")).withReuse(true);
+                new KafkaContainer(DockerImageName.parse("apache/kafka-native:3.8.0"))
+                        .withNetwork(network)
+                        .withNetworkAliases("kafka")
+                        .withListener("kafka:19092");
+        private final GenericContainer<?> schemaRegistry =
+                new GenericContainer<>(DockerImageName.parse("confluentinc/cp-schema-registry:7.8.0"))
+                        .withNetwork(network)
+                        .withExposedPorts(8081)
+                        .withEnv("SCHEMA_REGISTRY_HOST_NAME", "schema-registry")
+                        .withEnv("SCHEMA_REGISTRY_LISTENERS", "http://0.0.0.0:8081")
+                        .withEnv("SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS", "PLAINTEXT://kafka:19092")
+                        .waitingFor(Wait.forHttp("/subjects").forStatusCode(200))
+                        .withStartupTimeout(Duration.ofMinutes(2));
 
         private SharedKafka() {
             container.start();
+            schemaRegistry.start();
         }
 
         @Override
         public void close() {
-            // intentionally not stopping — container is shared/reused across modules
+            schemaRegistry.stop();
+            container.stop();
+            network.close();
         }
     }
 }

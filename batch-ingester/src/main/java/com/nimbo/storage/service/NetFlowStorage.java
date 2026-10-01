@@ -1,5 +1,23 @@
 package com.nimbo.storage.service;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.hadoop.ParquetWriter;
+
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.metrics.BatchIngesterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
@@ -13,19 +31,6 @@ import com.nimbo.storage.service.naming.FileNameGenerator;
 import com.nimbo.storage.service.parquet.ParquetFileWriter;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
-import org.apache.parquet.hadoop.ParquetWriter;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 
 @Slf4j
 public final class NetFlowStorage {
@@ -34,7 +39,7 @@ public final class NetFlowStorage {
     private final FileStorage fileStorage;
     private final FileNameGenerator fileNameGenerator;
     private final HdfsProperties hdfsProperties;
-    private final Schema storageSchema;
+    private final StorageSchemaEvolution schemaEvolution = new StorageSchemaEvolution();
 
     private final BatchAccumulator batchAccumulator;
 
@@ -46,6 +51,9 @@ public final class NetFlowStorage {
     private final BatchIngesterMetrics metrics;
     private final int instanceId;
     private Instant currentBucketHour;
+    private Schema knownSourceSchema;
+    private Schema currentStorageSchema;
+    private final Set<Schema> knownSchemas = new HashSet<>();
 
     public NetFlowStorage(
             BatchPolicy batchPolicy,
@@ -53,25 +61,39 @@ public final class NetFlowStorage {
             FileStorage fileStorage,
             FileNameGenerator fileNameGenerator,
             HdfsProperties hdfsProperties,
-            Schema storageSchema,
             BatchIngesterMetrics metrics,
-            int instanceId
+            int instanceId,
+            List<Schema> registeredSchemas
     ) {
         this.parquetFileWriter = Objects.requireNonNull(parquetFileWriter);
         this.fileStorage = Objects.requireNonNull(fileStorage);
         this.fileNameGenerator = Objects.requireNonNull(fileNameGenerator);
         this.hdfsProperties = Objects.requireNonNull(hdfsProperties);
-        this.storageSchema = Objects.requireNonNull(storageSchema);
         this.batchAccumulator = new BatchAccumulator(batchPolicy);
-        this.metrics = metrics;
+        this.metrics = Objects.requireNonNull(metrics);
         this.instanceId = instanceId;
+        initializeSchemas(registeredSchemas);
 
         metrics.registerGauge("ingester_open_batch_record_count", instanceId,
                 batchAccumulator, BatchAccumulator::getRecordCount);
         metrics.registerGauge("ingester_open_batch_age_seconds", instanceId,
                 this, NetFlowStorage::currentBatchAgeSeconds);
 
-        log.info("NetFlowStorage initialized (streaming writer) with HDFS target path: {}", hdfsProperties.getBasePath());
+        log.info(
+                "NetFlowStorage initialized with {} registered schema version(s) and HDFS target path: {}",
+                knownSchemas.size(), hdfsProperties.getBasePath());
+    }
+
+    private void initializeSchemas(List<Schema> registeredSchemas) {
+        Objects.requireNonNull(registeredSchemas, "registeredSchemas must not be null");
+        if (registeredSchemas.isEmpty()) {
+            throw new IllegalArgumentException("registeredSchemas must not be empty");
+        }
+
+        for (Schema registeredSchema : registeredSchemas) {
+            knownSourceSchema = schemaEvolution.merge(knownSourceSchema, registeredSchema);
+            knownSchemas.add(registeredSchema);
+        }
     }
 
     private double currentBatchAgeSeconds() {
@@ -91,18 +113,36 @@ public final class NetFlowStorage {
         try {
             Instant recordBucket = hourBucket(ingestedRecord.kafkaTimestamp());
             Map<TopicPartitionKey, Long> boundaryOffsets = Map.of();
+            Schema recordSchema = ingestedRecord.record().getSchema();
+            boolean unseenSchema = !knownSchemas.contains(recordSchema);
+            Schema mergedSchema = knownSourceSchema;
+            boolean schemaChanged = false;
 
-            if (writerOpen && !recordBucket.equals(currentBucketHour)) {
+            if (unseenSchema) {
+                mergedSchema = schemaEvolution.merge(knownSourceSchema, recordSchema);
+                schemaChanged = knownSourceSchema != null && !mergedSchema.equals(knownSourceSchema);
+            }
+
+            if (writerOpen && shouldRotateWriter(recordBucket, schemaChanged)) {
+                BatchPolicy.FlushReason reason =
+                        schemaChanged
+                                ? BatchPolicy.FlushReason.SCHEMA_CHANGE
+                                : BatchPolicy.FlushReason.TIME_BUCKET_BOUNDARY;
 
                 log.info(
-                        "Batch flush triggered: reason=TIME_BUCKET_BOUNDARY, recordCount={}," +
-                                " accumulatedSizeBytes={}, firstRecordAt={}",
+                        "Batch flush triggered: reason={}, recordCount={},"
+                                + " accumulatedSizeBytes={}, firstRecordAt={}",
+                        reason,
                         batchAccumulator.getRecordCount(),
                         batchAccumulator.getAccumulatedSizeBytes(),
-                        batchAccumulator.getFirstRecordAt()
-                );
+                        batchAccumulator.getFirstRecordAt());
 
-                boundaryOffsets = commitCurrentBatch(BatchPolicy.FlushReason.TIME_BUCKET_BOUNDARY);
+                boundaryOffsets = commitCurrentBatch(reason);
+            }
+
+            knownSourceSchema = mergedSchema;
+            if (unseenSchema) {
+                knownSchemas.add(recordSchema);
             }
 
             if (!writerOpen) {
@@ -110,8 +150,7 @@ public final class NetFlowStorage {
                 currentBucketHour = recordBucket;
             }
 
-            GenericRecord enrichedRecord = enrichWithKafkaTime(
-                    ingestedRecord.record(), ingestedRecord.kafkaTimestamp());
+            GenericRecord enrichedRecord = enrichWithKafkaMetadata(ingestedRecord);
 
             parquetFileWriter.write(currentWriter, enrichedRecord);
             metrics.recordWritten(instanceId);
@@ -188,7 +227,7 @@ public final class NetFlowStorage {
         return batchAccumulator.recordSkippedOffset(topic, partition, nextOffset);
     }
 
-    private void openWriter(IngestedRecord firstRecord)  {
+    private void openWriter(IngestedRecord firstRecord) {
         int primaryPartition = firstRecord.partition();
 
         String finalFileName = fileNameGenerator.generateFileName(primaryPartition, firstRecord.kafkaTimestamp());
@@ -197,9 +236,10 @@ public final class NetFlowStorage {
         Path basePath = new Path(hdfsProperties.getBasePath());
         currentFinalPath = new Path(basePath, finalFileName);
         currentTempPath = new Path(basePath, tempFileName);
+        currentStorageSchema = buildStorageSchema(knownSourceSchema);
 
         fileStorage.ensureDirectoryExists(currentFinalPath.getParent());
-        currentWriter = parquetFileWriter.createWriter(currentTempPath, storageSchema);
+        currentWriter = parquetFileWriter.createWriter(currentTempPath, currentStorageSchema);
         writerOpen = true;
 
         log.debug("Opened streaming writer for partition {} at {}", primaryPartition, currentTempPath);
@@ -232,6 +272,7 @@ public final class NetFlowStorage {
         currentWriter = null;
         currentTempPath = null;
         currentFinalPath = null;
+        currentStorageSchema = null;
 
         return offsets;
     }
@@ -256,22 +297,58 @@ public final class NetFlowStorage {
         currentWriter = null;
         currentTempPath = null;
         currentFinalPath = null;
+        currentStorageSchema = null;
     }
 
-    private GenericRecord enrichWithKafkaTime(GenericRecord original, long kafkaTimestamp) {
+    private GenericRecord enrichWithKafkaMetadata(IngestedRecord ingestedRecord) {
 
-        GenericRecord enriched = new GenericData.Record(storageSchema);
-        long kafkaTimestampMicros = kafkaTimestamp * 1000;
+        GenericRecord enriched = new GenericData.Record(currentStorageSchema);
+        GenericRecord original = ingestedRecord.record();
 
-        for (Schema.Field field : storageSchema.getFields()) {
-            String fieldName = field.name();
-
-            if ("PROCESS_TIME".equals(fieldName)) {
-                enriched.put("PROCESS_TIME", kafkaTimestampMicros);
-            } else {
-                enriched.put(fieldName, original.get(fieldName));
-            }
+        for (Schema.Field field : currentStorageSchema.getFields()) {
+            Object value = switch (field.name()) {
+                case "PROCESS_TIME" -> ingestedRecord.kafkaTimestamp() * 1000;
+                case "KAFKA_TOPIC" -> ingestedRecord.topic();
+                case "KAFKA_PARTITION" -> ingestedRecord.partition();
+                case "KAFKA_OFFSET" -> ingestedRecord.offset();
+                default -> schemaEvolution.valueFor(original, field);
+            };
+            enriched.put(field.name(), value);
         }
         return enriched;
+    }
+
+    private boolean shouldRotateWriter(Instant recordBucket, boolean schemaChanged) {
+        return !recordBucket.equals(currentBucketHour) || schemaChanged;
+    }
+
+    private Schema buildStorageSchema(Schema sourceSchema) {
+        List<String> reservedFields =
+                List.of("PROCESS_TIME", "KAFKA_TOPIC", "KAFKA_PARTITION", "KAFKA_OFFSET");
+        for (String field : reservedFields) {
+            if (sourceSchema.getField(field) != null) {
+                throw new StorageException("Producer schema must not contain reserved field " + field);
+            }
+        }
+
+        List<Schema.Field> fields = new ArrayList<>();
+        sourceSchema.getFields().forEach(field -> fields.add(new Schema.Field(field, field.schema())));
+
+        fields.add(storageField(
+                "PROCESS_TIME", Schema.Type.LONG, "Kafka record timestamp in UTC epoch microseconds."));
+        fields.add(storageField("KAFKA_TOPIC", Schema.Type.STRING, "Kafka source topic."));
+        fields.add(storageField("KAFKA_PARTITION", Schema.Type.INT, "Kafka source partition."));
+        fields.add(storageField("KAFKA_OFFSET", Schema.Type.LONG, "Kafka source offset."));
+
+        return Schema.createRecord(sourceSchema.getName(), sourceSchema.getDoc(), sourceSchema.getNamespace(),
+                sourceSchema.isError(), fields);
+    }
+
+    private Schema.Field storageField(String name, Schema.Type type, String doc) {
+        return new Schema.Field(
+                name,
+                Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(type)),
+                doc,
+                (Object) null);
     }
 }

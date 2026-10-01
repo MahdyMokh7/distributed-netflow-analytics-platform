@@ -55,6 +55,9 @@ kafka_topics:
   - name: netflow
     partitions: 3
     replication_factor: 2
+  - name: multi-version-netflow
+    partitions: 3
+    replication_factor: 2
   - name: netflow-dlq
     partitions: 1
     replication_factor: 1

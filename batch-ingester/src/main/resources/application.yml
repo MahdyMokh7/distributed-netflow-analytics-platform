@@ -47,6 +47,9 @@ management:
           http.server.requests: true
 
 ingester:
+  schema-registry:
+    url: ${SCHEMA_REGISTRY_URL}
+    subject: ${SCHEMA_REGISTRY_SUBJECT:netflow-value}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
     topic: ${KAFKA_TOPIC:netflow}

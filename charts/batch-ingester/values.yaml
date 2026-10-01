@@ -9,6 +9,10 @@ containerPort: 18080
 springProfile: prod
 healthPath: /actuator/health
 
+schemaRegistry:
+  url: http://schema-registry:8081
+  subject: netflow-value
+
 terminationGracePeriodSeconds: 40
 
 service:
@@ -39,4 +43,3 @@ resources:
   limits:
     cpu: "2"
     memory: 4Gi
-

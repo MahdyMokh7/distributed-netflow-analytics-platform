@@ -82,6 +82,10 @@ public class NetflowValidationService {
     }
 
     private void checkMinMax(GenericRecord record, String minField, String maxField, StringBuilder errors) {
+        if (!hasField(record, minField) || !hasField(record, maxField)) {
+            return;
+        }
+
         Object minObject = record.get(minField);
         Object maxObject = record.get(maxField);
 
@@ -111,6 +115,10 @@ public class NetflowValidationService {
     }
 
     private Number number(GenericRecord record, String field, StringBuilder errors) {
+        if (!hasField(record, field)) {
+            return null;
+        }
+
         Object value = record.get(field);
         if (value == null) {
             addError(errors, field + " is null");
@@ -125,6 +133,10 @@ public class NetflowValidationService {
     }
 
     private void checkIpv4(GenericRecord record, String field, StringBuilder errors) {
+        if (!hasField(record, field)) {
+            return;
+        }
+
         Object value = record.get(field);
         if (value == null) {
             addError(errors, field + " is null");
@@ -156,6 +168,10 @@ public class NetflowValidationService {
 
     private void addInvalidIpv4(StringBuilder errors, String field, String ip) {
         addError(errors, field + " invalid IPv4: " + ip);
+    }
+
+    private boolean hasField(GenericRecord record, String field) {
+        return record.getSchema().getField(field) != null;
     }
 
     private void addError(StringBuilder errors, String error) {

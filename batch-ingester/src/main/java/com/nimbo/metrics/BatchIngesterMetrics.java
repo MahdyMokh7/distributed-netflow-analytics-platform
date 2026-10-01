@@ -1,6 +1,17 @@
 package com.nimbo.metrics;
 
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.ToDoubleFunction;
+
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.springframework.stereotype.Component;
+
 import com.nimbo.storage.service.batching.BatchPolicy;
+
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
@@ -9,15 +20,6 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.springframework.stereotype.Component;
-
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.ToDoubleFunction;
 
 @Slf4j
 @Component
@@ -28,8 +30,9 @@ public class BatchIngesterMetrics {
     private static final String INSTANCE_TAG = "instance";
     private static final String REASON_TAG = "reason";
     private static final List<String> ROLLOVER_REASONS =
-            List.of("record_count", "size", "age", "time_bucket_boundary", "lifecycle");
-    private static final List<String> DLQ_REASONS = List.of("VALIDATION_ERROR", "DESERIALIZATION_ERROR");
+            List.of("record_count", "size", "age", "time_bucket_boundary", "schema_change", "lifecycle");
+    private static final List<String> DLQ_REASONS =
+            List.of("VALIDATION_ERROR", "DESERIALIZATION_ERROR", "UNSUPPORTED_SCHEMA");
 
     public BatchIngesterMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -65,17 +68,31 @@ public class BatchIngesterMetrics {
     private InstanceState state(int instanceId) {
         InstanceState s = instances.get(instanceId);
         if (s == null) {
-            throw new IllegalStateException("Instance " + instanceId +
-                    " not registered — call registerInstance() first");
+            throw new IllegalStateException(
+                    "Instance " + instanceId + " not registered — call registerInstance() first");
         }
         return s;
     }
 
-    public void consumerStarted(int instanceId) { state(instanceId).running.set(1); }
-    public void consumerStopped(int instanceId) { state(instanceId).running.set(0); }
-    public void recordsPolled(int instanceId, int count) { state(instanceId).pollRecords.record(count); }
-    public void recordWritten(int instanceId) { state(instanceId).recordsWritten.increment(); }
-    public void writeFailure(int instanceId) { state(instanceId).writeFailures.increment(); }
+    public void consumerStarted(int instanceId) {
+        state(instanceId).running.set(1);
+    }
+
+    public void consumerStopped(int instanceId) {
+        state(instanceId).running.set(0);
+    }
+
+    public void recordsPolled(int instanceId, int count) {
+        state(instanceId).pollRecords.record(count);
+    }
+
+    public void recordWritten(int instanceId) {
+        state(instanceId).recordsWritten.increment();
+    }
+
+    public void writeFailure(int instanceId) {
+        state(instanceId).writeFailures.increment();
+    }
 
     public void invalidRecord(int instanceId, String reason) {
         InstanceState s = state(instanceId);
@@ -111,7 +128,9 @@ public class BatchIngesterMetrics {
         s.lastSuccessfulRollover.set(System.currentTimeMillis() / 1000);
     }
 
-    public Timer.Sample startRolloverTimer() { return Timer.start(registry); }
+    public Timer.Sample startRolloverTimer() {
+        return Timer.start(registry);
+    }
 
     public void stopRolloverTimer(int instanceId, Timer.Sample sample) {
         sample.stop(state(instanceId).rolloverDuration);

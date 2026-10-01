@@ -1,18 +1,15 @@
 package com.nimbo.ingester.consumer;
 
-import com.nimbo.common.validation.NetflowValidationService;
-import com.nimbo.common.validation.ValidationResult;
-import com.nimbo.ingester.config.KafkaProperties;
-import com.nimbo.ingester.deserializer.AvroDeserializer;
-import com.nimbo.ingester.exception.DeserializationException;
-import com.nimbo.ingester.exception.KafkaConsumerException;
-import com.nimbo.ingester.model.IngestedRecord;
-import com.nimbo.ingester.service.DataProcessingService;
-import com.nimbo.ingester.service.DlqService;
-import com.nimbo.metrics.BatchIngesterMetrics;
-import com.nimbo.storage.exception.StorageException;
-import com.nimbo.storage.model.TopicPartitionKey;
-import lombok.extern.slf4j.Slf4j;
+import java.time.Duration;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -21,9 +18,22 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 
-import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
+import com.nimbo.common.validation.NetflowValidationService;
+import com.nimbo.common.validation.ValidationResult;
+import com.nimbo.ingester.config.KafkaProperties;
+import com.nimbo.ingester.deserializer.AvroDeserializer;
+import com.nimbo.ingester.exception.DeserializationException;
+import com.nimbo.ingester.exception.KafkaConsumerException;
+import com.nimbo.ingester.exception.SchemaRegistryException;
+import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.ingester.service.DataProcessingService;
+import com.nimbo.ingester.service.DlqService;
+import com.nimbo.metrics.BatchIngesterMetrics;
+import com.nimbo.storage.exception.StorageException;
+import com.nimbo.storage.exception.UnsupportedSchemaException;
+import com.nimbo.storage.model.TopicPartitionKey;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class NetflowConsumer {
@@ -49,7 +59,8 @@ public class NetflowConsumer {
             NetflowValidationService validationService,
             DlqService dlqService,
             KafkaOffsetCommitter kafkaOffsetCommitter,
-            int instanceId,BatchIngesterMetrics metrics) {
+            int instanceId,
+            BatchIngesterMetrics metrics) {
         this.kafkaConsumer = kafkaConsumer;
         this.kafkaProperties = kafkaProperties;
         this.avroDeserializer = avroDeserializer;
@@ -131,6 +142,7 @@ public class NetflowConsumer {
         catch (WakeupException e) {
                 log.info("Consumer {} shutting down", instanceId);
         } catch (KafkaException e) {
+
             log.error("Instance #{}: Kafka error during polling or offset commit", instanceId, e);
             throw new KafkaConsumerException("Kafka polling failed for consumer instance #" + instanceId, e);
 
@@ -142,20 +154,36 @@ public class NetflowConsumer {
     private void handleEmptyPoll() {
         log.debug("No records received from Kafka");
 
-        Map<TopicPartitionKey, Long> offsetsToCommit =
-                dataProcessingService.flushRemaining();
+        Map<TopicPartitionKey, Long> offsetsToCommit = dataProcessingService.flushRemaining();
 
         commitOffsets(offsetsToCommit);
     }
 
-    private Map<TopicPartitionKey, Long> processRecords(
-            ConsumerRecords<byte[], byte[]> records) {
+    private Map<TopicPartitionKey, Long> processRecords(ConsumerRecords<byte[], byte[]> records) {
 
         Map<TopicPartitionKey, Long> offsetsToCommit = new HashMap<>();
+        Set<TopicPartition> blockedPartitions = new HashSet<>();
 
         for (ConsumerRecord<byte[], byte[]> consumerRecord : records) {
-            processRecord(consumerRecord).ifPresent(offsets ->
-                    offsets.forEach((key, offset) -> offsetsToCommit.merge(key, offset, Math::max)));
+            TopicPartition topicPartition = new TopicPartition(consumerRecord.topic(), consumerRecord.partition());
+
+            if (blockedPartitions.contains(topicPartition)) {
+                continue;
+            }
+
+            try {
+
+                processRecord(consumerRecord).ifPresent(offsets ->
+                        offsets.forEach((key, offset) -> offsetsToCommit.merge(key, offset, Math::max)));
+
+            } catch (SchemaRegistryException exception) {
+
+                blockedPartitions.add(topicPartition);
+                kafkaConsumer.seek(topicPartition, consumerRecord.offset());
+                log.error("Instance #{}: Schema Registry lookup failed for topic={}, partition={}, offset={}; "
+                                + "the record will be retried", instanceId, consumerRecord.topic(),
+                        consumerRecord.partition(), consumerRecord.offset(), exception);
+            }
         }
 
         return offsetsToCommit;
@@ -164,7 +192,7 @@ public class NetflowConsumer {
     private Optional<Map<TopicPartitionKey, Long>> processRecord(ConsumerRecord<byte[], byte[]> consumerRecord) {
         long nextOffset = consumerRecord.offset() + 1;
         try {
-            var genericRecord = avroDeserializer.deserialize(consumerRecord.value());
+            var genericRecord = avroDeserializer.deserialize(consumerRecord.topic(), consumerRecord.value());
             ValidationResult result = validationService.validate(genericRecord);
 
             if (!result.valid()) {
@@ -175,21 +203,24 @@ public class NetflowConsumer {
             }
 
             IngestedRecord ingestedRecord = new IngestedRecord(
-                    genericRecord,
-                    consumerRecord.topic(),
-                    consumerRecord.partition(),
-                    consumerRecord.offset(),
-                    consumerRecord.timestamp(),
-                    consumerRecord.value().length
+                            genericRecord,
+                            consumerRecord.topic(),
+                            consumerRecord.partition(),
+                            consumerRecord.offset(),
+                            consumerRecord.timestamp(),
+                            consumerRecord.value().length
             );
 
             return dataProcessingService.processRecord(ingestedRecord);
 
-        } catch (DeserializationException e) {
-            metrics.invalidRecord(instanceId, "DESERIALIZATION_ERROR");
-            dlqService.publish(consumerRecord, "DESERIALIZATION_ERROR", e.getMessage());
+        } catch (DeserializationException | UnsupportedSchemaException e) {
+            String reason = e instanceof DeserializationException ? "DESERIALIZATION_ERROR" : "UNSUPPORTED_SCHEMA";
+            metrics.invalidRecord(instanceId, reason);
+            dlqService.publish(consumerRecord, reason, e.getMessage());
+
             return dataProcessingService.recordSkippedOffset(
                     consumerRecord.topic(), consumerRecord.partition(), nextOffset);
+
         } catch (StorageException e) {
             log.error("Instance #{}: Error processing record: topic={}, partition={}, offset={}",
                     instanceId, consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(), e);
@@ -204,8 +235,7 @@ public class NetflowConsumer {
 
         kafkaOffsetCommitter.commit(kafkaConsumer, offsetsToCommit);
 
-        log.debug("Instance #{}: Committed offsets: {}",
-                instanceId, offsetsToCommit);
+        log.debug("Instance #{}: Committed offsets: {}", instanceId, offsetsToCommit);
     }
 
     private void closeConsumer() {
@@ -215,10 +245,19 @@ public class NetflowConsumer {
         } catch (KafkaException | IllegalStateException e) {
             log.warn("Instance #{}: Error closing Kafka consumer", instanceId, e);
         }
+
+        try {
+            avroDeserializer.close();
+            log.info("Instance #{}: Avro deserializer closed", instanceId);
+        } catch (RuntimeException e) {
+            log.warn("Instance #{}: Error closing Avro deserializer", instanceId, e);
+        }
     }
 
     private void flushAndCommitOnShutdown() {
+
         log.info("Instance #{}: Flushing remaining buffered records before shutdown...", instanceId);
+
         try {
             Map<TopicPartitionKey, Long> flushedOffsets = dataProcessingService.flush();
 
