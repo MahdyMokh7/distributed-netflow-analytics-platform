@@ -38,6 +38,12 @@ llm:
     connect: ${ANALYTICS_QUERY_LLM_CONNECT_TIMEOUT:10s}
     read: ${ANALYTICS_QUERY_LLM_READ_TIMEOUT:240s}
 
+rest-api:
+  base-url: ${ANALYTICS_QUERY_REST_API_BASE_URL}
+  timeout:
+    connect: ${ANALYTICS_QUERY_REST_API_CONNECT_TIMEOUT:3s}
+    read: ${ANALYTICS_QUERY_REST_API_READ_TIMEOUT:15s}
+
 server:
   port: ${SERVER_PORT:8080}
 

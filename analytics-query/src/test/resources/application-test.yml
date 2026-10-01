@@ -10,3 +10,9 @@ llm:
   timeout:
     connect: 1s
     read: 5s
+
+rest-api:
+  base-url: http://127.0.0.1:65535/api
+  timeout:
+    connect: 1s
+    read: 5s

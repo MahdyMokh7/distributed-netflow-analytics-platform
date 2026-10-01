@@ -7,6 +7,7 @@ import com.nimbo.analyticsquery.dto.response.AnalyticsQueryResponse;
 import com.nimbo.analyticsquery.dto.response.SqlExecutionResponse;
 import com.nimbo.analyticsquery.dto.response.SqlGenerationResponse;
 import com.nimbo.analyticsquery.exception.FeatureNotImplementedException;
+import com.nimbo.analyticsquery.planner.AnalyticsQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -20,14 +21,20 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Analytics", description = "Natural-language analytics and controlled SQL query API")
 public class AnalyticsController {
 
+    private final AnalyticsQueryService analyticsQueryService;
+
+    public AnalyticsController(AnalyticsQueryService analyticsQueryService) {
+        this.analyticsQueryService = analyticsQueryService;
+    }
+
     @PostMapping("/query")
     @Operation(summary = "Execute an analytics question",
             description = "Interprets a natural-language analytics question and executes it "
-                    + "through an approved PostgreSQL cube tool or guarded SQL fallback."
+                    + "through an approved PostgreSQL cube tool. Unsupported requests "
+                    + "return a controlled status."
     )
     public AnalyticsQueryResponse query(@Valid @RequestBody AnalyticsQueryRequest request) {
-
-        throw new FeatureNotImplementedException("Analytics query execution is not implemented yet");
+        return AnalyticsQueryResponse.from(analyticsQueryService.query(request.question()));
     }
 
     @PostMapping("/sql/generate")

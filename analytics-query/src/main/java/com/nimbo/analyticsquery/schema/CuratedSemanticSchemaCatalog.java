@@ -29,41 +29,41 @@ public class CuratedSemanticSchemaCatalog implements SemanticSchemaCatalog {
         Map<String, SemanticField> configuredFields = new LinkedHashMap<>();
 
         add(configuredFields, dimension(
-                "SOURCE_IP",
+                SemanticFieldNames.SOURCE_IP,
                 "Source IP address observed in a NetFlow record."));
         add(configuredFields, dimension(
-                "DESTINATION_IP",
+                SemanticFieldNames.DESTINATION_IP,
                 "Destination IP address observed in a NetFlow record."));
         add(configuredFields, dimension(
-                "IP_ADDRESS",
+                SemanticFieldNames.IP_ADDRESS,
                 "IP address viewed from either the source or destination perspective."));
         add(configuredFields, dimension(
-                "L7_PROTOCOL",
+                SemanticFieldNames.L7_PROTOCOL,
                 "Layer-7 protocol identifier associated with the traffic."));
 
         add(configuredFields, metric(
-                "IN_BYTES",
+                SemanticFieldNames.IN_BYTES,
                 "Bytes received in the selected NetFlow perspective."));
         add(configuredFields, metric(
-                "OUT_BYTES",
+                SemanticFieldNames.OUT_BYTES,
                 "Bytes sent in the selected NetFlow perspective."));
         add(configuredFields, metric(
-                "TOTAL_BYTES",
+                SemanticFieldNames.TOTAL_BYTES,
                 "Combined inbound and outbound bytes."));
         add(configuredFields, metric(
-                "IN_PACKETS",
+                SemanticFieldNames.IN_PACKETS,
                 "Packets received in the selected NetFlow perspective."));
         add(configuredFields, metric(
-                "OUT_PACKETS",
+                SemanticFieldNames.OUT_PACKETS,
                 "Packets sent in the selected NetFlow perspective."));
         add(configuredFields, metric(
-                "TOTAL_PACKETS",
+                SemanticFieldNames.TOTAL_PACKETS,
                 "Combined inbound and outbound packets."));
         add(configuredFields, metric(
-                "RECORD_COUNT",
+                SemanticFieldNames.RECORD_COUNT,
                 "Number of NetFlow records represented by an aggregate."));
         add(configuredFields, metric(
-                "CONNECTION_COUNT",
+                SemanticFieldNames.CONNECTION_COUNT,
                 "Number of NetFlow connections represented by an aggregate."));
 
         fields = Map.copyOf(configuredFields);

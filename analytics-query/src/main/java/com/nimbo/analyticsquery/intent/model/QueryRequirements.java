@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import org.hibernate.validator.constraints.UniqueElements;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -15,10 +16,12 @@ public record QueryRequirements(
 
         @NotNull
         @Size(max = 20)
+        @UniqueElements(message = "contains duplicate fields")
         List<@NotBlank @Size(max = 64) String> dimensions,
 
         @NotNull
         @Size(max = 20)
+        @UniqueElements(message = "Duplicate metric requirement")
         List<@NotNull @Valid MetricRequirement> metrics,
 
         @NotNull
@@ -37,6 +40,7 @@ public record QueryRequirements(
 
         @NotNull
         @Size(max = 10)
+        @UniqueElements(message = "contains duplicate fields")
         List<@NotBlank @Size(max = 64) String> groupBy,
 
         Duration granularity,

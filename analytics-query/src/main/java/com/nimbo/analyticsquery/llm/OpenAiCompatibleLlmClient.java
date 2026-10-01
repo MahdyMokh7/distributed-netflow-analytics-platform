@@ -65,7 +65,10 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                     .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                     .readValue(content);
         } catch (JsonProcessingException exception) {
-            throw new LlmClientException("LLM returned invalid structured JSON", exception);
+            throw new LlmClientException(
+                    LlmClientException.Kind.INVALID_RESPONSE,
+                    "LLM returned invalid structured JSON",
+                    exception);
         }
     }
 
@@ -80,13 +83,14 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                             HttpStatusCode::isError,
                             (httpRequest, httpResponse) -> {
                                 throw new LlmClientException(
+                                        LlmClientException.Kind.UNAVAILABLE,
                                         "LLM request failed with HTTP status "
                                                 + httpResponse.getStatusCode().value());
                             })
                     .body(ChatCompletionResponse.class);
 
             if (response == null) {
-                throw new LlmClientException("LLM returned an empty HTTP response");
+                throw invalidResponse("LLM returned an empty HTTP response");
             }
 
             return response;
@@ -96,26 +100,49 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
 
         } catch (ResourceAccessException exception) {
             throw new LlmClientException(
+                    LlmClientException.Kind.UNAVAILABLE,
                     "LLM request timed out or the service is unreachable", exception
             );
 
         } catch (RestClientException exception) {
-            throw new LlmClientException("LLM request failed", exception);
+            throw new LlmClientException(
+                    LlmClientException.Kind.INVALID_RESPONSE,
+                    "LLM response could not be processed",
+                    exception);
         }
     }
 
     private String extractContent(ChatCompletionResponse response) {
         if (response.choices() == null || response.choices().isEmpty()) {
-            throw new LlmClientException("LLM response contains no choices");
+            throw invalidResponse("LLM response contains no choices");
         }
 
-        ChatCompletionResponse.Message message = response.choices().get(0).message();
+        ChatCompletionResponse.Choice choice = response.choices().get(0);
+        validateFinishReason(choice.finishReason());
+
+        ChatCompletionResponse.Message message = choice.message();
 
         if (message == null || message.content() == null || message.content().isBlank()) {
-            throw new LlmClientException("LLM response contains no message content");
+            throw invalidResponse("LLM response contains no message content");
         }
 
         return message.content();
+    }
+
+    private void validateFinishReason(String finishReason) {
+        if (finishReason != null
+                && !finishReason.isBlank()
+                && !"stop".equals(finishReason)) {
+
+            throw invalidResponse(
+                    "LLM response did not complete normally: " + finishReason);
+        }
+    }
+
+    private LlmClientException invalidResponse(String message) {
+        return new LlmClientException(
+                LlmClientException.Kind.INVALID_RESPONSE,
+                message);
     }
 
     private void validatePrompt(String prompt, String name) {
