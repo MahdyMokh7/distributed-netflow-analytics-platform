@@ -44,6 +44,10 @@ public final class TestExtension implements BeforeAllCallback, ParameterResolver
         return INFRASTRUCTURE.starRocks();
     }
 
+    public TestSchemaRegistry schemaRegistry() {
+        return INFRASTRUCTURE.schemaRegistry();
+    }
+
     static Infrastructure infrastructure() {
         return INFRASTRUCTURE;
     }
@@ -52,6 +56,7 @@ public final class TestExtension implements BeforeAllCallback, ParameterResolver
 
         private final TestKafka kafka = new TestKafka();
         private final TestStarRocks starRocks = new TestStarRocks();
+        private final TestSchemaRegistry schemaRegistry = new TestSchemaRegistry();
         private boolean started;
 
         synchronized void start() {
@@ -61,6 +66,7 @@ public final class TestExtension implements BeforeAllCallback, ParameterResolver
 
             try {
                 Startables.deepStart(kafka.container(), starRocks.container()).join();
+                schemaRegistry.start();
                 started = true;
             } catch (RuntimeException exception) {
                 close();
@@ -82,8 +88,13 @@ public final class TestExtension implements BeforeAllCallback, ParameterResolver
             return starRocks;
         }
 
+        TestSchemaRegistry schemaRegistry() {
+            return schemaRegistry;
+        }
+
         @Override
         public synchronized void close() {
+            schemaRegistry.close();
             stop(kafka.container());
             stop(starRocks.container());
             started = false;

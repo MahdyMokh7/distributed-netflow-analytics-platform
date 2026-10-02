@@ -2,39 +2,33 @@ package com.nimbo.starrockswriter.model;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class StarRocksRowTest {
 
     @Test
-    void shouldCombineKafkaMetadataAndNetflowValues() {
-        StarRocksRow row = new StarRocksRow("topic", 3, 20L, 30L, List.of("src", 100));
+    void shouldCombineKafkaMetadataWithRequestedNetflowColumns() {
+        StarRocksRow row = new StarRocksRow(
+                "topic", 3, 20L, 30L,
+                Map.of("src", "10.0.0.1", "bytes", 100L)
+        );
 
-        assertThat(row.values()).containsExactly("topic", 3, 20L, 30L, "src", 100);
+        assertThat(row.values(List.of("src", "bytes", "new_field")))
+                .containsExactly("topic", 3, 20L, 30L, "10.0.0.1", 100L, null);
     }
 
     @Test
-    void shouldProtectOriginalNetflowList() {
-        List<Object> source = new ArrayList<>();
-        source.add("value");
+    void shouldProtectOriginalNetflowMap() {
+        Map<String, Object> source = new LinkedHashMap<>();
+        source.put("value", "before");
 
         StarRocksRow row = new StarRocksRow("topic", 0, 1L, 2L, source);
-        source.add("changed");
+        source.put("value", "after");
 
-        assertThat(row.netFlowValues()).containsExactly("value");
-    }
-
-    @Test
-    void valuesShouldCreateNewListEachTime() {
-        StarRocksRow row = new StarRocksRow("topic", 0, 1L, 2L, List.of("a"));
-
-        List<Object> first = row.values();
-        List<Object> second = row.values();
-
-        assertThat(first).isNotSameAs(second);
-        assertThat(first).containsExactlyElementsOf(second);
+        assertThat(row.netFlowValues()).containsEntry("value", "before");
     }
 }

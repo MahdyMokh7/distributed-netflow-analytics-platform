@@ -7,6 +7,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,7 +21,7 @@ class BatchBufferTest {
     }
 
     private StarRocksRow row() {
-        return new StarRocksRow("topic", 0, 1L, 100L, List.of("value"));
+        return new StarRocksRow("topic", 0, 1L, 100L, Map.of("value", "value"));
     }
 
     @Test
@@ -56,6 +57,7 @@ class BatchBufferTest {
 
         assertThat(snapshot.rows()).isEmpty();
         assertThat(snapshot.offsets()).containsEntry(partition, offset);
+        assertThat(buffer.isEmpty()).isFalse();
     }
 
     @Test

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -14,37 +15,22 @@ import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
+@Order(0)
 @RequiredArgsConstructor
-public class StarRocksSchemaInitializer
-        implements ApplicationRunner {
+public class StarRocksSchemaInitializer implements ApplicationRunner {
 
-    private static final String CREATE_TABLE_SCRIPT =
-            "sql/netflow.sql";
+    private static final String CREATE_TABLE_SCRIPT = "sql/netflow.sql";
 
     private final JdbcTemplate jdbcTemplate;
 
     @Override
-    public void run(
-            ApplicationArguments args
-    ) throws IOException {
-
-        String sql =
-                loadSql();
-        jdbcTemplate.execute(sql);
-        log.info(
-                "StarRocks Writer table verified"
-        );
+    public void run(ApplicationArguments args) throws IOException {
+        jdbcTemplate.execute(loadSql());
+        log.info("StarRocks Writer table verified");
     }
 
-    private String loadSql(
-            ) throws IOException {
-
-        ClassPathResource resource =
-                new ClassPathResource(StarRocksSchemaInitializer.CREATE_TABLE_SCRIPT);
-
-        return StreamUtils.copyToString(
-                resource.getInputStream(),
-                StandardCharsets.UTF_8
-        );
+    private String loadSql() throws IOException {
+        ClassPathResource resource = new ClassPathResource(CREATE_TABLE_SCRIPT);
+        return StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
     }
 }

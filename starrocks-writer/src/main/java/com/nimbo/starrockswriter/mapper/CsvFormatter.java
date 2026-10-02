@@ -8,11 +8,11 @@ import java.util.List;
 @Component
 public class CsvFormatter {
 
-    public String format(List<StarRocksRow> rows) {
+    public String format(List<StarRocksRow> rows, List<String> netFlowColumns) {
         StringBuilder csv = new StringBuilder(rows.size() * 256);
 
         for (StarRocksRow row : rows) {
-            appendRow(csv, row.values());
+            appendRow(csv, row.values(netFlowColumns));
             csv.append('\n');
         }
         return csv.toString();

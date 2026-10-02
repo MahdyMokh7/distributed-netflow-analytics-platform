@@ -52,4 +52,10 @@ public class StarRocksProperties {
 
     @Min(1)
     private int maxInFlightRequests;
+
+    @Min(1000)
+    private long schemaEvolutionTimeoutMs = 120000;
+
+    @Min(100)
+    private long schemaEvolutionPollMs = 1000;
 }

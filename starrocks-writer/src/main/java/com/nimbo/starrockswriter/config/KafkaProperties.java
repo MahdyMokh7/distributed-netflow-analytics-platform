@@ -23,10 +23,10 @@ public class KafkaProperties {
     private String consumerGroup;
 
     @NotBlank
-    private String clientId ;
+    private String clientId;
 
     @NotBlank
-    private String autoOffsetReset ;
+    private String autoOffsetReset;
 
     @Min(1)
     private int maxPollRecords = 1000;
@@ -39,4 +39,10 @@ public class KafkaProperties {
 
     @Min(1)
     private int consumerCount;
+
+    @NotBlank
+    private String dlqTopic = "netflow-dlq";
+
+    @Min(100)
+    private long dlqPublishTimeoutMs = 10000;
 }

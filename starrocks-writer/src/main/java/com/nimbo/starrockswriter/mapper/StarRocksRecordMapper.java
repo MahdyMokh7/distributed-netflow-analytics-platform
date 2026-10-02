@@ -16,14 +16,13 @@ public class StarRocksRecordMapper {
             String topic,
             int partition,
             long offset,
-            long kafkaTimestamp
+            long processTime
     ) {
-
         return new StarRocksRow(
                 topic,
                 partition,
                 offset,
-                kafkaTimestamp,
+                processTime,
                 schemaMapping.extractValues(genericRecord)
         );
     }

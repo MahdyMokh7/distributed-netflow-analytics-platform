@@ -48,6 +48,13 @@ public record StreamLoadResult(
         @JsonProperty("LoadTimeMs")
         Long loadTimeMs
 ) {
+
+    public static StreamLoadResult offsetOnly(String label) {
+        return new StreamLoadResult(null, label, "Success", "No StarRocks load required", 0L,
+                0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L
+        );
+    }
+
     public boolean isSuccessful() {
         return "Success".equalsIgnoreCase(status);
     }
