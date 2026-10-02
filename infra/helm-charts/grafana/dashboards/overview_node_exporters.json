@@ -275,7 +275,7 @@
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": { "refresh_intervals": ["5s","10s","30s","1m","5m","15m","30m","1h","2h","1d"] },
   "timezone": "browser",
-  "title": "Overview — Node Exporters",
+  "title": "Nodes Status",
   "uid": "adnz4ck",
   "version": 5
 }

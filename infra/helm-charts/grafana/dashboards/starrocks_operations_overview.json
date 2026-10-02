@@ -1417,7 +1417,7 @@
       }
     },
     "preload": false,
-    "tags": [],
+    "tags": ["starrocks"],
     "timeSettings": {
       "autoRefresh": "1m",
       "autoRefreshIntervals": [
@@ -1438,7 +1438,7 @@
       "timezone": "browser",
       "to": "now"
     },
-    "title": "StarRocks Operations Overview",
+    "title": "StarRocks Operations",
     "variables": []
   }
 }

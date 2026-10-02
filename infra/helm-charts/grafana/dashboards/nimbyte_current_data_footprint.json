@@ -199,13 +199,13 @@
   ],
   "refresh": "2m",
   "schemaVersion": 39,
-  "tags": ["nimbo", "storage", "data-footprint", "PostgreSQL", "Kafka", "HDFS", "StarRocks"],
+  "tags": ["storage", "PostgreSQL", "Kafka", "HDFS", "StarRocks"],
   "templating": {"list": []},
   "time": {"from": "now-6h", "to": "now"},
   "timepicker": {},
   "timezone": "Asia/Tehran",
-  "title": "Nimbyte Current Data Footprint",
-  "uid": "nimbyte-current-data-footprint",
+  "title": "Current Storage Health",
+  "uid": "current-data-footprint",
   "version": 1,
   "weekStart": ""
 }
