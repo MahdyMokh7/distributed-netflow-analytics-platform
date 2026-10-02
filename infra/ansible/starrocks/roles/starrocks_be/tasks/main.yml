@@ -1,38 +1,8 @@
 ---
-- name: Install initial backend configuration only when missing
-  ansible.builtin.template:
-    src: be.conf.j2
-    dest: "{{ starrocks_install_dir }}/be/conf/be.conf"
-    owner: root
-    group: "{{ starrocks_group }}"
-    mode: '0640'
-    force: false
+- name: Run the configure phase
+  ansible.builtin.include_tasks: configure.yml
+  when: (starrocks_role_phase | default('configure')) == 'configure'
 
-- name: Install managed backend configuration on an uninitialized node
-  ansible.builtin.template:
-    src: be.conf.j2
-    dest: "{{ starrocks_install_dir }}/be/conf/be.conf"
-    owner: root
-    group: "{{ starrocks_group }}"
-    mode: '0640'
-  when: not starrocks_disk.has_metadata and not starrocks_disk.has_be_data
-
-- name: Install the backend service unit
-  ansible.builtin.template:
-    src: starrocks-be.service.j2
-    dest: /etc/systemd/system/starrocks-be.service
-    owner: root
-    group: root
-    mode: '0644'
-  register: starrocks_be_unit
-
-- name: Record the backend unit change for the rolling restart
-  ansible.builtin.set_fact:
-    starrocks_be_unit_changed: "{{ starrocks_be_unit.changed | bool }}"
-
-- name: Ensure the BE installation tree is owned by the service account
-  ansible.builtin.file:
-    path: "{{ starrocks_link }}/be"
-    owner: "{{ starrocks_user }}"
-    group: "{{ starrocks_group }}"
-    recurse: true
+- name: Run the join phase
+  ansible.builtin.include_tasks: join.yml
+  when: (starrocks_role_phase | default('configure')) == 'join'
