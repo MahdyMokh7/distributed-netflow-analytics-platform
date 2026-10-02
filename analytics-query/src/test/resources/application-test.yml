@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: analytics-query
+
+llm:
+  base-url: http://127.0.0.1:65535
+  api-key: sk-test-key
+  model: test-model
+  chat-completions-path: /v1/chat/completions
+  timeout:
+    connect: 1s
+    read: 5s
