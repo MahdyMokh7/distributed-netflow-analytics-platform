@@ -49,6 +49,12 @@ spec:
             - name: SERVER_PORT
               value: {{ .Values.containerPort | quote }}
 
+            - name: SCHEMA_REGISTRY_URL
+              value: {{ required "schemaRegistry.url is required" .Values.schemaRegistry.url | quote }}
+
+            - name: SCHEMA_REGISTRY_SUBJECT
+              value: {{ required "schemaRegistry.subject is required" .Values.schemaRegistry.subject | quote }}
+
             - name: SPRING_CONFIG_ADDITIONAL_LOCATION
               value: "file:/config/application-prod.yaml"
 

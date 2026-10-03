@@ -1,31 +1,28 @@
 package com.nimbo.support;
 
-import com.nimbo.ingester.config.IngesterConfiguration;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.EncoderFactory;
+import org.springframework.core.io.ClassPathResource;
 
 public final class NetFlowTestData {
 
     private final Schema sourceSchema;
-    private final Schema storageSchema;
 
     public NetFlowTestData() {
-        IngesterConfiguration configuration = new IngesterConfiguration();
-        sourceSchema = configuration.avroSchema();
-        storageSchema = configuration.storageSchema(sourceSchema);
+        try (InputStream input =
+                new ClassPathResource("avro/NetFlowV2Record.avsc").getInputStream()) {
+            sourceSchema = new Schema.Parser().parse(input);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to load NetFlow test schema", exception);
+        }
     }
 
     public Schema sourceSchema() {
         return sourceSchema;
-    }
-
-    public Schema storageSchema() {
-        return storageSchema;
     }
 
     public GenericRecord validRecord() {
@@ -78,17 +75,5 @@ public final class NetFlowTestData {
         record.put("DNS_TTL_ANSWER", 0L);
         record.put("FTP_COMMAND_RET_CODE", 0);
         return record;
-    }
-
-    public byte[] serialize(GenericRecord record) {
-        try {
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            var encoder = EncoderFactory.get().binaryEncoder(output, null);
-            new GenericDatumWriter<GenericRecord>(sourceSchema).write(record, encoder);
-            encoder.flush();
-            return output.toByteArray();
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to serialize deterministic NetFlow test record", e);
-        }
     }
 }

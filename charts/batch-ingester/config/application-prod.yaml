@@ -39,6 +39,9 @@ logging:
     com.nimbo.ingester: INFO
     com.nimbo.storage: INFO
 ingester:
+  schema-registry:
+    url: ${SCHEMA_REGISTRY_URL}
+    subject: ${SCHEMA_REGISTRY_SUBJECT}
   kafka:
     bootstrap-servers: 10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092
     topic: netflow

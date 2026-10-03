@@ -6,11 +6,7 @@ import java.util.Objects;
 
 public record BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBatchAge) {
 
-    public BatchPolicy(
-            long maxRecordCount,
-            long maxSizeBytes,
-            Duration maxBatchAge
-    ) {
+    public BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBatchAge) {
         if (maxRecordCount <= 0) {
             throw new IllegalArgumentException("maxRecordCount must be positive");
         }
@@ -34,15 +30,13 @@ public record BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBa
         SIZE,
         AGE,
         TIME_BUCKET_BOUNDARY,
+        SCHEMA_CHANGE,
         LIFECYCLE,
         NONE
     }
+
     public boolean shouldFlush(
-            long recordCount,
-            long totalSizeBytes,
-            Instant firstRecordAt,
-            Instant now
-    ) {
+            long recordCount, long totalSizeBytes, Instant firstRecordAt, Instant now) {
         Objects.requireNonNull(now, "now must not be null");
 
         if (recordCount == 0) {
@@ -61,11 +55,11 @@ public record BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBa
             return false;
         }
 
-        return Duration.between(firstRecordAt, now)
-                .compareTo(maxBatchAge) >= 0;
+        return Duration.between(firstRecordAt, now).compareTo(maxBatchAge) >= 0;
     }
 
-    public FlushReason flushReason(long recordCount, long totalSizeBytes, Instant firstRecordAt, Instant now) {
+    public FlushReason flushReason(
+            long recordCount, long totalSizeBytes, Instant firstRecordAt, Instant now) {
         if (recordCount == 0) {
             return FlushReason.NONE;
         }
@@ -75,7 +69,8 @@ public record BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBa
         if (totalSizeBytes >= maxSizeBytes) {
             return FlushReason.SIZE;
         }
-        if (firstRecordAt != null && Duration.between(firstRecordAt, now).compareTo(maxBatchAge) >= 0) {
+        if (firstRecordAt != null
+                && Duration.between(firstRecordAt, now).compareTo(maxBatchAge) >= 0) {
             return FlushReason.AGE;
         }
         return FlushReason.NONE;

@@ -1,5 +1,9 @@
 package com.nimbo.common.validation;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.List;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -8,8 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class NetflowValidationServiceTest {
 
@@ -69,11 +71,11 @@ class NetflowValidationServiceTest {
 
     @ParameterizedTest
     @CsvSource({
-            "IPV4_SRC_ADDR, '192.168.1', 'IPV4_SRC_ADDR invalid IPv4: 192.168.1'",
-            "IPV4_DST_ADDR, '10.0..1', 'IPV4_DST_ADDR invalid IPv4: 10.0..1'",
-            "IPV4_SRC_ADDR, '10.0.a.1', 'IPV4_SRC_ADDR invalid IPv4: 10.0.a.1'",
-            "IPV4_SRC_ADDR, '10.0.-1.1', 'IPV4_SRC_ADDR invalid IPv4: 10.0.-1.1'",
-            "IPV4_DST_ADDR, '10.0.0.256', 'IPV4_DST_ADDR invalid IPv4: 10.0.0.256'"
+        "IPV4_SRC_ADDR, '192.168.1', 'IPV4_SRC_ADDR invalid IPv4: 192.168.1'",
+        "IPV4_DST_ADDR, '10.0..1', 'IPV4_DST_ADDR invalid IPv4: 10.0..1'",
+        "IPV4_SRC_ADDR, '10.0.a.1', 'IPV4_SRC_ADDR invalid IPv4: 10.0.a.1'",
+        "IPV4_SRC_ADDR, '10.0.-1.1', 'IPV4_SRC_ADDR invalid IPv4: 10.0.-1.1'",
+        "IPV4_DST_ADDR, '10.0.0.256', 'IPV4_DST_ADDR invalid IPv4: 10.0.0.256'"
     })
     void givenMalformedIpv4_whenValidated_thenSpecificAddressIsRejected(
             String field, String value, String expectedError) {
@@ -88,8 +90,8 @@ class NetflowValidationServiceTest {
 
     @ParameterizedTest
     @CsvSource({
-            "L4_SRC_PORT, -1, 'L4_SRC_PORT out of range'",
-            "L4_DST_PORT, 65536, 'L4_DST_PORT out of range'"
+        "L4_SRC_PORT, -1, 'L4_SRC_PORT out of range'",
+        "L4_DST_PORT, 65536, 'L4_DST_PORT out of range'"
     })
     void givenPortOutsideUnsignedRange_whenValidated_thenPortIsRejected(
             String field, int value, String expectedError) {
@@ -103,10 +105,7 @@ class NetflowValidationServiceTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            "MIN_TTL, -1, 'MIN_TTL out of range'",
-            "MAX_TTL, 256, 'MAX_TTL out of range'"
-    })
+    @CsvSource({"MIN_TTL, -1, 'MIN_TTL out of range'", "MAX_TTL, 256, 'MAX_TTL out of range'"})
     void givenTtlOutsideUnsignedByteRange_whenValidated_thenTtlIsRejected(
             String field, int value, String expectedError) {
         GenericRecord record = validRecord();
@@ -120,10 +119,10 @@ class NetflowValidationServiceTest {
 
     @ParameterizedTest
     @CsvSource({
-            "IN_BYTES, 'IN_BYTES is negative: -1'",
-            "OUT_BYTES, 'OUT_BYTES is negative: -1'",
-            "IN_PKTS, 'IN_PKTS is negative: -1'",
-            "OUT_PKTS, 'OUT_PKTS is negative: -1'"
+        "IN_BYTES, 'IN_BYTES is negative: -1'",
+        "OUT_BYTES, 'OUT_BYTES is negative: -1'",
+        "IN_PKTS, 'IN_PKTS is negative: -1'",
+        "OUT_PKTS, 'OUT_PKTS is negative: -1'"
     })
     void givenNegativeTrafficCounter_whenValidated_thenCounterIsRejected(String field, String expectedError) {
         GenericRecord record = validRecord();
@@ -166,10 +165,10 @@ class NetflowValidationServiceTest {
         ValidationResult result = validationService.validate(record);
 
         assertThat(result.valid()).isFalse();
-        assertThat(result.reason())
-                .isEqualTo("MIN_TTL > MAX_TTL (100 > 50)"
-                        + " | SHORTEST_FLOW_PKT > LONGEST_FLOW_PKT (1500 > 64)"
-                        + " | MIN_IP_PKT_LEN > MAX_IP_PKT_LEN (1500 > 64)");
+        assertThat(result.reason()).isEqualTo(
+                        "MIN_TTL > MAX_TTL (100 > 50)"
+                                + " | SHORTEST_FLOW_PKT > LONGEST_FLOW_PKT (1500 > 64)"
+                                + " | MIN_IP_PKT_LEN > MAX_IP_PKT_LEN (1500 > 64)");
     }
 
     @Test
@@ -188,21 +187,21 @@ class NetflowValidationServiceTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            "IPV4_SRC_ADDR",
-            "IPV4_DST_ADDR",
-            "L4_SRC_PORT",
-            "L4_DST_PORT",
-            "IN_BYTES",
-            "OUT_BYTES",
-            "IN_PKTS",
-            "OUT_PKTS",
-            "MIN_TTL",
-            "MAX_TTL",
-            "LONGEST_FLOW_PKT",
-            "SHORTEST_FLOW_PKT",
-            "MIN_IP_PKT_LEN",
-            "MAX_IP_PKT_LEN"
-    })
+                "IPV4_SRC_ADDR",
+                "IPV4_DST_ADDR",
+                "L4_SRC_PORT",
+                "L4_DST_PORT",
+                "IN_BYTES",
+                "OUT_BYTES",
+                "IN_PKTS",
+                "OUT_PKTS",
+                "MIN_TTL",
+                "MAX_TTL",
+                "LONGEST_FLOW_PKT",
+                "SHORTEST_FLOW_PKT",
+                "MIN_IP_PKT_LEN",
+                "MAX_IP_PKT_LEN"
+            })
     void givenMissingValidatedField_whenValidated_thenExactFieldIsRejected(String field) {
         GenericRecord record = validRecord();
         record.put(field, null);
@@ -211,6 +210,25 @@ class NetflowValidationServiceTest {
 
         assertThat(result.valid()).isFalse();
         assertThat(result.reason()).isEqualTo(field + " is null");
+    }
+
+    @Test
+    void givenSchemaWithoutFormerValidatedField_whenValidated_thenRemainingFieldsAreAccepted() {
+        GenericRecord original = validRecord();
+        List<Schema.Field> remainingFields =
+                schema.getFields().stream()
+                        .filter(field -> !field.name().equals("DNS_QUERY_ID"))
+                        .map(field -> new Schema.Field(field, field.schema()))
+                        .toList();
+        Schema schemaWithoutDnsQueryId =
+                Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError(),
+                        remainingFields);
+        GenericRecord record = new GenericData.Record(schemaWithoutDnsQueryId);
+        remainingFields.forEach(field -> record.put(field.name(), original.get(field.name())));
+
+        ValidationResult result = validationService.validate(record);
+
+        assertThat(result).isEqualTo(ValidationResult.success());
     }
 
     @Test

@@ -23,9 +23,7 @@ public record IngestedRecord(
         }
 
         if (serializedSizeBytes < 0) {
-            throw new IllegalArgumentException(
-                    "serializedSizeBytes must not be negative"
-            );
+            throw new IllegalArgumentException("serializedSizeBytes must not be negative");
         }
     }
 }

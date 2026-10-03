@@ -1,12 +1,15 @@
 package com.nimbo.metrics;
 
-import com.nimbo.storage.service.batching.BatchPolicy;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import com.nimbo.storage.service.batching.BatchPolicy;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 class BatchIngesterMetricsTest {
 
@@ -33,7 +36,7 @@ class BatchIngesterMetricsTest {
         assertThat(registry.find("ingester_consumer_running").tag("instance", "1").gauges())
                 .hasSize(1);
         assertThat(registry.find("ingester_rollover_total").tag("instance", "1").counters())
-                .hasSize(5);
+                .hasSize(6);
     }
 
     @Test
@@ -43,7 +46,8 @@ class BatchIngesterMetricsTest {
 
         // When: the consumer starts and then stops
         metrics.consumerStarted(2);
-        double running = registry.get("ingester_consumer_running").tag("instance", "2").gauge().value();
+        double running =
+                registry.get("ingester_consumer_running").tag("instance", "2").gauge().value();
         metrics.consumerStopped(2);
 
         // Then: the gauge exposes both lifecycle states exactly
@@ -69,28 +73,49 @@ class BatchIngesterMetricsTest {
         assertThat(polls.count()).isEqualTo(2);
         assertThat(polls.totalAmount()).isEqualTo(7.0);
         assertThat(polls.max()).isEqualTo(5.0);
-        assertThat(registry.get("ingester_records_written_total").tag("instance", "3").counter().count())
+        assertThat(
+                        registry.get("ingester_records_written_total")
+                                .tag("instance", "3")
+                                .counter()
+                                .count())
                 .isEqualTo(2.0);
-        assertThat(registry.get("ingester_write_failures_total").tag("instance", "3").counter().count())
+        assertThat(
+                        registry.get("ingester_write_failures_total")
+                                .tag("instance", "3")
+                                .counter()
+                                .count())
                 .isEqualTo(1.0);
     }
 
     @Test
     void givenKnownInvalidRecords_whenRecorded_thenBoundedDlqReasonsRemainSeparate() {
-        // Given: one registered instance and both supported failure classifications
+        // Given: one registered instance and the supported failure classifications
         metrics.registerInstance(4);
 
-        // When: validation and deserialization failures are recorded
+        // When: validation, deserialization, and unsupported-schema failures are recorded
         metrics.invalidRecord(4, "VALIDATION_ERROR");
         metrics.invalidRecord(4, "VALIDATION_ERROR");
         metrics.invalidRecord(4, "DESERIALIZATION_ERROR");
+        metrics.invalidRecord(4, "UNSUPPORTED_SCHEMA");
 
         // Then: each bounded reason has its exact independent count
-        assertThat(registry.get("ingester_dlq_records_total")
-                        .tags("instance", "4", "reason", "VALIDATION_ERROR").counter().count())
+        assertThat(
+                        registry.get("ingester_dlq_records_total")
+                                .tags("instance", "4", "reason", "VALIDATION_ERROR")
+                                .counter()
+                                .count())
                 .isEqualTo(2.0);
-        assertThat(registry.get("ingester_dlq_records_total")
-                        .tags("instance", "4", "reason", "DESERIALIZATION_ERROR").counter().count())
+        assertThat(
+                        registry.get("ingester_dlq_records_total")
+                                .tags("instance", "4", "reason", "DESERIALIZATION_ERROR")
+                                .counter()
+                                .count())
+                .isEqualTo(1.0);
+        assertThat(
+                        registry.get("ingester_dlq_records_total")
+                                .tags("instance", "4", "reason", "UNSUPPORTED_SCHEMA")
+                                .counter()
+                                .count())
                 .isEqualTo(1.0);
     }
 
@@ -103,17 +128,35 @@ class BatchIngesterMetricsTest {
         metrics.rollover(5, BatchPolicy.FlushReason.RECORD_COUNT, 500, 1_048_576);
 
         // Then: the reason counter, distributions, gauges, and timestamp describe one batch
-        assertThat(registry.get("ingester_rollover_total")
-                        .tags("instance", "5", "reason", "record_count").counter().count())
+        assertThat(
+                        registry.get("ingester_rollover_total")
+                                .tags("instance", "5", "reason", "record_count")
+                                .counter()
+                                .count())
                 .isEqualTo(1.0);
-        assertThat(registry.get("ingester_batch_record_count").tag("instance", "5").summary().totalAmount())
+        assertThat(
+                        registry.get("ingester_batch_record_count")
+                                .tag("instance", "5")
+                                .summary()
+                                .totalAmount())
                 .isEqualTo(500.0);
-        assertThat(registry.get("ingester_batch_size_bytes").tag("instance", "5").summary().totalAmount())
+        assertThat(
+                        registry.get("ingester_batch_size_bytes")
+                                .tag("instance", "5")
+                                .summary()
+                                .totalAmount())
                 .isEqualTo(1_048_576.0);
-        assertThat(registry.get("ingester_last_batch_record_count").tag("instance", "5").gauge().value())
+        assertThat(
+                        registry.get("ingester_last_batch_record_count")
+                                .tag("instance", "5")
+                                .gauge()
+                                .value())
                 .isEqualTo(500.0);
-        assertThat(registry.get("ingester_last_successful_rollover_timestamp")
-                        .tag("instance", "5").gauge().value())
+        assertThat(
+                        registry.get("ingester_last_successful_rollover_timestamp")
+                                .tag("instance", "5")
+                                .gauge()
+                                .value())
                 .isPositive();
     }
 
@@ -138,11 +181,13 @@ class BatchIngesterMetricsTest {
         int instanceId = 99;
 
         // When: an instance-specific metric is recorded
-        var invocation = org.assertj.core.api.Assertions.catchThrowable(
-                () -> metrics.recordWritten(instanceId));
+        var invocation =
+                org.assertj.core.api.Assertions.catchThrowable(
+                        () -> metrics.recordWritten(instanceId));
 
         // Then: the lifecycle contract reports the missing registration
-        assertThat(invocation).isInstanceOf(IllegalStateException.class)
+        assertThat(invocation)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Instance 99 not registered");
     }
 

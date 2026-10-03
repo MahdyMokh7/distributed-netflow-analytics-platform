@@ -16,8 +16,7 @@ public class DataProcessingService {
         this.netFlowStorage = netFlowStorage;
     }
 
-    public Optional<Map<TopicPartitionKey, Long>> processRecord(
-            IngestedRecord ingestedRecord) {
+    public Optional<Map<TopicPartitionKey, Long>> processRecord(IngestedRecord ingestedRecord) {
 
         return netFlowStorage.accept(ingestedRecord);
     }
@@ -36,10 +35,6 @@ public class DataProcessingService {
             int partition,
             long nextOffset) {
 
-        return netFlowStorage.recordSkippedOffset(
-                topic,
-                partition,
-                nextOffset
-        );
+        return netFlowStorage.recordSkippedOffset(topic, partition, nextOffset);
     }
 }
