@@ -17,7 +17,7 @@ class IntentPromptFactoryTest {
     private final IntentPromptFactory promptFactory =
             new IntentPromptFactory(
                     Clock.fixed(NOW, ZoneOffset.UTC),
-                    new CuratedSemanticSchemaCatalog());
+                    new CuratedSemanticSchemaCatalog(java.util.List.of()));
 
     @Test
     void givenFixedUtcClockWhenPromptIsCreatedThenTimeContextIsDeterministic() {

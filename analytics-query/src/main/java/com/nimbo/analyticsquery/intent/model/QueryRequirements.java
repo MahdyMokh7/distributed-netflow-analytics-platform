@@ -1,117 +1,55 @@
 package com.nimbo.analyticsquery.intent.model;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+
 import org.hibernate.validator.constraints.UniqueElements;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-
 public record QueryRequirements(
-
-        @NotNull
-        @Size(max = 20)
-        @UniqueElements(message = "contains duplicate fields")
-        List<@NotBlank @Size(max = 64) String> dimensions,
-
-        @NotNull
-        @Size(max = 20)
-        @UniqueElements(message = "Duplicate metric requirement")
-        List<@NotNull @Valid MetricRequirement> metrics,
-
-        @NotNull
-        @Size(max = 20)
-        List<@NotNull @Valid FilterRequirement> filters,
-
-        @NotNull
-        @Size(max = 4)
-        List<@NotNull @Valid IpRequirement> ipRequirements,
-
-        @NotNull
-        TrafficDirection trafficDirection,
-
-        @Valid
-        TimeRange timeRange,
-
-        @NotNull
-        @Size(max = 10)
-        @UniqueElements(message = "contains duplicate fields")
-        List<@NotBlank @Size(max = 64) String> groupBy,
-
+        @NotNull @Size(max = 20) @UniqueElements(message = "contains duplicate fields")
+                List<@NotBlank @Size(max = 64) String> dimensions,
+        @NotNull @Size(max = 20) @UniqueElements(message = "Duplicate metric requirement")
+                List<@NotNull @Valid MetricRequirement> metrics,
+        @NotNull @Size(max = 20) List<@NotNull @Valid FilterRequirement> filters,
+        @NotNull @Size(max = 4) List<@NotNull @Valid IpRequirement> ipRequirements,
+        @NotNull TrafficDirection trafficDirection,
+        @Valid TimeRange timeRange,
+        @NotNull @Size(max = 10) @UniqueElements(message = "contains duplicate fields")
+                List<@NotBlank @Size(max = 64) String> groupBy,
         Duration granularity,
-
-        @NotNull
-        @Size(max = 10)
-        List<@NotNull @Valid SortRequirement> sort,
-
-        @Positive
-        @Max(1000)
-        Integer limit,
-
+        @NotNull @Size(max = 10) List<@NotNull @Valid SortRequirement> sort,
+        @Positive @Max(MAX_LIMIT) Integer limit,
         boolean distinct) {
 
+    public static final int MAX_LIMIT = 1000;
+
     public record MetricRequirement(
-
-            @NotBlank
-            @Size(max = 64)
-            String field,
-
-            @NotNull
-            Aggregation aggregation) {
-    }
+            @NotBlank @Size(max = 64) String field, @NotNull Aggregation aggregation) {}
 
     public record FilterRequirement(
-
-            @NotBlank
-            @Size(max = 64)
-            String field,
-
-            @NotNull
-            FilterOperator operator,
-
-            @NotNull
-            @Size(min = 1, max = 50)
-            List<@NotBlank @Size(max = 256) String> values) {
-    }
+            @NotBlank @Size(max = 64) String field,
+            @NotNull FilterOperator operator,
+            @NotNull @Size(min = 1, max = 50) List<@NotBlank @Size(max = 256) String> values) {}
 
     public record IpRequirement(
+            @NotNull IpRole role,
+            @NotNull IpMatchType matchType,
+            @NotNull @Size(min = 1, max = 20) List<@NotBlank @Size(max = 64) String> values) {}
 
-            @NotNull
-            IpRole role,
-
-            @NotNull
-            IpMatchType matchType,
-
-            @NotNull
-            @Size(min = 1, max = 20)
-            List<@NotBlank @Size(max = 64) String> values) {
-    }
-
-    public record TimeRange(
-
-            @NotNull
-            Instant start,
-
-            @NotNull
-            Instant end) {
-    }
+    public record TimeRange(@NotNull Instant start, @NotNull Instant end) {}
 
     public record SortRequirement(
-
-            @NotBlank
-            @Size(max = 64)
-            String field,
-
+            @NotBlank @Size(max = 64) String field,
             Aggregation aggregation,
-
-            @NotNull
-            SortDirection direction) {
-    }
+            @NotNull SortDirection direction) {}
 
     public enum Aggregation {
         NONE,

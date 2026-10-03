@@ -1,9 +1,9 @@
 package com.nimbo.analyticsquery.controller;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nimbo.analyticsquery.support.RestApiTestServerExtension;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.Objects;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,9 +18,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-import java.util.Objects;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import com.nimbo.analyticsquery.support.RestApiTestServerExtension;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -29,12 +31,10 @@ class AnalyticsControllerIT {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @RegisterExtension
-    static final RestApiTestServerExtension LLM =
-            new RestApiTestServerExtension();
+    static final RestApiTestServerExtension LLM = new RestApiTestServerExtension();
 
     @RegisterExtension
-    static final RestApiTestServerExtension REST_API =
-            new RestApiTestServerExtension();
+    static final RestApiTestServerExtension REST_API = new RestApiTestServerExtension();
 
     @DynamicPropertySource
     static void dependencies(DynamicPropertyRegistry registry) {
@@ -43,25 +43,24 @@ class AnalyticsControllerIT {
         registry.add("rest-api.base-url", () -> REST_API.baseUrl().toString());
     }
 
-    @Autowired
-    private TestRestTemplate restTemplate;
+    @Autowired private TestRestTemplate restTemplate;
 
     @Test
     void givenSupportedAnalyticsQuestionWhenQueryEndpointIsCalledThenToolDataIsReturned() {
         // Given: a supported question with valid LLM intent and REST data
         LLM.respondWith(200, llmResponse(successfulTrafficIntent()));
         REST_API.respondWith(200, trafficResponse());
-        HttpEntity<String> request = jsonRequest("""
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "question": "Show traffic windows from the last hour"
                 }
                 """);
 
         // When: the analytics query endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/query",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
         // Then: the complete tool-first path returns normalized PostgreSQL data
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -80,17 +79,17 @@ class AnalyticsControllerIT {
     void givenTerminalIntentWhenQueryEndpointIsCalledThenExecutionStopsBeforeRestApi() {
         // Given: an out-of-scope intent returned by the LLM
         LLM.respondWith(200, llmResponse(outOfScopeIntent()));
-        HttpEntity<String> request = jsonRequest("""
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "question": "Who won the football match?"
                 }
                 """);
 
         // When: the analytics query endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/query",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
         // Then: the controlled status is returned without executing a tool
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -103,17 +102,17 @@ class AnalyticsControllerIT {
     void givenIncompleteQuestionWhenQueryEndpointIsCalledThenClarificationQuestionIsReturned() {
         // Given: an incomplete request and the LLM clarification intent
         LLM.respondWith(200, llmResponse(clarificationIntent()));
-        HttpEntity<String> request = jsonRequest("""
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "question": "Show traffic for 10.0.0.1"
                 }
                 """);
 
         // When: the analytics query endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/query",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
         // Then: the user receives the specific question without tool execution
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -127,24 +126,24 @@ class AnalyticsControllerIT {
     void givenIntentWithoutMatchingToolWhenQueryEndpointIsCalledThenUnsupportedIsReturned() {
         // Given: a valid NetFlow intent unsupported by the current tools
         LLM.respondWith(200, llmResponse(unsupportedIntent()));
-        HttpEntity<String> request = jsonRequest("""
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "question": "Sum inbound bytes by source IP during the last hour"
                 }
                 """);
 
         // When: the analytics query endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/query",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
-        // Then: Day 2 reports unsupported without invoking the REST API
+        // Then: SQL fallback routes and stops before generation without invoking REST
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         JsonNode body = requireBody(response);
         assertThat(body.path("status").asText()).isEqualTo("UNSUPPORTED_ANALYSIS");
         assertThat(body.path("message").asText())
-                .isEqualTo("No supported analytics capability found");
+                .isEqualTo("SQL generation is not implemented yet");
         assertThat(REST_API.requestCount()).isZero();
     }
 
@@ -152,23 +151,25 @@ class AnalyticsControllerIT {
     void givenSupportedQuestionWithoutDataWhenQueryEndpointIsCalledThenEmptySuccessIsReturned() {
         // Given: a supported intent and the REST API no-data response
         LLM.respondWith(200, llmResponse(successfulTrafficIntent()));
-        REST_API.respondWith(404, """
+        REST_API.respondWith(
+                404,
+                """
                 {
                   "success": false,
                   "message": "No traffic data found"
                 }
                 """);
-        HttpEntity<String> request = jsonRequest("""
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "question": "Show traffic windows from the last hour"
                 }
                 """);
 
         // When: the analytics query endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/query",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
         // Then: no data remains a successful empty tool result
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -186,10 +187,8 @@ class AnalyticsControllerIT {
         HttpEntity<String> request = analyticsQuestion();
 
         // When: the analytics query endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/query",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
         // Then: a controlled dependency status is returned without tool execution
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -207,10 +206,8 @@ class AnalyticsControllerIT {
         HttpEntity<String> request = analyticsQuestion();
 
         // When: the analytics query endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/query",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
         // Then: invalid model output is controlled without tool execution
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -227,10 +224,8 @@ class AnalyticsControllerIT {
         HttpEntity<String> request = analyticsQuestion();
 
         // When: the analytics query endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/query",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
         // Then: incomplete model output is controlled without tool execution
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -243,17 +238,17 @@ class AnalyticsControllerIT {
     @Test
     void givenBlankAnalyticsQuestionWhenQueryEndpointIsCalledThenBadRequestIsReturned() {
         // Given: an analytics request with a blank question
-        HttpEntity<String> request = jsonRequest("""
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "question": ""
                 }
                 """);
 
         // When: the analytics query endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/query",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
         // Then: request validation rejects the blank question
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -267,85 +262,153 @@ class AnalyticsControllerIT {
     @Test
     void givenMalformedJsonWhenQueryEndpointIsCalledThenBadRequestIsReturned() {
         // Given: malformed JSON for an analytics query
-        HttpEntity<String> request = jsonRequest("""
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "question":
                 }
                 """);
 
         // When: the analytics query endpoint receives the malformed request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/query",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
         // Then: malformed JSON is rejected with the expected API error
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
         JsonNode body = requireBody(response);
         assertThat(body.path("status").asInt()).isEqualTo(400);
-        assertThat(body.path("message").asText())
-                .isEqualTo("Malformed JSON request");
+        assertThat(body.path("message").asText()).isEqualTo("Malformed JSON request");
     }
 
     @Test
-    void givenValidSqlGenerationQuestionWhenGenerateEndpointIsCalledThenNotImplementedIsReturned() {
-        // Given: a valid SQL generation request
-        HttpEntity<String> request = jsonRequest("""
+    void givenEligibleQuestionWhenGenerateEndpointIsCalledThenValidatedSqlIsReturned() {
+        // Given: an eligible intent followed by SQL for its routed PostgreSQL table
+        LLM.respondWithSequence(
+                llmResponse(unsupportedIntent()),
+                llmResponse(generatedPostgresqlSql()));
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "question": "Show the top source IPs in the last hour"
                 }
                 """);
 
         // When: the SQL generation endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/sql/generate",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/sql/generate", request, JsonNode.class);
 
-        // Then: the endpoint reports that SQL generation is not implemented yet
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_IMPLEMENTED);
-        assertThat(requireBody(response).path("status").asInt()).isEqualTo(501);
+        // Then: validated SQL is returned without calling the REST API
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = requireBody(response);
+        assertThat(body.path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(body.path("dataSource").asText()).isEqualTo("POSTGRESQL");
+        assertThat(body.path("sql").asText())
+                .isEqualTo(
+                        "SELECT src_ip, SUM(in_bytes) FROM traffic_aggregates "
+                                + "GROUP BY src_ip LIMIT 10");
+        assertThat(LLM.requestCount()).isEqualTo(2);
+        assertThat(REST_API.requestCount()).isZero();
+    }
+
+    @Test
+    void givenGeneratedSqlForUnknownTableWhenGenerateEndpointIsCalledThenQueryIsRejected() {
+        // Given: an eligible intent followed by SQL referencing an unapproved table
+        LLM.respondWithSequence(
+                llmResponse(unsupportedIntent()),
+                llmResponse(
+                        """
+                        {
+                          "dataSource": "POSTGRESQL",
+                          "sql": "SELECT src_ip FROM secret_table"
+                        }
+                        """));
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
+                {
+                  "question": "Show the top source IPs in the last hour"
+                }
+                """);
+
+        // When: the SQL generation endpoint validates the generated statement
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/sql/generate", request, JsonNode.class);
+
+        // Then: validation fails closed and no query is executed
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = requireBody(response);
+        assertThat(body.path("status").asText()).isEqualTo("QUERY_REJECTED");
+        assertThat(body.path("message").asText())
+                .isEqualTo("Generated SQL did not satisfy the query safety policy");
+        assertThat(body.has("sql")).isFalse();
+        assertThat(LLM.requestCount()).isEqualTo(2);
+        assertThat(REST_API.requestCount()).isZero();
+    }
+
+    @Test
+    void givenOutOfScopeIntentWhenGenerateEndpointIsCalledThenGenerationStops() {
+        // Given: an out-of-scope intent returned by the interpretation call
+        LLM.respondWith(200, llmResponse(outOfScopeIntent()));
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
+                {
+                  "question": "Who won the football match?"
+                }
+                """);
+
+        // When: the SQL generation endpoint receives the request
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/sql/generate", request, JsonNode.class);
+
+        // Then: the controlled status returns before routing or SQL generation
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = requireBody(response);
+        assertThat(body.path("status").asText()).isEqualTo("OUT_OF_SCOPE");
+        assertThat(body.path("message").asText())
+                .isEqualTo("Analytics request cannot be converted to SQL");
+        assertThat(LLM.requestCount()).isEqualTo(1);
+        assertThat(REST_API.requestCount()).isZero();
     }
 
     @Test
     void givenBlankSqlGenerationQuestionWhenGenerateEndpointIsCalledThenBadRequestIsReturned() {
         // Given: a SQL generation request with a blank question
-        HttpEntity<String> request = jsonRequest("""
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "question": " "
                 }
                 """);
 
         // When: the SQL generation endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/sql/generate",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/sql/generate", request, JsonNode.class);
 
         // Then: request validation rejects the blank question
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(requireBody(response)
-                .path("violations")
-                .path("question")
-                .asText())
+        assertThat(requireBody(response).path("violations").path("question").asText())
                 .isEqualTo("Question must not be blank");
     }
 
     @Test
     void givenValidSqlWhenExecuteEndpointIsCalledThenNotImplementedIsReturned() {
         // Given: a valid SQL execution request
-        HttpEntity<String> request = jsonRequest("""
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "sql": "SELECT * FROM traffic_aggregates LIMIT 10"
                 }
                 """);
 
         // When: the SQL execution endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/sql/execute",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
 
         // Then: the endpoint reports that SQL execution is not implemented yet
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_IMPLEMENTED);
@@ -355,24 +418,21 @@ class AnalyticsControllerIT {
     @Test
     void givenBlankSqlWhenExecuteEndpointIsCalledThenBadRequestIsReturned() {
         // Given: a SQL execution request with blank SQL
-        HttpEntity<String> request = jsonRequest("""
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
                 {
                   "sql": ""
                 }
                 """);
 
         // When: the SQL execution endpoint receives the request
-        ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                "/analytics/sql/execute",
-                request,
-                JsonNode.class);
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
 
         // Then: request validation rejects the blank SQL
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(requireBody(response)
-                .path("violations")
-                .path("sql")
-                .asText())
+        assertThat(requireBody(response).path("violations").path("sql").asText())
                 .isEqualTo("SQL must not be blank");
     }
 
@@ -384,7 +444,8 @@ class AnalyticsControllerIT {
     }
 
     private HttpEntity<String> analyticsQuestion() {
-        return jsonRequest("""
+        return jsonRequest(
+                """
                 {
                   "question": "Show traffic windows from the last hour"
                 }
@@ -392,9 +453,7 @@ class AnalyticsControllerIT {
     }
 
     private JsonNode requireBody(ResponseEntity<JsonNode> response) {
-        return Objects.requireNonNull(
-                response.getBody(),
-                "Expected HTTP response body");
+        return Objects.requireNonNull(response.getBody(), "Expected HTTP response body");
     }
 
     private static String llmResponse(String intent) {
@@ -416,11 +475,11 @@ class AnalyticsControllerIT {
                         }
                       ]
                     }
-                    """.formatted(
-                    OBJECT_MAPPER.writeValueAsString(intent),
-                    finishReason);
+                    """
+                    .formatted(OBJECT_MAPPER.writeValueAsString(intent), finishReason);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Failed to build the deterministic LLM response", exception);
+            throw new IllegalStateException(
+                    "Failed to build the deterministic LLM response", exception);
         }
     }
 
@@ -576,6 +635,15 @@ class AnalyticsControllerIT {
                     }
                   ],
                   "timestamp": "2026-10-01T09:00:00Z"
+                }
+                """;
+    }
+
+    private static String generatedPostgresqlSql() {
+        return """
+                {
+                  "dataSource": "POSTGRESQL",
+                  "sql": "SELECT src_ip, SUM(in_bytes) FROM traffic_aggregates GROUP BY src_ip LIMIT 10"
                 }
                 """;
     }

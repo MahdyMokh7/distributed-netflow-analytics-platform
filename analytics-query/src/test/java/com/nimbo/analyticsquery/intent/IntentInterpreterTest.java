@@ -35,7 +35,7 @@ class IntentInterpreterTest {
                         Duration.ofSeconds(1)));
 
         CuratedSemanticSchemaCatalog catalog =
-                new CuratedSemanticSchemaCatalog();
+                new CuratedSemanticSchemaCatalog(java.util.List.of());
 
         validatorFactory = Validation.buildDefaultValidatorFactory();
 

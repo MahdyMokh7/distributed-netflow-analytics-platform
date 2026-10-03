@@ -28,6 +28,22 @@ analytics-query:
   intent:
     max-time-range: ${ANALYTICS_QUERY_MAX_TIME_RANGE:7d}
 
+  schema:
+    starrocks:
+      enabled: ${ANALYTICS_QUERY_STARROCKS_CATALOG_ENABLED:false}
+      jdbc-url: ${ANALYTICS_QUERY_STARROCKS_JDBC_URL:}
+      username: ${ANALYTICS_QUERY_STARROCKS_USERNAME:}
+      password: ${ANALYTICS_QUERY_STARROCKS_PASSWORD:}
+      database: ${ANALYTICS_QUERY_STARROCKS_DATABASE:nimbo}
+      table: ${ANALYTICS_QUERY_STARROCKS_TABLE:netflow}
+      refresh-interval: ${ANALYTICS_QUERY_STARROCKS_REFRESH_INTERVAL:15m}
+      connection-timeout: ${ANALYTICS_QUERY_STARROCKS_CONNECTION_TIMEOUT:5s}
+      pool-size: ${ANALYTICS_QUERY_STARROCKS_POOL_SIZE:2}
+      query-timeout-seconds: ${ANALYTICS_QUERY_STARROCKS_QUERY_TIMEOUT_SECONDS:10}
+
+  sql-generation:
+    max-sql-length: 20000
+
 llm:
   base-url: ${ANALYTICS_QUERY_LLM_BASE_URL:http://saca-api.inside.sahab.ir:3100}
   api-key: ${ANALYTICS_QUERY_LLM_API_KEY}

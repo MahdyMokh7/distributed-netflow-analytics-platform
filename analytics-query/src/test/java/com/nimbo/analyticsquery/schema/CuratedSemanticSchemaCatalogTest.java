@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CuratedSemanticSchemaCatalogTest {
 
     private final CuratedSemanticSchemaCatalog catalog =
-            new CuratedSemanticSchemaCatalog();
+            new CuratedSemanticSchemaCatalog(java.util.List.of());
 
     @Test
     void givenApprovedDimensionWhenLookedUpThenCapabilitiesAreReturned() {

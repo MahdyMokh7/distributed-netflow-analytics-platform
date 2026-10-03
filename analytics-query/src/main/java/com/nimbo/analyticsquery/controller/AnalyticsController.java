@@ -8,6 +8,7 @@ import com.nimbo.analyticsquery.dto.response.SqlExecutionResponse;
 import com.nimbo.analyticsquery.dto.response.SqlGenerationResponse;
 import com.nimbo.analyticsquery.exception.FeatureNotImplementedException;
 import com.nimbo.analyticsquery.planner.AnalyticsQueryService;
+import com.nimbo.analyticsquery.planner.SqlGenerationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -22,9 +23,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class AnalyticsController {
 
     private final AnalyticsQueryService analyticsQueryService;
+    private final SqlGenerationService sqlGenerationService;
 
-    public AnalyticsController(AnalyticsQueryService analyticsQueryService) {
+    public AnalyticsController(
+            AnalyticsQueryService analyticsQueryService,
+            SqlGenerationService sqlGenerationService) {
         this.analyticsQueryService = analyticsQueryService;
+        this.sqlGenerationService = sqlGenerationService;
     }
 
     @PostMapping("/query")
@@ -43,8 +48,7 @@ public class AnalyticsController {
                     + "without executing the query."
     )
     public SqlGenerationResponse generateSql(@Valid @RequestBody SqlGenerationRequest request) {
-
-        throw new FeatureNotImplementedException("SQL generation is not implemented yet");
+        return SqlGenerationResponse.from(sqlGenerationService.generate(request.question()));
     }
 
     @PostMapping("/sql/execute")

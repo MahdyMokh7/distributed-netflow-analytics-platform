@@ -251,7 +251,7 @@ Responsibilities:
 
 * parse it;
 * inspect the AST;
-* identify referenced relations;
+* identify referenced tables;
 * determine or verify the datasource;
 * enforce the same SQL policy used by generated SQL;
 * perform safety/cost checks;
@@ -427,7 +427,7 @@ If those conditions do not hold, return the relevant clarification, unsupported,
 
 # 9. Semantic schema contract
 
-The semantic catalog is application-owned metadata describing what the available relations mean.
+The semantic catalog is application-owned metadata describing what the available tables mean.
 
 ### PostgreSQL
 
@@ -447,7 +447,7 @@ The V1 catalog includes:
 Each catalog entry should describe:
 
 * datasource;
-* relation;
+* table;
 * columns;
 * types;
 * grain;
@@ -487,9 +487,9 @@ The selected datasource's schema is then the only schema included in the SQL-gen
 
 # 11. SQL generation contract
 
-For PostgreSQL-selected requests, the LLM receives only approved PostgreSQL analytics relations and their semantics.
+For PostgreSQL-selected requests, the LLM receives only approved PostgreSQL analytics tables and their semantics.
 
-For StarRocks-selected requests, it receives only approved StarRocks relations and their semantics.
+For StarRocks-selected requests, it receives only approved StarRocks tables and their semantics.
 
 The LLM produces a candidate query.
 
@@ -520,7 +520,7 @@ The AST-based validator must ensure at minimum:
 * no prohibited procedure/function calls;
 * no dangerous copy/import operations;
 * no system/catalog access;
-* only allowlisted relations;
+* only allowlisted tables;
 * no cross-PostgreSQL/StarRocks query;
 * allowed functions;
 * allowed joins;
@@ -1179,9 +1179,9 @@ Build the authoritative semantic description of:
 
 * `nimbo.netflow`.
 
-For every relation document:
+For every table document:
 
-* exact table/relation name;
+* exact table name;
 * datasource;
 * available columns;
 * SQL types;
@@ -1190,7 +1190,7 @@ For every relation document:
 * timestamp column;
 * available dimensions;
 * available metrics;
-* meaningful relationships;
+* meaningful table relationships;
 * analyses that can/cannot be answered correctly.
 
 Do not expose staging tables, state tables, PostgreSQL catalogs or unrelated schemas.
@@ -1198,9 +1198,9 @@ Do not expose staging tables, state tables, PostgreSQL catalogs or unrelated sch
 Use two catalog sources behind the same semantic-catalog contract:
 
 * PostgreSQL aggregate metadata is curated and fixed from the final migrated cube schema owned by this project.
-* StarRocks physical table/column metadata is discovered from `INFORMATION_SCHEMA` at startup and refreshed on a controlled interval or explicit refresh.
+* StarRocks physical table/column metadata is discovered from `INFORMATION_SCHEMA` at startup and every 15 minutes by default.
 
-StarRocks discovery must be intersected with application-owned semantic metadata and an allowlist. A newly discovered physical column is not automatically available to the LLM or SQL executor. Publish refreshed catalog snapshots atomically, and retain the last known-good snapshot if a periodic refresh fails.
+StarRocks remains authoritative for physical column existence, SQL type and nullability. Column comments are used as meanings when available; otherwise meanings and conservative semantic roles are derived deterministically from established NetFlow naming conventions. Optional application-owned overrides are reserved for exceptional or ambiguous fields rather than required for every column. Columns whose role cannot be inferred safely are not exposed. Publish changed catalog snapshots atomically, and retain the last known-good snapshot if a periodic refresh fails.
 
 ---
 
@@ -1215,12 +1215,16 @@ Requirements can describe:
 * filters;
 * IP, source, destination and direction semantics;
 * distinct-count needs;
-* raw versus aggregated granularity;
+* grouping and optional temporal bucket granularity;
 * requested time range;
 * sorting/ranking;
 * limits.
 
 Use a small typed vocabulary for dimensions, metrics, granularity, aggregation and time range rather than matching words in the original question. `QueryRequirements` is the validated object passed from intent interpretation to the planner and datasource router.
+
+Do not add a raw-versus-aggregated datasource hint to `QueryRequirements`.
+Phase 3.4 determines whether a table preserves the requested semantics by
+comparing these requirements with the catalog's table grain and fields.
 
 ---
 
@@ -1263,8 +1267,7 @@ Add comprehensive routing tests because incorrect routing can produce logically 
 After routing, construct a context containing only:
 
 * selected datasource;
-* selected SQL dialect;
-* allowlisted relations for that datasource;
+* allowlisted tables for that datasource;
 * allowlisted columns;
 * column meanings;
 * grain;
@@ -1287,8 +1290,8 @@ Requirements:
 * enforce maximum generated SQL size;
 * explicit instruction for one read-only query;
 * no schema discovery;
-* only catalog-approved relations and columns;
-* no invented relations or columns.
+* only catalog-approved tables and columns;
+* no invented tables or columns.
 
 ---
 
@@ -1313,8 +1316,8 @@ Parse generated SQL and verify:
 * one statement;
 * supported query statement type;
 * referenced tables can be extracted;
-* all relations belong to the selected datasource;
-* no unknown relations.
+* all tables belong to the selected datasource;
+* no unknown tables.
 
 Full policy and execution hardening continue Day 4.
 
@@ -1429,7 +1432,7 @@ Endpoint flow:
 ```text
 submitted SQL
 → parse
-→ extract relations
+→ extract tables
 → identify/verify datasource
 → policy validation
 → EXPLAIN check
@@ -1706,6 +1709,36 @@ Include:
 
 If Persian support is a project requirement, include both Persian and English before release.
 
+### Phase 5.11 — StarRocks semantic comment enrichment
+
+Make `starrocks-writer`, as the owner of the StarRocks ingestion schema, enrich
+`nimbo.netflow` column comments from the active NetFlow Avro schema in Schema
+Registry.
+
+Requirements:
+
+* use the configured Schema Registry URL and subject rather than copying the
+  bundled initial Avro schema into `analytics-query`;
+* match registered Avro fields to physical StarRocks columns by their normalized
+  names and use each field's Avro `doc` as its column comment;
+* define application-owned comments for Kafka metadata columns that are not part
+  of the Avro record;
+* include comments when creating new columns and idempotently reconcile missing
+  or changed comments on existing columns as part of the writer's schema
+  creation/evolution flow;
+* keep compatibility and type-evolution policy in the writer rather than
+  duplicating it in `analytics-query`, and do not allow comment-enrichment
+  failure to stop ingestion;
+* retry failed comment reconciliation on the next controlled schema refresh and
+  expose a bounded warning or metric;
+* verify initial comments, newly added fields and updated Avro documentation with
+  integration tests.
+
+StarRocks remains authoritative for physical column existence, type and
+nullability. `analytics-query` may prefer these comments as semantic meanings,
+but must retain its deterministic fallback for columns whose comments are absent
+during deployment, migration or schema-evolution windows.
+
 ### Day 5 exit criteria
 
 * functional flows are hardened;
@@ -1924,7 +1957,7 @@ Verify, in order:
 8. `/sql/generate` returns safe SQL;
 9. `/sql/execute` executes permitted SQL;
 10. destructive SQL is rejected;
-11. unknown relations are rejected;
+11. unknown tables are rejected;
 12. explanation appears on successful request;
 13. forced explanation failure still returns data;
 14. Prometheus target is healthy;

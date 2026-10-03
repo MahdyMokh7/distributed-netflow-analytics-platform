@@ -14,6 +14,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,6 +23,8 @@ public final class RestApiTestServerExtension
         implements BeforeAllCallback, BeforeEachCallback, AfterEachCallback, AfterAllCallback {
 
     private final AtomicInteger requestCount = new AtomicInteger();
+    private final ConcurrentLinkedQueue<ConfiguredResponse> responses =
+            new ConcurrentLinkedQueue<>();
 
     private HttpServer server;
     private volatile int responseStatus;
@@ -38,6 +41,7 @@ public final class RestApiTestServerExtension
         releaseResponse();
         responseRelease = new CountDownLatch(0);
         requestCount.set(0);
+        responses.clear();
         respondWith(500, """
                 {
                   "success": false,
@@ -77,6 +81,13 @@ public final class RestApiTestServerExtension
         responseBody = body.getBytes(StandardCharsets.UTF_8);
     }
 
+    public void respondWithSequence(String... bodies) {
+        responses.clear();
+        for (String body : bodies) {
+            responses.add(new ConfiguredResponse(200, body.getBytes(StandardCharsets.UTF_8)));
+        }
+    }
+
     public void holdResponse() {
         responseRelease = new CountDownLatch(1);
     }
@@ -96,10 +107,14 @@ public final class RestApiTestServerExtension
             return;
         }
 
+        ConfiguredResponse configured = responses.poll();
+        int status = configured == null ? responseStatus : configured.status();
+        byte[] responseBytes = configured == null ? responseBody : configured.body();
+
         exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(responseStatus, responseBody.length);
+        exchange.sendResponseHeaders(status, responseBytes.length);
         try (var body = exchange.getResponseBody()) {
-            body.write(responseBody);
+            body.write(responseBytes);
         } finally {
             exchange.close();
         }
@@ -120,4 +135,6 @@ public final class RestApiTestServerExtension
             throw new UncheckedIOException("Failed to start the test HTTP server", exception);
         }
     }
+
+    private record ConfiguredResponse(int status, byte[] body) {}
 }

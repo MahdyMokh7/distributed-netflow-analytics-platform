@@ -55,7 +55,7 @@ class IntentValidatorTest {
 
         validator = new IntentValidator(
                 validatorFactory.getValidator(),
-                new CuratedSemanticSchemaCatalog(),
+                new CuratedSemanticSchemaCatalog(java.util.List.of()),
                 Clock.fixed(CURRENT_TIME, ZoneOffset.UTC),
                 new IntentProperties(Duration.ofDays(7)));
     }
