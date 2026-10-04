@@ -5,8 +5,8 @@ import java.util.stream.Collectors;
 
 import com.nimbo.backfill.config.BackfillConfig;
 import com.nimbo.backfill.model.BackfillProjection;
-import com.nimbo.backfill.model.BackfillProjection.HdfsPathProjection;
 import com.nimbo.backfill.model.DailyBackfillPlan;
+import com.nimbo.backfill.model.HdfsPathColumnMapping;
 
 public final class NetflowBackfillSql {
 
@@ -14,19 +14,19 @@ public final class NetflowBackfillSql {
     }
 
     public static String describeTable(BackfillConfig config) {
-        return "DESC " + qualifiedTable(config);
+        return "DESC " + starRocksTable(config);
     }
 
     public static String describeHdfs(BackfillConfig config, String path) {
         return "DESC " + files(config, path);
     }
 
-    public static String temporaryPartitionExists(BackfillConfig config, DailyBackfillPlan plan) {
-        return "SHOW TEMPORARY PARTITIONS FROM " + qualifiedTable(config) + " WHERE PartitionName = "
-                + literal(plan.temporaryPartition());
+    public static String stagingPartitionExists(BackfillConfig config, DailyBackfillPlan plan) {
+        return "SHOW TEMPORARY PARTITIONS FROM " + starRocksTable(config) + " WHERE PartitionName = "
+                + literal(plan.stagingPartitionName());
     }
 
-    public static String sourceMetrics(BackfillConfig config, DailyBackfillPlan plan, String path) {
+    public static String sourceIntervalMetrics(BackfillConfig config, DailyBackfillPlan plan, String path) {
         return """
                 SELECT COUNT(*) AS row_count,
                        COALESCE(SUM(IN_BYTES), 0) AS in_bytes,
@@ -41,27 +41,29 @@ public final class NetflowBackfillSql {
                 """.formatted(files(config, path), plan.fromMicros(), plan.toMicros());
     }
 
-    public static String formalIntervalMetrics(BackfillConfig config, DailyBackfillPlan plan) {
+    public static String targetIntervalMetrics(BackfillConfig config, DailyBackfillPlan plan) {
         return destinationMetrics(config, "", plan);
     }
 
-    public static String temporaryIntervalMetrics(BackfillConfig config, DailyBackfillPlan plan) {
-        return destinationMetrics(config, "TEMPORARY PARTITION (" + identifier(plan.temporaryPartition()) + ")", plan);
+    public static String stagingIntervalMetrics(BackfillConfig config, DailyBackfillPlan plan) {
+        return destinationMetrics(config,
+                "TEMPORARY PARTITION (" + identifier(plan.stagingPartitionName()) + ")", plan);
     }
 
-    public static String dropTemporaryPartition(BackfillConfig config, DailyBackfillPlan plan) {
-        return "ALTER TABLE " + qualifiedTable(config) + " DROP TEMPORARY PARTITION "
-                + identifier(plan.temporaryPartition());
+    public static String dropStagingPartition(BackfillConfig config, DailyBackfillPlan plan) {
+        return "ALTER TABLE " + starRocksTable(config) + " DROP TEMPORARY PARTITION "
+                + identifier(plan.stagingPartitionName());
     }
 
-    public static String createTemporaryPartition(BackfillConfig config, DailyBackfillPlan plan) {
-        return "ALTER TABLE " + qualifiedTable(config) + " ADD TEMPORARY PARTITION "
-                + identifier(plan.temporaryPartition()) + " VALUES IN ((" + literal(plan.day() + " 00:00:00") + "))";
+    public static String createStagingPartition(BackfillConfig config, DailyBackfillPlan plan) {
+        return "ALTER TABLE " + starRocksTable(config) + " ADD TEMPORARY PARTITION "
+                + identifier(plan.stagingPartitionName()) + " VALUES IN ((" + literal(plan.day() + " 00:00:00")
+                + "))";
     }
 
-    public static String copyTemporaryIntervalIntoFormal(BackfillConfig config, DailyBackfillPlan plan,
+    public static String publishStagedInterval(BackfillConfig config, DailyBackfillPlan plan,
             BackfillProjection projection) {
-        String columns = columns(projection.tableColumns());
+        String columns = columns(projection.starRocksColumnNames());
         return """
                 INSERT INTO %s (
                 %s
@@ -71,55 +73,57 @@ public final class NetflowBackfillSql {
                 FROM %s TEMPORARY PARTITION (%s)
                 WHERE kafka_timestamp >= %d
                   AND kafka_timestamp < %d
-                """.formatted(qualifiedTable(config), columns, columns, qualifiedTable(config),
-                identifier(plan.temporaryPartition()), plan.fromMillis(), plan.toMillis());
+                """.formatted(starRocksTable(config), columns, columns, starRocksTable(config),
+                identifier(plan.stagingPartitionName()), plan.fromMillis(), plan.toMillis());
     }
 
-    public static String deleteFormalInterval(BackfillConfig config, DailyBackfillPlan plan) {
+    public static String deleteTargetInterval(BackfillConfig config, DailyBackfillPlan plan) {
         return """
                 DELETE FROM %s
                 WHERE kafka_timestamp >= %d
                   AND kafka_timestamp < %d
-                """.formatted(qualifiedTable(config), plan.fromMillis(), plan.toMillis());
+                """.formatted(starRocksTable(config), plan.fromMillis(), plan.toMillis());
     }
 
-    public static String loadHdfs(BackfillConfig config, DailyBackfillPlan plan, BackfillProjection projection) {
-        return insertFromHdfs(config, " TEMPORARY PARTITION (" + identifier(plan.temporaryPartition()) + ")", plan,
-                projection);
+    public static String loadSourceIntoStaging(BackfillConfig config, DailyBackfillPlan plan,
+            BackfillProjection projection) {
+        return insertFromHdfs(config,
+                " TEMPORARY PARTITION (" + identifier(plan.stagingPartitionName()) + ")", plan, projection);
     }
 
-    public static String validateHdfsProjection(BackfillConfig config, DailyBackfillPlan plan,
-            HdfsPathProjection pathProjection) {
-        return hdfsSelect(config, plan, pathProjection) + "LIMIT 1";
+    public static String validateSourceProjection(BackfillConfig config, DailyBackfillPlan plan,
+            HdfsPathColumnMapping hdfsColumnMapping) {
+        return hdfsSelect(config, plan, hdfsColumnMapping) + "LIMIT 1";
     }
 
-    public static String qualifiedTable(BackfillConfig config) {
+    public static String starRocksTable(BackfillConfig config) {
         return identifier(config.database()) + "." + identifier(config.table());
     }
 
     private static String insertFromHdfs(BackfillConfig config, String partitionClause, DailyBackfillPlan plan,
             BackfillProjection projection) {
-        String selects = projection.pathProjections().stream()
-                .map(pathProjection -> hdfsSelect(config, plan, pathProjection))
+        String selects = projection.hdfsColumnMappings().stream()
+                .map(hdfsColumnMapping -> hdfsSelect(config, plan, hdfsColumnMapping))
                 .collect(Collectors.joining("UNION ALL\n"));
         return """
                 INSERT INTO %s%s (
                 %s
                 )
                 %s
-                """.formatted(qualifiedTable(config), partitionClause, columns(projection.tableColumns()), selects);
+                """.formatted(starRocksTable(config), partitionClause,
+                columns(projection.starRocksColumnNames()), selects);
     }
 
     private static String hdfsSelect(BackfillConfig config, DailyBackfillPlan plan,
-            HdfsPathProjection pathProjection) {
+            HdfsPathColumnMapping hdfsColumnMapping) {
         return """
                 SELECT
                 %s
                 FROM %s
                 WHERE PROCESS_TIME >= %d
                   AND PROCESS_TIME < %d
-                """.formatted(String.join(",\n", pathProjection.expressions()),
-                files(config, pathProjection.path()), plan.fromMicros(), plan.toMicros());
+                """.formatted(String.join(",\n", hdfsColumnMapping.expressions()),
+                files(config, hdfsColumnMapping.path()), plan.fromMicros(), plan.toMicros());
     }
 
     private static String destinationMetrics(BackfillConfig config, String partitionClause, DailyBackfillPlan plan) {
@@ -134,7 +138,7 @@ public final class NetflowBackfillSql {
                 FROM %s %s
                 WHERE kafka_timestamp >= %d
                   AND kafka_timestamp < %d
-                """.formatted(qualifiedTable(config), partitionClause, plan.fromMillis(), plan.toMillis());
+                """.formatted(starRocksTable(config), partitionClause, plan.fromMillis(), plan.toMillis());
     }
 
     private static String files(BackfillConfig config, String path) {

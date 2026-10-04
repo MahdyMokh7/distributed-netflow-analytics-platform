@@ -8,27 +8,27 @@ import com.nimbo.backfill.model.DailyBackfillPlan;
 
 public interface BackfillRepository {
 
-    boolean temporaryPartitionExists(DailyBackfillPlan plan) throws SQLException;
+    boolean stagingPartitionExists(DailyBackfillPlan plan) throws SQLException;
 
-    BackfillProjection prepareProjection(DailyBackfillPlan plan) throws SQLException;
+    BackfillProjection buildBackfillProjection(DailyBackfillPlan plan) throws SQLException;
 
-    BackfillMetrics readHdfsIntervalMetrics(DailyBackfillPlan plan, BackfillProjection projection)
+    BackfillMetrics readSourceIntervalMetrics(DailyBackfillPlan plan, BackfillProjection projection)
             throws SQLException;
 
-    void validateHdfsProjection(DailyBackfillPlan plan, BackfillProjection projection) throws SQLException;
+    void validateSourceProjections(DailyBackfillPlan plan, BackfillProjection projection) throws SQLException;
 
-    BackfillMetrics readFormalIntervalMetrics(DailyBackfillPlan plan) throws SQLException;
+    BackfillMetrics readTargetIntervalMetrics(DailyBackfillPlan plan) throws SQLException;
 
-    BackfillMetrics readTemporaryIntervalMetrics(DailyBackfillPlan plan) throws SQLException;
+    BackfillMetrics readStagingIntervalMetrics(DailyBackfillPlan plan) throws SQLException;
 
-    void dropTemporaryPartition(DailyBackfillPlan plan) throws SQLException;
+    void dropStagingPartition(DailyBackfillPlan plan) throws SQLException;
 
-    void createTemporaryPartition(DailyBackfillPlan plan) throws SQLException;
+    void createStagingPartition(DailyBackfillPlan plan) throws SQLException;
 
-    void loadHdfs(DailyBackfillPlan plan, BackfillProjection projection) throws SQLException;
+    void loadSourceIntoStaging(DailyBackfillPlan plan, BackfillProjection projection) throws SQLException;
 
-    void deleteFormalInterval(DailyBackfillPlan plan) throws SQLException;
+    void deleteTargetInterval(DailyBackfillPlan plan) throws SQLException;
 
-    void copyTemporaryIntervalIntoFormal(DailyBackfillPlan plan, BackfillProjection projection) throws SQLException;
+    void publishStagedInterval(DailyBackfillPlan plan, BackfillProjection projection) throws SQLException;
 
 }

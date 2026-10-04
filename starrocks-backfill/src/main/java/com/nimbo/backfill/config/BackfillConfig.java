@@ -33,12 +33,6 @@ public record BackfillConfig(String jdbcUrl, String username, String password, S
                 || !Instant.ofEpochMilli(to.toEpochMilli()).equals(to)) {
             throw new BackfillException("Backfill timestamps must have millisecond precision");
         }
-
-        LocalDate firstDay = from.atZone(ZoneOffset.UTC).toLocalDate();
-        LocalDate lastDay = to.minusNanos(1).atZone(ZoneOffset.UTC).toLocalDate();
-        if (!firstDay.equals(lastDay)) {
-            throw new BackfillException("One backfill execution must stay inside one UTC day");
-        }
     }
 
     public static BackfillConfig fromEnvironment(Map<String, String> environment, Clock clock) {

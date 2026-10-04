@@ -10,6 +10,7 @@ import com.nimbo.backfill.model.BackfillMetrics;
 import com.nimbo.backfill.model.BackfillMode;
 import com.nimbo.backfill.model.BackfillProjection;
 import com.nimbo.backfill.model.DailyBackfillPlan;
+import com.nimbo.backfill.model.HdfsPathColumnMapping;
 import com.nimbo.backfill.repository.BackfillRepository;
 
 public final class BackfillService {
@@ -23,21 +24,21 @@ public final class BackfillService {
     }
 
     public void run(DailyBackfillPlan plan) throws SQLException {
-        BackfillProjection projection = repository.prepareProjection(plan);
-        BackfillMetrics hdfsIntervalMetrics = repository.readHdfsIntervalMetrics(plan, projection);
+        BackfillProjection projection = repository.buildBackfillProjection(plan);
+        BackfillMetrics sourceIntervalMetrics = repository.readSourceIntervalMetrics(plan, projection);
 
-        if (hdfsIntervalMetrics.rowCount() == 0) {
+        if (sourceIntervalMetrics.rowCount() == 0) {
             throw new BackfillException("No HDFS records were found in the requested interval");
         }
-        repository.validateHdfsProjection(plan, projection);
+        repository.validateSourceProjections(plan, projection);
 
-        BackfillMetrics starRocksIntervalMetrics = repository.readFormalIntervalMetrics(plan);
-        printPlan(plan, projection, hdfsIntervalMetrics, starRocksIntervalMetrics);
-        if (plan.mode() == BackfillMode.EXECUTE && repository.temporaryPartitionExists(plan)) {
-            LOGGER.info("Dropping stale temporary partition: {}", plan.temporaryPartition());
-            repository.dropTemporaryPartition(plan);
+        BackfillMetrics targetIntervalMetrics = repository.readTargetIntervalMetrics(plan);
+        printPlan(plan, projection, sourceIntervalMetrics, targetIntervalMetrics);
+        if (plan.mode() == BackfillMode.EXECUTE && repository.stagingPartitionExists(plan)) {
+            LOGGER.info("Dropping stale temporary partition: {}", plan.stagingPartitionName());
+            repository.dropStagingPartition(plan);
         }
-        if (hdfsIntervalMetrics.sameDataAs(starRocksIntervalMetrics)) {
+        if (sourceIntervalMetrics.sameDataAs(targetIntervalMetrics)) {
             LOGGER.info("SKIP: HDFS and StarRocks interval metrics already match; no data was changed");
             return;
         }
@@ -46,72 +47,71 @@ public final class BackfillService {
             return;
         }
 
-        BackfillMetrics publishedStarRocksMetrics = stageAndReplaceInterval(plan, projection, hdfsIntervalMetrics);
-        LOGGER.info("EXECUTE completed successfully: {}", publishedStarRocksMetrics.summary());
+        BackfillMetrics publishedTargetMetrics = stageAndReplaceInterval(plan, projection, sourceIntervalMetrics);
+        LOGGER.info("EXECUTE completed successfully: {}", publishedTargetMetrics.summary());
     }
 
     private BackfillMetrics stageAndReplaceInterval(DailyBackfillPlan plan, BackfillProjection projection,
-        BackfillMetrics hdfsIntervalMetrics) throws SQLException {
-        boolean temporaryCreated = false;
-        boolean deleteStarted = false;
+            BackfillMetrics sourceIntervalMetrics) throws SQLException {
+        boolean stagingPartitionCreated = false;
+        boolean targetDeleteStarted = false;
         try {
-            repository.createTemporaryPartition(plan);
-            temporaryCreated = true;
-            repository.loadHdfs(plan, projection);
+            repository.createStagingPartition(plan);
+            stagingPartitionCreated = true;
+            repository.loadSourceIntoStaging(plan, projection);
 
-            BackfillMetrics stagedIntervalMetrics = repository.readTemporaryIntervalMetrics(plan);
-            verifyMetrics("HDFS and temporary partition interval", hdfsIntervalMetrics, stagedIntervalMetrics);
+            BackfillMetrics stagingIntervalMetrics = repository.readStagingIntervalMetrics(plan);
+            verifyMetrics("HDFS and temporary partition interval", sourceIntervalMetrics, stagingIntervalMetrics);
 
             LOGGER.info("Staged interval validated; deleting and inserting only the requested interval");
-            deleteStarted = true;
-            repository.deleteFormalInterval(plan);
-            repository.copyTemporaryIntervalIntoFormal(plan, projection);
+            targetDeleteStarted = true;
+            repository.deleteTargetInterval(plan);
+            repository.publishStagedInterval(plan, projection);
 
-            BackfillMetrics publishedStarRocksMetrics = repository.readFormalIntervalMetrics(plan);
-            verifyMetrics("HDFS and published StarRocks interval", hdfsIntervalMetrics,
-                    publishedStarRocksMetrics);
-            repository.dropTemporaryPartition(plan);
-            temporaryCreated = false;
-            return publishedStarRocksMetrics;
+            BackfillMetrics publishedTargetMetrics = repository.readTargetIntervalMetrics(plan);
+            verifyMetrics("HDFS and published StarRocks interval", sourceIntervalMetrics, publishedTargetMetrics);
+            repository.dropStagingPartition(plan);
+            stagingPartitionCreated = false;
+            return publishedTargetMetrics;
         } catch (BackfillException | SQLException exception) {
-            if (deleteStarted) {
+            if (targetDeleteStarted) {
                 LOGGER.warn("The interval update is non-atomic; rerun EXECUTE if this run did not finish");
             }
-            if (temporaryCreated) {
-                dropTemporaryAfterFailure(plan, exception);
+            if (stagingPartitionCreated) {
+                dropStagingAfterFailure(plan, exception);
             }
             throw exception;
         }
     }
 
-    private void dropTemporaryAfterFailure(DailyBackfillPlan plan, Exception original) {
+    private void dropStagingAfterFailure(DailyBackfillPlan plan, Exception original) {
         try {
-            repository.dropTemporaryPartition(plan);
-            LOGGER.info("Dropped incomplete temporary partition: {}", plan.temporaryPartition());
+            repository.dropStagingPartition(plan);
+            LOGGER.info("Dropped incomplete temporary partition: {}", plan.stagingPartitionName());
         } catch (SQLException cleanupFailure) {
             original.addSuppressed(cleanupFailure);
-            LOGGER.error("Could not drop incomplete temporary partition {}", plan.temporaryPartition(),
+            LOGGER.error("Could not drop incomplete temporary partition {}", plan.stagingPartitionName(),
                     cleanupFailure);
         }
     }
 
     private void printPlan(DailyBackfillPlan plan, BackfillProjection projection,
-            BackfillMetrics hdfsIntervalMetrics, BackfillMetrics starRocksIntervalMetrics) {
+            BackfillMetrics sourceIntervalMetrics, BackfillMetrics targetIntervalMetrics) {
         LOGGER.info("Backfill run: {}", plan.runId());
         LOGGER.info("Mode: {}", plan.mode());
         LOGGER.info("Interval: [{}, {})", plan.from(), plan.to());
-        LOGGER.info("Temporary partition: {}", plan.temporaryPartition());
-        LOGGER.info("HDFS paths: {}", projection.pathProjections().stream()
-                .map(BackfillProjection.HdfsPathProjection::path)
+        LOGGER.info("Temporary partition: {}", plan.stagingPartitionName());
+        LOGGER.info("HDFS paths: {}", projection.hdfsColumnMappings().stream()
+                .map(HdfsPathColumnMapping::path)
                 .collect(java.util.stream.Collectors.joining(", ")));
         if (!projection.skippedPaths().isEmpty()) {
             LOGGER.info("Skipped empty HDFS paths: {}", String.join(", ", projection.skippedPaths()));
         }
-        for (BackfillProjection.HdfsPathProjection pathProjection : projection.pathProjections()) {
-            LOGGER.info("Schema mapping for {}: {}", pathProjection.path(), pathProjection.summary());
+        for (HdfsPathColumnMapping hdfsColumnMapping : projection.hdfsColumnMappings()) {
+            LOGGER.info("Schema mapping for {}: {}", hdfsColumnMapping.path(), hdfsColumnMapping.mappingSummary());
         }
-        LOGGER.info("HDFS interval: {}", hdfsIntervalMetrics.summary());
-        LOGGER.info("Current StarRocks interval: {}", starRocksIntervalMetrics.summary());
+        LOGGER.info("HDFS interval: {}", sourceIntervalMetrics.summary());
+        LOGGER.info("Current StarRocks interval: {}", targetIntervalMetrics.summary());
     }
 
     private void verifyMetrics(String description, BackfillMetrics expected, BackfillMetrics actual) {
