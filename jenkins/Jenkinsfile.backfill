@@ -1,0 +1,109 @@
+pipeline {
+    agent {
+        docker {
+            label 'nimbo-nimbyte'
+            image 'maven:3.9-eclipse-temurin-17'
+            args '''
+                -v /home/team1/.m2:/home/team1/.m2
+                -v /opt/jdk-17.0.6/lib/security/cacerts:/certs/cacerts:ro
+                -v /etc/passwd:/etc/passwd:ro
+                -v /etc/group:/etc/group:ro
+            '''
+        }
+    }
+
+    options {
+        timestamps()
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timeout(time: 2, unit: 'HOURS')
+    }
+
+    parameters {
+        string(name: 'GERRIT_REFSPEC', defaultValue: 'refs/heads/master',
+                description: 'Gerrit ref to run, for example refs/changes/91/40091/4')
+        choice(name: 'BACKFILL_MODE', choices: ['PLAN', 'EXECUTE'],
+                description: 'PLAN only inspects and compares. EXECUTE may replace the selected interval.')
+        string(name: 'BACKFILL_FROM', defaultValue: '',
+                description: 'Inclusive UTC start, for example 2026-09-26T10:00:00Z')
+        string(name: 'BACKFILL_TO', defaultValue: '',
+                description: 'Exclusive UTC end, inside the same UTC day')
+        string(name: 'BACKFILL_RETENTION_DAYS', defaultValue: '7',
+                description: 'Must match the StarRocks target table retention')
+        string(name: 'STARROCKS_JDBC_URL', defaultValue: 'jdbc:mysql://10.10.61.53:9030/nimbo',
+                description: 'StarRocks JDBC URL')
+        string(name: 'STARROCKS_USERNAME', defaultValue: 'root',
+                description: 'StarRocks user with backfill permissions')
+        password(name: 'STARROCKS_PASSWORD', defaultValue: '',
+                description: 'StarRocks password')
+        string(name: 'BACKFILL_HDFS_BASE_PATH',
+                defaultValue: 'hdfs://10.10.61.53:8020/netflow/parquetFiles',
+                description: 'Base directory containing yyyy-MM-dd/HH Parquet paths')
+        string(name: 'BACKFILL_HDFS_USERNAME', defaultValue: 'team1',
+                description: 'HDFS username passed to the StarRocks FILES function')
+    }
+
+    environment {
+        MAVEN_OPTS = '-Djavax.net.ssl.trustStore=/certs/cacerts'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh '''
+                    mvn \
+                      --settings jenkins/maven-settings.xml \
+                      --batch-mode \
+                      --no-transfer-progress \
+                      -pl starrocks-backfill \
+                      -DskipTests \
+                      package dependency:copy-dependencies \
+                      -DincludeScope=runtime
+                '''
+            }
+        }
+
+        stage('Confirm Execute') {
+            when {
+                expression { params.BACKFILL_MODE == 'EXECUTE' }
+            }
+            input {
+                message "Execute backfill for ${params.BACKFILL_FROM} to ${params.BACKFILL_TO} " +
+                        "on ${params.STARROCKS_JDBC_URL} as ${params.STARROCKS_USERNAME}?"
+                ok 'Execute'
+            }
+            steps {
+                echo 'Execution approved.'
+            }
+        }
+
+        stage('Run Backfill') {
+            steps {
+                sh '''
+                    java \
+                      -cp 'starrocks-backfill/target/starrocks-backfill.jar:starrocks-backfill/target/dependency/*' \
+                      com.nimbo.backfill.StarRocksBackfillApplication
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "Backfill ${params.BACKFILL_MODE} completed successfully."
+        }
+        failure {
+            echo "Backfill ${params.BACKFILL_MODE} failed."
+        }
+    }
+}
