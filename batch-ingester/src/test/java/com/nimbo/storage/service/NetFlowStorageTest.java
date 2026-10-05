@@ -174,7 +174,7 @@ class NetFlowStorageTest {
         storage.flush();
 
         GenericRecord persisted = readAllParquetRecords().get(0);
-        assertEquals(KAFKA_TIMESTAMP * 1000, persisted.get("PROCESS_TIME"));
+        assertEquals(KAFKA_TIMESTAMP, persisted.get("PROCESS_TIME"));
         assertEquals("test-topic", persisted.get("KAFKA_TOPIC").toString());
         assertEquals(7, persisted.get("KAFKA_PARTITION"));
         assertEquals(123L, persisted.get("KAFKA_OFFSET"));
@@ -251,9 +251,9 @@ class NetFlowStorageTest {
         assertEquals("v2", persistedV2.get("value").toString());
         assertEquals("preserved", persistedV2.get("new_field").toString());
         assertNull(persistedLaterV1.get("new_field"));
-        assertEquals(KAFKA_TIMESTAMP * 1000, persistedV1.get("PROCESS_TIME"));
-        assertEquals(KAFKA_TIMESTAMP * 1000, persistedV2.get("PROCESS_TIME"));
-        assertEquals(KAFKA_TIMESTAMP * 1000, persistedLaterV1.get("PROCESS_TIME"));
+        assertEquals(KAFKA_TIMESTAMP, persistedV1.get("PROCESS_TIME"));
+        assertEquals(KAFKA_TIMESTAMP, persistedV2.get("PROCESS_TIME"));
+        assertEquals(KAFKA_TIMESTAMP, persistedLaterV1.get("PROCESS_TIME"));
     }
 
     @Test

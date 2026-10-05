@@ -114,7 +114,7 @@ public final class BackfillParquetTestData {
         record.put("OUT_BYTES", row.outBytes());
         record.put("IN_PKTS", row.inPackets());
         record.put("OUT_PKTS", row.outPackets());
-        record.put(PROCESS_TIME, Math.multiplyExact(row.timestampMillis(), 1_000L));
+        record.put(PROCESS_TIME, row.timestampMillis());
         return record;
     }
 

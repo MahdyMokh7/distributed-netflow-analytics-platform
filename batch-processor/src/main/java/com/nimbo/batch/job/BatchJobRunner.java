@@ -28,7 +28,7 @@ import java.util.function.Supplier;
 import static com.nimbo.batch.constants.ColumnConstants.NETFLOW_PROCESS_TIME;
 import static org.apache.spark.sql.functions.col;
 import static org.apache.spark.sql.functions.lit;
-import static org.apache.spark.sql.functions.timestamp_micros;
+import static org.apache.spark.sql.functions.timestamp_millis;
 
 @Slf4j
 @Component
@@ -158,7 +158,7 @@ public class BatchJobRunner {
 
         Dataset<Row> source = spark.read().parquet(paths);
         if (retentionWindow.isBounded()) {
-            source = source.filter(timestamp_micros(col(NETFLOW_PROCESS_TIME))
+            source = source.filter(timestamp_millis(col(NETFLOW_PROCESS_TIME))
                     .geq(lit(java.sql.Timestamp.from(retentionWindow.cutoffInstant()))));
         }
         return source.persist(StorageLevel.MEMORY_AND_DISK());

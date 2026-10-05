@@ -34,8 +34,8 @@ not copy, read, or stage the other 23.5 hours. Empty hourly directories are repo
 The load mapping is not hardcoded:
 
 - Columns present on both sides are matched without case sensitivity and cast to the StarRocks type.
-- `kafka_timestamp` is always derived from Parquet `PROCESS_TIME / 1000` because `PROCESS_TIME` is the
-  Kafka record timestamp stored in microseconds.
+- `kafka_timestamp` is mapped directly from Parquet `PROCESS_TIME`; both store the Kafka record timestamp
+  in milliseconds.
 - `KAFKA_TOPIC`, `KAFKA_PARTITION`, and `KAFKA_OFFSET` are read directly from Parquet like normal
   columns. Missing required metadata stops the run before writing; no synthetic fallback is generated.
 - A nullable StarRocks-only evolution column is filled with `NULL` for older Parquet files.

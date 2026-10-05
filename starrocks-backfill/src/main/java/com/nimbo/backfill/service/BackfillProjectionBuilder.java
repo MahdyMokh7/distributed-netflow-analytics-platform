@@ -62,8 +62,8 @@ public final class BackfillProjectionBuilder {
                 requireCompatibleTypes(processTime, starRocksColumn, hdfsSchema.path());
 
                 expressions.add(
-                        "CAST(" + identifier(processTime.name()) + " / 1000 AS " + starRocksColumn.type() + ")");
-                generatedMappings.add("kafka_timestamp <- PROCESS_TIME/1000");
+                        "CAST(" + identifier(processTime.name()) + " AS " + starRocksColumn.type() + ")");
+                generatedMappings.add("kafka_timestamp <- PROCESS_TIME");
 
             } else if (hdfsColumn != null) {
                 requireCompatibleTypes(hdfsColumn, starRocksColumn, hdfsSchema.path());

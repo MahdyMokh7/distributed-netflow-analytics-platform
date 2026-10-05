@@ -33,12 +33,12 @@ public final class NetflowBackfillSql {
                        COALESCE(SUM(OUT_BYTES), 0) AS out_bytes,
                        COALESCE(SUM(IN_PKTS), 0) AS in_packets,
                        COALESCE(SUM(OUT_PKTS), 0) AS out_packets,
-                       MIN(CAST(PROCESS_TIME / 1000 AS BIGINT)) AS minimum_timestamp,
-                       MAX(CAST(PROCESS_TIME / 1000 AS BIGINT)) AS maximum_timestamp
+                       MIN(CAST(PROCESS_TIME AS BIGINT)) AS minimum_timestamp,
+                       MAX(CAST(PROCESS_TIME AS BIGINT)) AS maximum_timestamp
                 FROM %s
                 WHERE PROCESS_TIME >= %d
                   AND PROCESS_TIME < %d
-                """.formatted(files(config, path), plan.fromMicros(), plan.toMicros());
+                """.formatted(files(config, path), plan.fromMillis(), plan.toMillis());
     }
 
     public static String targetIntervalMetrics(BackfillConfig config, DailyBackfillPlan plan) {
@@ -123,7 +123,7 @@ public final class NetflowBackfillSql {
                 WHERE PROCESS_TIME >= %d
                   AND PROCESS_TIME < %d
                 """.formatted(String.join(",\n", hdfsColumnMapping.expressions()),
-                files(config, hdfsColumnMapping.path()), plan.fromMicros(), plan.toMicros());
+                files(config, hdfsColumnMapping.path()), plan.fromMillis(), plan.toMillis());
     }
 
     private static String destinationMetrics(BackfillConfig config, String partitionClause, DailyBackfillPlan plan) {

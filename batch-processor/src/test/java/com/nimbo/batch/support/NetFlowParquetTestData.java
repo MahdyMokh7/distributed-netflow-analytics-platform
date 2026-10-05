@@ -107,8 +107,7 @@ public final class NetFlowParquetTestData {
                     .plusSeconds(fileIndex * 30L)
                     .plusMillis(recordIdx * 10L);
 
-            long processTimeMicros = recordTime.getEpochSecond() * 1_000_000L
-                    + recordTime.getNano() / 1000;
+            long processTimeMillis = recordTime.toEpochMilli();
 
             int ipIdx = (fileIndex + recordIdx) % IP_ADDRESSES.length;
             String srcIp = IP_ADDRESSES[ipIdx];
@@ -158,7 +157,7 @@ public final class NetFlowParquetTestData {
                     protocol == 17 ? 1 : 0,
                     protocol == 17 ? 300L : 0L,
                     protocol == 6 ? 200 : 0,
-                    processTimeMicros
+                    processTimeMillis
             );
 
             rows.add(row);

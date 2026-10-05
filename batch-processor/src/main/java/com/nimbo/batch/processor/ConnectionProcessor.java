@@ -19,7 +19,7 @@ import static org.apache.spark.sql.functions.window;
 import static org.apache.spark.sql.functions.sum;
 import static org.apache.spark.sql.functions.sha2;
 import static org.apache.spark.sql.functions.concat_ws;
-import static org.apache.spark.sql.functions.timestamp_micros;
+import static org.apache.spark.sql.functions.timestamp_millis;
 
 @Component
 @Slf4j
@@ -74,7 +74,7 @@ public class ConnectionProcessor extends BaseProcessor {
                 .groupBy(
                         col(NETFLOW_SRC_IP).alias(SPARK_SRC_IP),
                         col(NETFLOW_DST_IP).alias(SPARK_DST_IP),
-                        window(timestamp_micros(col(NETFLOW_PROCESS_TIME)), windowDuration)
+                        window(timestamp_millis(col(NETFLOW_PROCESS_TIME)), windowDuration)
                 )
                 .agg(
                         sum(col(NETFLOW_IN_BYTES)).alias(SPARK_IN_BYTES),

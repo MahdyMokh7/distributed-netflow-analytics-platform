@@ -18,7 +18,7 @@ import static org.apache.spark.sql.functions.col;
 import static org.apache.spark.sql.functions.count;
 import static org.apache.spark.sql.functions.sum;
 import static org.apache.spark.sql.functions.window;
-import static org.apache.spark.sql.functions.timestamp_micros;
+import static org.apache.spark.sql.functions.timestamp_millis;
 
 @Component
 @Slf4j
@@ -76,7 +76,7 @@ public class TrafficAggregationProcessor extends BaseProcessor {
         return sourceDf
                 .groupBy(
                         col(NETFLOW_SRC_IP).alias(SPARK_SRC_IP),
-                        window(timestamp_micros(col(NETFLOW_PROCESS_TIME)), windowDuration)
+                        window(timestamp_millis(col(NETFLOW_PROCESS_TIME)), windowDuration)
                 )
                 .agg(
                         sum(col(NETFLOW_IN_BYTES)).alias(SPARK_IN_BYTES),

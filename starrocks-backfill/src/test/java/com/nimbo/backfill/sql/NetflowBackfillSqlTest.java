@@ -37,8 +37,8 @@ class NetflowBackfillSqlTest {
         String sql = NetflowBackfillSql.loadSourceIntoStaging(config, plan, projection);
 
         assertThat(sql).contains("TEMPORARY PARTITION").contains("`ipv4_src_addr`").contains("`IPV4_SRC_ADDR`")
-                .contains("CAST(PROCESS_TIME / 1000 AS BIGINT)").contains("`KAFKA_TOPIC`")
-                .contains("PROCESS_TIME >= " + plan.fromMicros()).contains("PROCESS_TIME < " + plan.toMicros())
+                .contains("CAST(PROCESS_TIME AS BIGINT)").contains("`KAFKA_TOPIC`")
+                .contains("PROCESS_TIME >= " + plan.fromMillis()).contains("PROCESS_TIME < " + plan.toMillis())
                 .doesNotContain("hdfs-backfill").doesNotContain("SELECT *");
     }
 
@@ -49,7 +49,7 @@ class NetflowBackfillSqlTest {
                 .doesNotContain("2026-09-27 00:00:00");
 
         assertThat(NetflowBackfillSql.loadSourceIntoStaging(config, plan, projection))
-                .contains("PROCESS_TIME >= " + plan.fromMicros()).contains("PROCESS_TIME < " + plan.toMicros());
+                .contains("PROCESS_TIME >= " + plan.fromMillis()).contains("PROCESS_TIME < " + plan.toMillis());
     }
 
     @Test
@@ -74,7 +74,7 @@ class NetflowBackfillSqlTest {
     void validatesTheFullProjectionWithoutWriting() {
         assertThat(NetflowBackfillSql.validateSourceProjection(config, plan,
                 projection.hdfsColumnMappings().get(0)))
-                .contains("`IPV4_SRC_ADDR`").contains("CAST(PROCESS_TIME / 1000 AS BIGINT)").endsWith("LIMIT 1");
+                .contains("`IPV4_SRC_ADDR`").contains("CAST(PROCESS_TIME AS BIGINT)").endsWith("LIMIT 1");
     }
 
     @Test
@@ -86,7 +86,7 @@ class NetflowBackfillSqlTest {
 
     private HdfsPathColumnMapping mapping(String path) {
         return new HdfsPathColumnMapping(path,
-                List.of("CAST(`IPV4_SRC_ADDR` AS varchar(15))", "CAST(PROCESS_TIME / 1000 AS BIGINT)",
+                List.of("CAST(`IPV4_SRC_ADDR` AS varchar(15))", "CAST(PROCESS_TIME AS BIGINT)",
                         "CAST(`KAFKA_TOPIC` AS varchar(255))"),
                 "mapping");
     }

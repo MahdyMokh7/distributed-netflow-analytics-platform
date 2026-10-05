@@ -27,8 +27,6 @@ class BackfillPlannerTest {
                 "hdfs://team1/netflow/parquetFiles/2026-09-26/11/*.parquet");
         assertThat(plan.runId()).isEqualTo("bf_20260926_101500_000_20260926_120000_000");
         assertThat(plan.stagingPartitionName()).isEqualTo("tmp_bf_20260926_101500_000_20260926_120000_000");
-        assertThat(plan.fromMicros()).isEqualTo(plan.fromMillis() * 1_000L);
-        assertThat(plan.toMicros()).isEqualTo(plan.toMillis() * 1_000L);
     }
 
     @Test

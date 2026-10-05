@@ -21,13 +21,4 @@ public record DailyBackfillPlan(String runId, BackfillMode mode, LocalDate day, 
     public long toMillis() {
         return to.toEpochMilli();
     }
-
-    public long fromMicros() {
-        return Math.multiplyExact(fromMillis(), 1_000L);
-    }
-
-    public long toMicros() {
-        return Math.multiplyExact(toMillis(), 1_000L);
-    }
-
 }

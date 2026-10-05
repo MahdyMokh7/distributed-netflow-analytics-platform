@@ -153,9 +153,13 @@ class BatchIngesterPipelineIT {
                     files.stream().map(f -> f.getParent().getName()).sorted().toList();
             assertThat(hourFolders).containsExactly("10", "11");
 
+            List<Long> processTimes = new ArrayList<>();
             for (org.apache.hadoop.fs.Path file : files) {
-                assertThat(readRecords(localConfiguration(), file)).hasSize(1);
+                List<GenericRecord> records = readRecords(localConfiguration(), file);
+                assertThat(records).hasSize(1);
+                processTimes.add((Long) records.get(0).get("PROCESS_TIME"));
             }
+            assertThat(processTimes).containsExactlyInAnyOrder(firstHourMillis, secondHourMillis);
         } finally {
             fs.close();
         }

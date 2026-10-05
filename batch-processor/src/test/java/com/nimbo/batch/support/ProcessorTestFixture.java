@@ -149,6 +149,6 @@ public final class ProcessorTestFixture {
                 outBytes,
                 inPackets,
                 outPackets,
-                Instant.parse(timestamp).toEpochMilli() * 1_000);
+                Instant.parse(timestamp).toEpochMilli());
     }
 }

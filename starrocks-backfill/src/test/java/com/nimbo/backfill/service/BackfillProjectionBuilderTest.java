@@ -50,7 +50,7 @@ class BackfillProjectionBuilderTest {
         BackfillProjection projection = builder.build(TABLE, starRocksColumns, List.of(hdfsSchema), List.of());
 
         assertThat(projection.hdfsColumnMappings().get(0).expressions())
-                .containsExactly("CAST(`PROCESS_TIME` / 1000 AS bigint)", "CAST(NULL AS varchar(20))");
+                .containsExactly("CAST(`PROCESS_TIME` AS bigint)", "CAST(NULL AS varchar(20))");
     }
 
     @Test

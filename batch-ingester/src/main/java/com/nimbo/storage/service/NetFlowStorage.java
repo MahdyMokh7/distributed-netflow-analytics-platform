@@ -307,7 +307,7 @@ public final class NetFlowStorage {
 
         for (Schema.Field field : currentStorageSchema.getFields()) {
             Object value = switch (field.name()) {
-                case "PROCESS_TIME" -> ingestedRecord.kafkaTimestamp() * 1000;
+                case "PROCESS_TIME" -> ingestedRecord.kafkaTimestamp();
                 case "KAFKA_TOPIC" -> ingestedRecord.topic();
                 case "KAFKA_PARTITION" -> ingestedRecord.partition();
                 case "KAFKA_OFFSET" -> ingestedRecord.offset();
@@ -335,7 +335,7 @@ public final class NetFlowStorage {
         sourceSchema.getFields().forEach(field -> fields.add(new Schema.Field(field, field.schema())));
 
         fields.add(storageField(
-                "PROCESS_TIME", Schema.Type.LONG, "Kafka record timestamp in UTC epoch microseconds."));
+                "PROCESS_TIME", Schema.Type.LONG, "Kafka record timestamp in UTC epoch milliseconds."));
         fields.add(storageField("KAFKA_TOPIC", Schema.Type.STRING, "Kafka source topic."));
         fields.add(storageField("KAFKA_PARTITION", Schema.Type.INT, "Kafka source partition."));
         fields.add(storageField("KAFKA_OFFSET", Schema.Type.LONG, "Kafka source offset."));

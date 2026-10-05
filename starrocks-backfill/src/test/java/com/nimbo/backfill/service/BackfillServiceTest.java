@@ -142,7 +142,7 @@ class BackfillServiceTest {
         private SQLException publishFailure;
         private final BackfillProjection projection = new BackfillProjection(List.of("kafka_timestamp"),
                 List.of(new HdfsPathColumnMapping("hdfs://team1/netflow/parquetFiles/2026-09-26/10/*.parquet",
-                        List.of("CAST(PROCESS_TIME / 1000 AS BIGINT)"), "mapping")),
+                        List.of("CAST(PROCESS_TIME AS BIGINT)"), "mapping")),
                 List.of());
 
         private int validateCalls;

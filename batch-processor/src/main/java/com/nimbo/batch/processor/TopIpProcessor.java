@@ -17,7 +17,7 @@ import java.util.UUID;
 import static org.apache.spark.sql.functions.col;
 import static org.apache.spark.sql.functions.window;
 import static org.apache.spark.sql.functions.sum;
-import static org.apache.spark.sql.functions.timestamp_micros;
+import static org.apache.spark.sql.functions.timestamp_millis;
 
 @Component
 @Slf4j
@@ -75,7 +75,7 @@ public class TopIpProcessor extends BaseProcessor {
                         col(NETFLOW_IN_BYTES).alias(SPARK_INBOUND_BYTES),
                         col(NETFLOW_OUT_PKTS).alias(SPARK_OUTBOUND_PACKETS),
                         col(NETFLOW_IN_PKTS).alias(SPARK_INBOUND_PACKETS),
-                        timestamp_micros(col(NETFLOW_PROCESS_TIME)).alias(NETFLOW_PROCESS_TIME)
+                        timestamp_millis(col(NETFLOW_PROCESS_TIME)).alias(NETFLOW_PROCESS_TIME)
                 );
 
         Dataset<Row> dstPerspective = sourceDf
@@ -85,7 +85,7 @@ public class TopIpProcessor extends BaseProcessor {
                         col(NETFLOW_OUT_BYTES).alias(SPARK_INBOUND_BYTES),
                         col(NETFLOW_IN_PKTS).alias(SPARK_OUTBOUND_PACKETS),
                         col(NETFLOW_OUT_PKTS).alias(SPARK_INBOUND_PACKETS),
-                        timestamp_micros(col(NETFLOW_PROCESS_TIME)).alias(NETFLOW_PROCESS_TIME)
+                        timestamp_millis(col(NETFLOW_PROCESS_TIME)).alias(NETFLOW_PROCESS_TIME)
                 );
 
         Dataset<Row> unified = srcPerspective.unionByName(dstPerspective);
