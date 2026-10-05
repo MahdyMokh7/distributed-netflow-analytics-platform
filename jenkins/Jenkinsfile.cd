@@ -33,7 +33,7 @@ static def modulePathPrefixes(String name) {
 }
 
 static def moduleNames() {
-    return ['batch-ingester', 'batch-processor', 'starrocks-writer', 'rest-api']
+    return ['batch-ingester', 'batch-processor', 'starrocks-writer', 'rest-api', 'analytics-query']
 }
 
 def userSelectedModules() {
@@ -41,7 +41,8 @@ def userSelectedModules() {
             'batch-ingester'  : params.DEPLOY_BATCH_INGESTER,
             'batch-processor' : params.DEPLOY_BATCH_PROCESSOR,
             'starrocks-writer': params.DEPLOY_STARROCKS_WRITER,
-            'rest-api'        : params.DEPLOY_REST_API
+            'rest-api'        : params.DEPLOY_REST_API,
+            'analytics-query' : params.DEPLOY_ANALYTICS_QUERY
     ]
     def selected = moduleMap.findAll { name, isSelected -> isSelected }.keySet() as List
     if (selected.isEmpty()) {
@@ -70,14 +71,14 @@ def modulesToDeployList() {
 }
 
 def buildHelmArgs(List toDeploy) {
-    def allFour = toDeploy.size() == moduleNames().size()
+    def allModules = toDeploy.size() == moduleNames().size()
 
     def releaseExists = sh(
             script: "helm status nimbo-platform --namespace \"${env.KUBE_NAMESPACE}\" > /dev/null 2>&1",
             returnStatus: true
     ) == 0
 
-    if (!allFour && !releaseExists) {
+    if (!allModules && !releaseExists) {
         echo "WARNING: partial deploy (${toDeploy.join(', ')}) but no existing nimbo-platform release was found. " +
                 "The untouched modules will be created for the first time using their chart defaults (image.tag=latest)."
     }
@@ -86,7 +87,7 @@ def buildHelmArgs(List toDeploy) {
         "--set ${name}.image.repository=${env.NEXUS_PULL_REGISTRY}/${env.IMAGE_PREFIX}-${name} --set ${name}.image.tag=${env.IMAGE_TAG}"
     }.join(' ')
 
-    def reuseFlag = (!allFour && releaseExists) ? '--reuse-values' : ''
+    def reuseFlag = (!allModules && releaseExists) ? '--reuse-values' : ''
 
     return "${reuseFlag} ${setArgs}".trim()
 }
@@ -110,7 +111,7 @@ pipeline {
         string(name: 'NEXUS_GROUP_PORT', defaultValue: '9462', description: 'Docker group port used for pulls')
         string(name: 'NEXUS_HOSTED_PORT', defaultValue: '9466', description: 'Docker hosted port used for pushes')
         string(name: 'NEXUS_USERNAME', defaultValue: 'nimbo1', description: 'Nexus username')
-        password(name: 'NEXUS_PASSWORD', defaultValue: 'gvFUU0Fxma95w9', description: 'Nexus password')
+        password(name: 'NEXUS_PASSWORD', defaultValue: '', description: 'Nexus password')
 
         string(name: 'KUBE_NAMESPACE', defaultValue: 'team1', description: 'Kubernetes namespace to deploy into')
 
@@ -121,6 +122,7 @@ pipeline {
         booleanParam(name: 'DEPLOY_BATCH_PROCESSOR', defaultValue: true, description: 'Include batch-processor in this run')
         booleanParam(name: 'DEPLOY_STARROCKS_WRITER', defaultValue: true, description: 'Include starrocks-writer in this run')
         booleanParam(name: 'DEPLOY_REST_API', defaultValue: true, description: 'Include rest-api in this run')
+        booleanParam(name: 'DEPLOY_ANALYTICS_QUERY', defaultValue: true, description: 'Include analytics-query in this run')
     }
 
     environment {
