@@ -11,7 +11,7 @@ the `Dockerfile` itself as comments, not just here — read those before
 a mentor asks.
 
 **One thing still worth doing once, not yet done:** grep
-`batch-processor`'s Flyway migration SQL files for
+`cube-maker`'s Flyway migration SQL files for
 `CREATE EXTENSION timescaledb`. If any migration assumes it exists,
 dropping TimescaleDB breaks app startup on a fresh cluster. If nothing
 turns up, this decision is fully settled.

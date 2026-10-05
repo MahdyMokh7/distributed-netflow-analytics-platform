@@ -85,7 +85,7 @@ scrape_configs:
       - source_labels: [__meta_kubernetes_pod_name]
         target_label: instance
 
-  - job_name: batch-processor
+  - job_name: cube-maker
     metrics_path: /actuator/prometheus
     kubernetes_sd_configs:
       - role: endpoints
@@ -94,7 +94,7 @@ scrape_configs:
             - '{{ .Release.Namespace }}'
     relabel_configs:
       - source_labels: [__meta_kubernetes_service_name]
-        regex: batch-processor
+        regex: cube-maker
         action: keep
       - source_labels: [__meta_kubernetes_endpoint_port_name]
         regex: http

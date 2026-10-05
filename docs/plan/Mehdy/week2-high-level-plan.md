@@ -82,9 +82,9 @@ Based on Phase 1 analytics requirements, design tables for:
 ### 2.1. Project Structure
 
 ```
-nimbo-batch-processor/
+nimbo-cube-maker/
 ├── pom.xml (with Spark dependencies)
-├── src/main/java/com/nimbo/batch/
+├── src/main/java/com/nimbo/cubemaker/
 │   ├── config/
 │   │   ├── SparkConfig.java
 │   │   └── PostgresConfig.java
@@ -113,7 +113,7 @@ nimbo-batch-processor/
 ```yaml
 spark:
   master: spark://10.10.61.52:7077
-  app-name: nimbo-batch-processor
+  app-name: nimbo-cube-maker
   batch-size: 1000000
   partition-count: 8
 
@@ -214,7 +214,7 @@ batch:
 **Recommendation:** Option A for better operational control
 
 ### 4.3. Docker Compose Integration
-- Create Dockerfile for batch processor
+- Create Dockerfile for cube maker
 - Add to docker-compose.yml alongside existing services
 - Configure environment variables for deployment
 

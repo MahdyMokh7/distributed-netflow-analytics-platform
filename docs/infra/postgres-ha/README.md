@@ -5,7 +5,7 @@
 - **Dropped TimescaleDB entirely** (was originally kept for a reasoned,
   query-pattern-based justification — see git history if curious — but
   the team decided against it). Image is now plain `postgres:16-alpine` +
-  Patroni. **One check still worth doing**: grep `batch-processor`'s
+  Patroni. **One check still worth doing**: grep `cube-maker`'s
   Flyway migrations for `CREATE EXTENSION timescaledb` — if none exist,
   this decision is fully settled.
 - **Fixed a real bug in the image**: `v1` had no Postgres driver
@@ -18,7 +18,7 @@
   `postgres_exporter` by default (`pg_up`, `pg_replication_is_replica`).
   No custom query file needed, so it's gone, not just trimmed.
 - **`appDatabase.existingSecretName` now points at the real, confirmed
-  secret** (`batch-processor-secret`, `DB_USERNAME=nimbo_user`,
+  secret** (`cube-maker-secret`, `DB_USERNAME=nimbo_user`,
   `DB_PASSWORD=123456`) instead of a guessed name.
 - **Removed Persian locale (`icu-locale: fa-IR`) from `patroni.yml`'s
   `initdb` block** — leftover from when the image still had that locale
@@ -47,7 +47,7 @@ independently of this chart; nothing here created or removes them).
 `templates/bootstrap-job.yaml` does the one thing that actually needs
 doing — making sure `nimbo_db` exists — in plain, readable SQL. It
 deliberately does **not** create the actual netflow table/schema:
-`batch-processor` already owns that via Flyway migrations
+`cube-maker` already owns that via Flyway migrations
 (`spring.flyway.enabled: true`), so schema belongs there, not duplicated
 here.
 
@@ -77,7 +77,7 @@ survived Stone Age week, so the pool should still be intact — confirm
 with `kubectl get ipaddresspools -n team1` before setting
 `service.masterLoadBalancerIP` to `10.10.61.70` explicitly (left blank =
 auto-assign a fresh one, which means updating `rest-api`/
-`batch-processor`'s hardcoded connection strings afterward).
+`cube-maker`'s hardcoded connection strings afterward).
 
 ## What this deploys, in dependency order
 
@@ -127,10 +127,10 @@ kubectl exec -n team1 postgresql-postgresql-0 -c postgresql -- \
 - `storage.size` (`20Gi`) is a placeholder — no PVC survived to confirm
   the real prior size.
 - **TimescaleDB is no longer in this image at all.** Confirm
-  `batch-processor`'s Flyway migrations never run
+  `cube-maker`'s Flyway migrations never run
   `CREATE EXTENSION timescaledb` — if one does, app startup will fail on
   a fresh cluster (the extension genuinely won't exist to create). One
   `grep -R timescaledb` through the migration SQL settles this either way.
 - Verify `rest-api-secret` holds the same `DB_USERNAME`/`DB_PASSWORD` as
-  `batch-processor-secret` (the one the bootstrap Job actually uses) —
+  `cube-maker-secret` (the one the bootstrap Job actually uses) —
   if they differ, `rest-api` won't be able to log in after install.

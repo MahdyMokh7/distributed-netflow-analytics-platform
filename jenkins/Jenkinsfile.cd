@@ -33,13 +33,13 @@ static def modulePathPrefixes(String name) {
 }
 
 static def moduleNames() {
-    return ['parquet-writer', 'batch-processor', 'starrocks-writer', 'rest-api', 'analytics-query']
+    return ['parquet-writer', 'cube-maker', 'starrocks-writer', 'rest-api', 'analytics-query']
 }
 
 def userSelectedModules() {
     def moduleMap = [
             'parquet-writer'  : params.DEPLOY_PARQUET_WRITER,
-            'batch-processor' : params.DEPLOY_BATCH_PROCESSOR,
+            'cube-maker' : params.DEPLOY_CUBE_MAKER,
             'starrocks-writer': params.DEPLOY_STARROCKS_WRITER,
             'rest-api'        : params.DEPLOY_REST_API,
             'analytics-query' : params.DEPLOY_ANALYTICS_QUERY
@@ -119,7 +119,7 @@ pipeline {
         booleanParam(name: 'FORCE_ALL', defaultValue: false, description: 'Build+deploy all checked modules even if unchanged since last successful deploy')
 
         booleanParam(name: 'DEPLOY_PARQUET_WRITER', defaultValue: true, description: 'Include parquet-writer in this run')
-        booleanParam(name: 'DEPLOY_BATCH_PROCESSOR', defaultValue: true, description: 'Include batch-processor in this run')
+        booleanParam(name: 'DEPLOY_CUBE_MAKER', defaultValue: true, description: 'Include cube-maker in this run')
         booleanParam(name: 'DEPLOY_STARROCKS_WRITER', defaultValue: true, description: 'Include starrocks-writer in this run')
         booleanParam(name: 'DEPLOY_REST_API', defaultValue: true, description: 'Include rest-api in this run')
         booleanParam(name: 'DEPLOY_ANALYTICS_QUERY', defaultValue: true, description: 'Include analytics-query in this run')
@@ -206,7 +206,7 @@ pipeline {
                     def modules = modulesToDeployList()
                     withEnv([
                             "MODULES_CSV=${modules.join(',')}",
-                            "BUILDS_BATCH_PROCESSOR=${modules.contains('batch-processor')}"
+                            "BUILDS_CUBE_MAKER=${modules.contains('cube-maker')}"
                     ]) {
                         sh 'bash jenkins/scripts/build-and-push.sh'
                     }

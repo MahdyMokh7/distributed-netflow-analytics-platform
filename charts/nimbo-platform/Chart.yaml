@@ -10,9 +10,9 @@ dependencies:
     version: "0.1.0"
     repository: "file://../parquet-writer"
 
-  - name: batch-processor
+  - name: cube-maker
     version: "0.1.0"
-    repository: "file://../batch-processor"
+    repository: "file://../cube-maker"
 
   - name: starrocks-writer
     version: "0.1.0"

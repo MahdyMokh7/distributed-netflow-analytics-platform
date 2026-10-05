@@ -1,0 +1,138 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: Cube Maker
+    folder: Nimbyte
+    interval: 1m
+    rules:
+      - uid: nimbo-cube-maker-down
+        title: CubeMakerDown
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: 1 - max(up{job="cube-maker"}) or vector(1)
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator: {params: [0], type: gt}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {params: [], type: last}
+                  type: query
+        noDataState: Alerting
+        execErrState: Error
+        for: 10m
+        labels: {module: cube-maker, severity: critical}
+        annotations:
+          summary: Cube maker metrics endpoint is unavailable
+          description: Prometheus has no cube maker target or has been unable to scrape it for ten minutes.
+
+      - uid: nimbo-cube-maker-run-failed
+        title: CubeMakerRunFailed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 7800, to: 0}
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: sum(increase(cube_maker_runs_total{job="cube-maker",outcome="failed"}[130m])) + max(min_over_time(cube_maker_failed_batch_pending{job="cube-maker"}[70m]))
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator: {params: [1.5], type: gt}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {params: [], type: last}
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 0s
+        labels: {module: cube-maker, severity: critical}
+        annotations:
+          summary: Cube maker run failed
+          description: Two runs failed within two hourly schedules, or one failed batch remained pending through its next retry interval.
+
+      - uid: nimbo-cube-maker-run-stuck
+        title: CubeMakerRunStuck
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: max without (pod, instance) (cube_maker_run_in_progress{job="cube-maker"})
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator: {params: [0], type: gt}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {params: [], type: last}
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 70m
+        labels: {module: cube-maker, severity: critical}
+        annotations:
+          summary: Cube maker run is taking too long
+          description: A cube maker run has remained active for more than seventy minutes and has exceeded the next hourly schedule.
+
+      - uid: nimbo-cube-maker-state-fallback
+        title: CubeMakerStateFallbackActive
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: max without (pod, instance) (cube_maker_state_fallback_active{job="cube-maker"})
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: A
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator: {params: [0], type: gt}
+                  operator: {type: and}
+                  query: {params: [C]}
+                  reducer: {params: [], type: last}
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 10m
+        labels: {module: cube-maker, severity: critical}
+        annotations:
+          summary: Cube maker state is not durable
+          description: Processed-file state exists only in memory; a pod restart can cause files to be processed again.

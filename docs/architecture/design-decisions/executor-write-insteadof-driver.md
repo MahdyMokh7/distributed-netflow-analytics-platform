@@ -1,4 +1,4 @@
-# Technical Report: Batch-Processor Writer Evolution
+# Technical Report: Cube Maker Writer Evolution
 
 ## From Driver-Centric to Executor-Centric Database Writing
 
@@ -6,7 +6,7 @@
 
 ### 1. Executive Summary
 
-This report documents the architectural evolution of the Nimbo batch-processor's database writer component. The system transitioned from a driver-centric `toLocalIterator()` approach to a distributed `foreachPartition()` model where each Spark executor independently writes aggregated data to PostgreSQL. This transformation addressed critical scalability, memory, and serialization challenges while maintaining exactly-once processing semantics.
+This report documents the architectural evolution of the Nimbo cube-maker's database writer component. The system transitioned from a driver-centric `toLocalIterator()` approach to a distributed `foreachPartition()` model where each Spark executor independently writes aggregated data to PostgreSQL. This transformation addressed critical scalability, memory, and serialization challenges while maintaining exactly-once processing semantics.
 
 **Key Achievements:**
 - ✅ Eliminated driver memory bottlenecks by distributing write operations
@@ -545,7 +545,7 @@ postgres:
 │  │  │  - connection_aggregates                                    │   │   │
 │  │  │  - protocol_usage_aggregates                                │   │   │
 │  │  │  - ip_bandwidth_aggregates                                  │   │   │
-│  │  │  - batch_processor_state (driver only)                     │   │   │
+│  │  │  - cube_maker_state (driver only)                     │   │   │
 │  │  └─────────────────────────────────────────────────────────────┘   │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -569,7 +569,7 @@ postgres:
 
 ### 12. Conclusion
 
-The transition from driver-centric to executor-centric database writing transformed the Nimbo batch-processor into a truly distributed, scalable system. By addressing serialization challenges through lazy initialization, custom serializable interfaces, and extracted partition writers, the system now scales horizontally across Spark executors without driver memory bottlenecks.
+The transition from driver-centric to executor-centric database writing transformed the Nimbo cube-maker into a truly distributed, scalable system. By addressing serialization challenges through lazy initialization, custom serializable interfaces, and extracted partition writers, the system now scales horizontally across Spark executors without driver memory bottlenecks.
 
 The combination of:
 - **`batch_id`-based UPSERT** for idempotency

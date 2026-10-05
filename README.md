@@ -1,4 +1,4 @@
-Here's the updated README with the batch-processor run instructions replaced:
+Here's the updated README with the cube-maker run instructions replaced:
 
 ---
 
@@ -83,7 +83,7 @@ Nimbo's dual-path architecture serves both use cases without compromising on dat
 | Module | Description | Status |
 |--------|-------------|--------|
 | **parquet-writer** | Kafka → HDFS Parquet consumer with zero data loss | ✅ Complete |
-| **batch-processor** | Spark aggregations → PostgreSQL (Cube Maker) | ✅ Complete |
+| **cube-maker** | Spark aggregations → PostgreSQL (Cube Maker) | ✅ Complete |
 | **realtime** | Kafka → StarRocks low-latency writer | ✅ Complete |
 | **rest-api** | Unified REST API for both batch and real-time queries | ✅ Complete |
 
@@ -120,7 +120,7 @@ The platform supports four key network analytics queries:
 
 | Role | Name | Responsibility |
 |------|------|----------------|
-| **Batch Path Lead** | **Mehdy Mokhtari** | Parquet Writer (Consumer), Batch Processor (Spark + PostgreSQL), REST API (Batch Queries) |
+| **Batch Path Lead** | **Mehdy Mokhtari** | Parquet Writer (Consumer), Cube Maker (Spark + PostgreSQL), REST API (Batch Queries) |
 | **Realtime Path Lead** | Sobhan Arshadi | Realtime Module (StarRocks Writer), REST API (Realtime Queries), DLQ Handling |
 | **Infrastructure Lead** | Amin Jangi | Parquet Writer (Storage Layer), CI/CD Pipeline, DevOps, Containerization |
 
@@ -136,14 +136,14 @@ nimbo/
 │   ├── storage/             # HDFS + Parquet writing
 │   └── service/             # Validation, DLQ
 │
-├── batch-processor/         # Spark → PostgreSQL aggregations
+├── cube-maker/         # Spark → PostgreSQL aggregations
 │   ├── processor/           # 4 aggregation processors
 │   ├── writer/              # JDBI-based PostgreSQL writer
 │   ├── discovery/           # Incremental file discovery
 │   └── model/               # Domain models
 │
 ├── realtime/                # Kafka → StarRocks writer
-│   ├── consumer/            # StarRocks batch processor
+│   ├── consumer/            # StarRocks cube maker
 │   ├── mapper/              # Avro → StarRocks mapping
 │   └── client/              # StarRocks Stream Load client
 │
@@ -179,15 +179,15 @@ nimbo/
 mvn clean package -DskipTests
 
 # Build specific module
-cd batch-processor && mvn clean package -DskipTests
+cd cube-maker && mvn clean package -DskipTests
 ```
 
-### Run Batch Processor
+### Run Cube Maker
 
 **Option 1: Run with Spring Boot (Development)**
 
 ```bash
-cd batch-processor
+cd cube-maker
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
@@ -195,16 +195,16 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 
 ```bash
 # Transfer JAR to Node3
-scp target/batch-processor.jar team1@10.10.61.53:~/
+scp target/cube-maker.jar team1@10.10.61.53:~/
 
 # SSH into Node3 and run
 ssh team1@10.10.61.53
 
 # Run with prod profile
-java -jar batch-processor.jar --spring.profiles.active=prod
+java -jar cube-maker.jar --spring.profiles.active=prod
 
 # Or with custom schedule
-java -jar batch-processor.jar \
+java -jar cube-maker.jar \
   --spring.profiles.active=prod \
   --batch.schedule="0 */1 * * * ?"
 ```
@@ -214,13 +214,13 @@ java -jar batch-processor.jar \
 ```bash
 docker run -it --rm \
   --network host \
-  -v /home/team1/batch-processor-1.0.0-SNAPSHOT.jar:/app/batch-processor.jar \
+  -v /home/team1/cube-maker-1.0.0-SNAPSHOT.jar:/app/cube-maker.jar \
   zoraq/spark:4.1.1 \
   spark-submit \
   --master spark://10.10.61.71:7077 \
   --deploy-mode client \
-  --class com.nimbo.batch.BatchProcessorApplication \
-  /app/batch-processor.jar \
+  --class com.nimbo.cubemaker.CubeMakerApplication \
+  /app/cube-maker.jar \
   --spring.profiles.active=prod
 ```
 
@@ -285,7 +285,7 @@ The analytical store consists of five tables:
 | `connection_aggregates` | 5-tuple connection details | `window_start` |
 | `protocol_usage_aggregates` | L7 protocol usage statistics | `window_start` |
 | `ip_bandwidth_aggregates` | IP bandwidth (bidirectional) | `window_start` |
-| `batch_processor_state` | Tracks processed Parquet files | — |
+| `cube_maker_state` | Tracks processed Parquet files | — |
 
 All aggregate tables use `batch_id` (UUID) in their primary keys for idempotency and auditability.
 

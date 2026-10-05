@@ -1,4 +1,4 @@
-# Nimbo Batch Processor — Key Technical Decisions (Week 3)
+# Nimbo Cube Maker — Key Technical Decisions (Week 3)
 
 ---
 

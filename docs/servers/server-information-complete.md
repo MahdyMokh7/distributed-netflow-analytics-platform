@@ -190,7 +190,7 @@ The Spark master API at `10.10.61.71` reported `ALIVE`, but only two workers wer
 
 Cluster total at snapshot time: 4 cores, 4 GiB worker memory, no active applications. Node1 and Node3 workers were unavailable; their pods moved from `Init:ImagePullBackOff` to `PodInitializing` during collection but remained 0/2 ready.
 
-The master recorded four completed applications named `batch-processor` on 2026-09-05. Three used all four available cores; all four finished successfully. This confirms recent end-to-end submissions reached Spark, but it does not by itself validate output completeness.
+The master recorded four completed applications named `cube-maker` on 2026-09-05. Three used all four available cores; all four finished successfully. This confirms recent end-to-end submissions reached Spark, but it does not by itself validate output completeness.
 
 ## Installed platform versions
 
@@ -367,7 +367,7 @@ Spark and PostgreSQL application versions were not re-derived from container ima
 | Nimbo component | Expected data path | Dedicated Kubernetes controller/pod found | Matching persistent host Java process found | Observed execution model at snapshot |
 |---|---|:---:|:---:|---|
 | `parquet-writer` | Kafka → HDFS/Parquet | No | No | Not observed as a persistent Kubernetes or direct host process |
-| `batch-processor` | HDFS/Parquet → Spark → PostgreSQL | No dedicated app pod | No | Submitted Spark applications; four completed jobs were visible from 2026-09-05 |
+| `cube-maker` | HDFS/Parquet → Spark → PostgreSQL | No dedicated app pod | No | Submitted Spark applications; four completed jobs were visible from 2026-09-05 |
 | `realtime` | Kafka → StarRocks | No | No | Not observed as a persistent Kubernetes or direct host process |
 | `rest-api` | PostgreSQL/StarRocks query API | No | No | Not observed as a persistent Kubernetes or direct host process |
 | Shared Avro/model code | Schema dependency used by application modules | Not applicable | Not applicable | Library/module, not a server service |

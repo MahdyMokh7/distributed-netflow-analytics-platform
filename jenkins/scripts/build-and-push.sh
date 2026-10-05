@@ -2,7 +2,7 @@
 # Requires:
 #   IMAGE_TAG, NEXUS_PUSH_REGISTRY, NEXUS_USERNAME, NEXUS_PASSWORD
 #   MODULES_CSV            - comma-separated Maven module list to build, e.g. "rest-api,realtime"
-#   BUILDS_BATCH_PROCESSOR - "true"/"false" - whether batch-processor is in this run
+#   BUILDS_CUBE_MAKER - "true"/"false" - whether cube-maker is in this run
 set -eu
 set +x
 
@@ -22,7 +22,7 @@ mvn \
   clean package \
   -DskipTests
 
-if [ "${BUILDS_BATCH_PROCESSOR}" = "true" ]; then
+if [ "${BUILDS_CUBE_MAKER}" = "true" ]; then
     ./jenkins/scripts/validate-spark-jar.sh
 fi
 

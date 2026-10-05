@@ -6,7 +6,7 @@
 
 ### 1. Executive Summary
 
-Week 3 focused on completing the **batch-processor** module (Cube Maker) by implementing PostgreSQL integration for aggregate storage and production-hardening the entire batch pipeline. The work included:
+Week 3 focused on completing the **cube-maker** module (Cube Maker) by implementing PostgreSQL integration for aggregate storage and production-hardening the entire batch pipeline. The work included:
 
 - Replacing the fragile manual `TableMapper` with a production-grade JDBI DAO layer
 - Implementing proper Avro schema separation for Kafka deserialization vs Parquet writing
@@ -14,7 +14,7 @@ Week 3 focused on completing the **batch-processor** module (Cube Maker) by impl
 - Building incremental file reading with at-least-once semantics
 - Fixing critical bugs including ANSI overflow, timestamp parsing, and file discovery ordering
 
-**Status:** All 4 aggregations are working. Tests are passing. The batch-processor module is production-ready.
+**Status:** All 4 aggregations are working. Tests are passing. The cube-maker module is production-ready.
 
 ---
 
@@ -47,7 +47,7 @@ Week 3 focused on completing the **batch-processor** module (Cube Maker) by impl
 | Module | Purpose | Status |
 |--------|---------|--------|
 | `parquet-writer` | Kafka → HDFS Parquet | ✅ Complete |
-| `batch-processor` | Spark → PostgreSQL | ✅ Complete |
+| `cube-maker` | Spark → PostgreSQL | ✅ Complete |
 | `realtime` | Kafka → StarRocks | ⚠️ Not covered |
 
 ---
@@ -81,7 +81,7 @@ Week 3 focused on completing the **batch-processor** module (Cube Maker) by impl
 | `ConnectionAggregateDao.java` | UPSERT operations for connection_aggregates |
 | `ProtocolAggregateDao.java` | UPSERT operations for protocol_usage_aggregates |
 | `IpBandwidthAggregateDao.java` | UPSERT operations for ip_bandwidth_aggregates |
-| `BatchStateDao.java` | CRUD operations for batch_processor_state |
+| `BatchStateDao.java` | CRUD operations for cube_maker_state |
 
 **Result:** Code reduced from 500+ lines to ~50 lines of clean, type-safe DAO interfaces.
 
@@ -119,7 +119,7 @@ public Schema storageSchema(Schema avroSchema) {
 
 #### 3.3 Processing Time Implementation
 
-**Decision:** Add `PROCESSING_TIME` as a per-record column in the Parquet file at ingestion time (parquet-writer), not at processing time (batch-processor).
+**Decision:** Add `PROCESSING_TIME` as a per-record column in the Parquet file at ingestion time (parquet-writer), not at processing time (cube-maker).
 
 **Why This Matters:**
 
@@ -333,7 +333,7 @@ The `TestDataGenerator` was updated to include `PROCESSING_TIME` column, ensurin
 
 ### 8. Files Modified/Created
 
-#### 8.1 New Files (batch-processor)
+#### 8.1 New Files (cube-maker)
 
 | File | Purpose |
 |------|---------|
@@ -343,7 +343,7 @@ The `TestDataGenerator` was updated to include `PROCESSING_TIME` column, ensurin
 | `BatchStateRecord.java` | State table model |
 | `FileDiscoveryService.java` | Incremental file reading |
 
-#### 8.2 Modified Files (batch-processor)
+#### 8.2 Modified Files (cube-maker)
 
 | File | Changes |
 |------|---------|
@@ -375,7 +375,7 @@ The `TestDataGenerator` was updated to include `PROCESSING_TIME` column, ensurin
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    BATCH-PROCESSOR ARCHITECTURE                            │
+│                       CUBE-MAKER ARCHITECTURE                              │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                     FileDiscoveryService                            │   │
@@ -415,7 +415,7 @@ The `TestDataGenerator` was updated to include `PROCESSING_TIME` column, ensurin
 │  │  │ (src_ip, window) │  │aggregates        │  │aggregates        │  │   │
 │  │  └──────────────────┘  └──────────────────┘  └──────────────────┘  │   │
 │  │  ┌──────────────────┐  ┌──────────────────┐                       │   │
-│  │  │ ip_bandwidth_    │  │ batch_processor_ │                       │   │
+│  │  │ ip_bandwidth_    │  │ cube_maker_ │                       │   │
 │  │  │ aggregates       │  │ state            │                       │   │
 │  │  │ (ip, window)     │  │ (processed files)│                       │   │
 │  │  └──────────────────┘  └──────────────────┘                       │   │
@@ -456,7 +456,7 @@ The `TestDataGenerator` was updated to include `PROCESSING_TIME` column, ensurin
 
 ### 12. Conclusion
 
-Week 3 successfully completed the batch-processor module with all 4 aggregations writing to PostgreSQL. The system is now:
+Week 3 successfully completed the cube-maker module with all 4 aggregations writing to PostgreSQL. The system is now:
 
 - **Production-ready** — ACK verification, retry with backoff, at-least-once semantics
 - **Maintainable** — JDBI DAO pattern replaces fragile 500+ line TableMapper

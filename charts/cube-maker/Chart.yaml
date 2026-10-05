@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cube-maker
+description: Helm chart for the nimbo-nimbyte cube-maker module
+type: application
+version: 0.1.0
+appVersion: "1.0"

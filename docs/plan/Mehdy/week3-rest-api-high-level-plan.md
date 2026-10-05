@@ -538,7 +538,7 @@ com.nimbo.restapi/
 
 2. **Read Replica:** For production, consider a separate read replica to offload queries from the writer database.
 
-3. **Materialized Views:** For very frequent queries (e.g., top bandwidth by day), create materialized views refreshed by the batch processor.
+3. **Materialized Views:** For very frequent queries (e.g., top bandwidth by day), create materialized views refreshed by the cube maker.
 
 4. **GraphQL Option:** If your API consumers need flexible querying, consider adding a GraphQL layer alongside REST.
 

@@ -1,8 +1,8 @@
-# 🎯 **Batch-Processor: From At-Least-Once to Exactly-Once Semantics**
+# 🎯 **Cube Maker: From At-Least-Once to Exactly-Once Semantics**
 
 ## 📋 **Executive Summary**
 
-We successfully implemented **exactly-once processing** for the batch processor by introducing three key changes: **`batch_id` in the primary key**, **a retry mechanism with batch ID reuse**, and **custom exception propagation**. This ensures that even when a batch fails mid-execution, retrying the same batch produces the exact same final state without duplicates or data loss.
+We successfully implemented **exactly-once processing** for the cube maker by introducing three key changes: **`batch_id` in the primary key**, **a retry mechanism with batch ID reuse**, and **custom exception propagation**. This ensures that even when a batch fails mid-execution, retrying the same batch produces the exact same final state without duplicates or data loss.
 
 ---
 
@@ -229,4 +229,4 @@ RESULT:
 
 ## 🚀 **Conclusion**
 
-By adding `batch_id` to the primary key, implementing batch ID reuse on failure, and propagating `batch_id` through custom exceptions, we transformed the batch processor from **at-least-once** to **exactly-once** semantics. Now, even with failures and retries, each batch execution produces a consistent, deduplicated, and fully traceable result.
+By adding `batch_id` to the primary key, implementing batch ID reuse on failure, and propagating `batch_id` through custom exceptions, we transformed the cube maker from **at-least-once** to **exactly-once** semantics. Now, even with failures and retries, each batch execution produces a consistent, deduplicated, and fully traceable result.

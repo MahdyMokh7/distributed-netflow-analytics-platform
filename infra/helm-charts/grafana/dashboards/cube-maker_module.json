@@ -1,0 +1,169 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "description": "Operational health, throughput, duration, PostgreSQL writes, and exactly-once state for the Nimbo cube maker.",
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Whether Prometheus can scrape the cube-maker runtime endpoint.",
+      "fieldConfig": {"defaults": {"mappings": [{"options": {"0": {"color": "red", "text": "DOWN"}, "1": {"color": "green", "text": "UP"}}, "type": "value"}], "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "max(up{job=\"cube-maker\"}) or vector(0)", "refId": "A"}],
+      "title": "Application Health",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Whether a scheduled batch execution is currently active.",
+      "fieldConfig": {"defaults": {"mappings": [{"options": {"0": {"color": "green", "text": "IDLE"}, "1": {"color": "blue", "text": "RUNNING"}}, "type": "value"}]}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "max without (pod, instance) (cube_maker_run_in_progress{job=\"cube-maker\"})", "refId": "A"}],
+      "title": "Run State",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "DURABLE means processed-file state is persisted in PostgreSQL; FALLBACK means restart safety is degraded.",
+      "fieldConfig": {"defaults": {"mappings": [{"options": {"0": {"color": "green", "text": "DURABLE"}, "1": {"color": "red", "text": "FALLBACK"}}, "type": "value"}]}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "id": 5,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "max without (pod, instance) (cube_maker_state_fallback_active{job=\"cube-maker\"})", "refId": "A"}],
+      "title": "Exactly-Once State",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Whether the next scheduled execution must reuse a failed batch identifier.",
+      "fieldConfig": {"defaults": {"mappings": [{"options": {"0": {"color": "green", "text": "CLEAR"}, "1": {"color": "orange", "text": "RETRY PENDING"}}, "type": "value"}]}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "id": 6,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "max without (pod, instance) (cube_maker_failed_batch_pending{job=\"cube-maker\"})", "refId": "A"}],
+      "title": "Failed Batch Recovery",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Completed scheduled executions grouped by outcome over the selected dashboard time range.",
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}]}}, "overrides": [{"matcher": {"id": "byName", "options": "failed"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}, {"matcher": {"id": "byName", "options": "no_data"}, "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]}, {"matcher": {"id": "byName", "options": "disabled"}, "properties": [{"id": "color", "value": {"fixedColor": "gray", "mode": "fixed"}}]}]},
+      "gridPos": {"h": 7, "w": 8, "x": 0, "y": 4},
+      "id": 7,
+      "options": {"displayMode": "gradient", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+      "targets": [{"expr": "sum by (outcome) (increase(cube_maker_runs_total{job=\"cube-maker\"}[$__range]))", "instant": true, "legendFormat": "{{outcome}}", "range": false, "refId": "A"}],
+      "title": "Run Outcomes in Selected Range",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Duration of each completed run, shown for five minutes after completion so hourly executions are not combined.",
+      "fieldConfig": {"defaults": {"decimals": 1, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "thresholdsStyle": {"mode": "line"}}, "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "orange", "value": 3000}, {"color": "red", "value": 4200}]}, "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 8, "x": 8, "y": 4},
+      "id": 8,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (outcome) (increase(cube_maker_run_duration_seconds_sum{job=\"cube-maker\"}[5m])) / sum by (outcome) (increase(cube_maker_run_duration_seconds_count{job=\"cube-maker\"}[5m]))", "legendFormat": "{{outcome}}", "refId": "A"}],
+      "title": "Run Duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Average duration by stage over the selected dashboard range, sorted to show the recurring processing bottleneck across completed runs.",
+      "fieldConfig": {"defaults": {"decimals": 1, "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}]}}, "overrides": []},
+      "gridPos": {"h": 7, "w": 8, "x": 16, "y": 4},
+      "id": 9,
+      "options": {"displayMode": "gradient", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+      "targets": [{"expr": "sort_desc(sum by (stage) (increase(cube_maker_stage_duration_seconds_sum{job=\"cube-maker\"}[$__range])) / sum by (stage) (increase(cube_maker_stage_duration_seconds_count{job=\"cube-maker\"}[$__range])))", "instant": true, "legendFormat": "{{stage}}", "range": false, "refId": "A"}],
+      "title": "Stage Duration",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Durably recorded files and processed source records emitted by each batch, shown in a five-minute event window; these differ when state persistence falls back to memory.",
+      "fieldConfig": {"defaults": {"decimals": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}, "unit": "short"}, "overrides": [{"matcher": {"id": "byName", "options": "durably recorded files"}, "properties": [{"id": "custom.axisPlacement", "value": "right"}, {"id": "custom.drawStyle", "value": "bars"}]}]},
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 11},
+      "id": 10,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum(increase(cube_maker_files_processed_total{job=\"cube-maker\"}[5m]))", "legendFormat": "durably recorded files", "refId": "A"},
+        {"expr": "sum(increase(cube_maker_source_records_total{job=\"cube-maker\"}[5m]))", "legendFormat": "processed source records", "refId": "B"}
+      ],
+      "title": "Processed Input",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Rows written to PostgreSQL by cube for each batch, shown in a five-minute event window so hourly executions remain separate.",
+      "fieldConfig": {"defaults": {"decimals": 0, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 11},
+      "id": 11,
+      "options": {"legend": {"calcs": [], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "sum by (cube) (increase(cube_maker_output_rows_total{job=\"cube-maker\"}[5m]))", "legendFormat": "{{cube}}", "refId": "A"}],
+      "title": "PostgreSQL Rows Written",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18},
+      "id": 13,
+      "panels": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Executor-side PostgreSQL retries and terminal stage failures emitted by each batch, shown in a five-minute event window.",
+          "fieldConfig": {"defaults": {"decimals": 0, "custom": {"drawStyle": "bars", "fillOpacity": 30, "lineWidth": 1}, "unit": "short"}, "overrides": [{"matcher": {"id": "byRegexp", "options": "/^retry /"}, "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]}, {"matcher": {"id": "byRegexp", "options": "/^failure /"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}]},
+          "gridPos": {"h": 7, "w": 12, "x": 0, "y": 19},
+          "id": 12,
+          "options": {"legend": {"calcs": [], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"expr": "sum by (cube) (increase(cube_maker_postgres_retries_total{job=\"cube-maker\"}[5m]))", "legendFormat": "retry {{cube}}", "refId": "A"},
+            {"expr": "sum by (stage) (increase(cube_maker_stage_failures_total{job=\"cube-maker\"}[5m]))", "legendFormat": "failure {{stage}}", "refId": "B"}
+          ],
+          "title": "Retries and Failures",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Elapsed time since the last successful non-empty batch. No-data runs do not update this timestamp, so age alone is not a health signal.",
+          "fieldConfig": {"defaults": {"decimals": 0, "noValue": "NO SUCCESS YET", "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "blue"}]}}, "overrides": []},
+          "gridPos": {"h": 7, "w": 6, "x": 12, "y": 19},
+          "id": 3,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "time() - max without (pod, instance) (cube_maker_last_success_timestamp_seconds{job=\"cube-maker\"} > 0)", "refId": "A"}],
+          "title": "Last Success Age",
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Age of the newest durably recorded Parquet filename timestamp. Upstream inactivity or backlog can increase this value without a processor failure.",
+          "fieldConfig": {"defaults": {"decimals": 0, "noValue": "NO FILE COMMITTED", "unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "blue"}]}}, "overrides": []},
+          "gridPos": {"h": 7, "w": 6, "x": 18, "y": 19},
+          "id": 4,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+          "targets": [{"expr": "time() - max without (pod, instance) (cube_maker_last_processed_file_timestamp_seconds{job=\"cube-maker\"} > 0)", "refId": "A"}],
+          "title": "Processed File Age",
+          "type": "stat"
+        }
+      ],
+      "title": "Diagnostics",
+      "type": "row"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["cube-maker", "Spark", "PostgreSQL", "HDFS"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Cube Maker Module Health",
+  "uid": "cube-maker",
+  "version": 1,
+  "weekStart": ""
+}
