@@ -21,6 +21,7 @@ import com.nimbo.analyticsquery.sql.SqlGenerationContextFactory;
 import com.nimbo.analyticsquery.sql.SqlGenerationResult;
 import com.nimbo.analyticsquery.sql.SqlGenerator;
 import com.nimbo.analyticsquery.sql.SqlParsingException;
+import com.nimbo.analyticsquery.sql.SqlRequirementValidator;
 import com.nimbo.analyticsquery.sql.SqlValidationException;
 import com.nimbo.analyticsquery.sql.SqlValidator;
 
@@ -37,6 +38,7 @@ public class SqlGenerationService {
     private final SqlGenerator sqlGenerator;
     private final SqlAstParser sqlAstParser;
     private final SqlValidator sqlValidator;
+    private final SqlRequirementValidator sqlRequirementValidator;
     private final AnalyticsQueryMetrics metrics;
 
     public SqlGenerationService(
@@ -47,6 +49,7 @@ public class SqlGenerationService {
             SqlGenerator sqlGenerator,
             SqlAstParser sqlAstParser,
             SqlValidator sqlValidator,
+            SqlRequirementValidator sqlRequirementValidator,
             AnalyticsQueryMetrics metrics) {
         this.intentInterpreter = intentInterpreter;
         this.eligibilityPolicy = eligibilityPolicy;
@@ -55,6 +58,7 @@ public class SqlGenerationService {
         this.sqlGenerator = sqlGenerator;
         this.sqlAstParser = sqlAstParser;
         this.sqlValidator = sqlValidator;
+        this.sqlRequirementValidator = sqlRequirementValidator;
         this.metrics = metrics;
     }
 
@@ -105,9 +109,12 @@ public class SqlGenerationService {
                     Stage.SQL_VALIDATION,
                     () -> sqlAstParser.parse(candidate));
 
-            return SqlGenerationResult.success(metrics.observeStage(
+            ParsedSql validatedSql = metrics.observeStage(
                     Stage.SQL_VALIDATION,
-                    () -> sqlValidator.validate(parsedSql, context)));
+                    () -> sqlValidator.validate(parsedSql, context));
+            sqlRequirementValidator.validate(
+                    validatedSql, intent.queryRequirements(), context);
+            return SqlGenerationResult.success(validatedSql);
 
         } catch (LlmClientException exception) {
             log.warn("LLM processing failed during SQL generation with kind {}", exception.kind());

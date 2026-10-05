@@ -51,6 +51,14 @@ class SqlGenerationContextFactoryTest {
         assertThat(table.timeSemantics().column()).isEqualTo("window_start");
         assertThat(table.timeSemantics().timeZone()).isEqualTo(ZoneOffset.UTC);
         assertThat(table.timeSemantics().resolution()).isEqualTo(Duration.ofHours(1));
+        assertThat(table.semanticExpressions())
+                .contains(
+                        new SqlGenerationContext.SemanticExpression(
+                                SemanticFieldNames.TOTAL_BYTES,
+                                "(in_bytes + out_bytes)"),
+                        new SqlGenerationContext.SemanticExpression(
+                                SemanticFieldNames.TOTAL_PACKETS,
+                                "(in_packets + out_packets)"));
         assertThat(context.queryRestrictions())
                 .contains(
                         "Do not reference another datasource.",
