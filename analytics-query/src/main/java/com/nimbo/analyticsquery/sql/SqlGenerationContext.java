@@ -3,10 +3,16 @@ package com.nimbo.analyticsquery.sql;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import com.nimbo.analyticsquery.model.AnalysisDataSource;
 import com.nimbo.analyticsquery.schema.SemanticColumn;
+import com.nimbo.analyticsquery.schema.SemanticFieldNames;
 
 public record SqlGenerationContext(
         AnalysisDataSource dataSource,
@@ -52,6 +58,63 @@ public record SqlGenerationContext(
             if (columns.isEmpty()) {
                 throw new IllegalArgumentException("table columns must not be empty");
             }
+        }
+
+        @JsonProperty("semanticExpressions")
+        public List<SemanticExpression> semanticExpressions() {
+            Map<String, SemanticColumn> byField = columns.stream()
+                    .filter(column -> column.semanticField() != null)
+                    .collect(
+                            Collectors.toMap(
+                                    SemanticColumn::semanticField,
+                                    Function.identity(),
+                                    (first, ignored) -> first));
+
+            List<SemanticExpression> expressions = byField.values().stream()
+                    .map(column -> new SemanticExpression(column.semanticField(), column.name()))
+                    .sorted(java.util.Comparator.comparing(SemanticExpression::semanticField))
+                    .collect(Collectors.toCollection(java.util.ArrayList::new));
+
+            addDerived(
+                    expressions,
+                    byField,
+                    SemanticFieldNames.TOTAL_BYTES,
+                    SemanticFieldNames.IN_BYTES,
+                    SemanticFieldNames.OUT_BYTES);
+            addDerived(
+                    expressions,
+                    byField,
+                    SemanticFieldNames.TOTAL_PACKETS,
+                    SemanticFieldNames.IN_PACKETS,
+                    SemanticFieldNames.OUT_PACKETS);
+
+            return List.copyOf(expressions);
+        }
+
+        private static void addDerived(
+                List<SemanticExpression> expressions,
+                Map<String, SemanticColumn> byField,
+                String derivedField,
+                String firstField,
+                String secondField) {
+
+            SemanticColumn first = byField.get(firstField);
+            SemanticColumn second = byField.get(secondField);
+
+            if (first != null && second != null) {
+                expressions.add(
+                        new SemanticExpression(
+                                derivedField,
+                                "(" + first.name() + " + " + second.name() + ")"));
+            }
+        }
+    }
+
+    public record SemanticExpression(String semanticField, String sqlExpression) {
+
+        public SemanticExpression {
+            requireText(semanticField, "semanticField");
+            requireText(sqlExpression, "sqlExpression");
         }
     }
 

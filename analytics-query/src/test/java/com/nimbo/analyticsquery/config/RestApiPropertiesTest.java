@@ -33,5 +33,6 @@ class RestApiPropertiesTest {
 
     @EnableConfigurationProperties(RestApiProperties.class)
     static class TestConfiguration {
+
     }
 }

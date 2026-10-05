@@ -36,6 +36,7 @@ class AnalyticsPlannerIT {
     @DynamicPropertySource
     static void dependencies(DynamicPropertyRegistry registry) {
         registry.add("rest-api.base-url", () -> REST_API.baseUrl().toString());
+        registry.add("rest-api.timeout.read", () -> "250ms");
         registry.add("llm.base-url", () -> REST_API.originUrl().toString());
     }
 

@@ -42,6 +42,20 @@ class StarRocksSemanticMetadataTest {
     }
 
     @Test
+    void givenGenericTimestampCommentWhenMetadataIsCreatedThenCuratedUnitIsPreserved() {
+        // Given: a known timestamp column with a generic physical comment
+        String comment = "Kafka event timestamp";
+
+        // When: semantic metadata is derived
+        var metadata =
+                StarRocksSemanticMetadata.metadata("kafka_timestamp", "bigint", comment)
+                        .orElseThrow();
+
+        // Then: the epoch-millisecond unit is preserved
+        assertThat(metadata.meaning()).isEqualTo("Kafka record timestamp in epoch milliseconds.");
+    }
+
+    @Test
     void givenMeasurementColumnWhenMetadataIsCreatedThenSumIsNotAllowed() {
         // Given: a minimum TTL measurement rather than an additive counter
         String columnName = "min_ttl";

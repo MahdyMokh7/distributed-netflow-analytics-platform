@@ -38,6 +38,9 @@ class StarRocksSqlExecutionControllerIT {
         registry.add("analytics-query.sql-execution.starrocks.jdbc-url", STARROCKS::jdbcUrl);
         registry.add("analytics-query.sql-execution.starrocks.username", () -> "root");
         registry.add("analytics-query.sql-execution.starrocks.password", () -> "");
+        registry.add(
+                "analytics-query.sql-execution.starrocks.connection-timeout",
+                () -> "15s");
     }
 
     @Autowired private TestRestTemplate restTemplate;

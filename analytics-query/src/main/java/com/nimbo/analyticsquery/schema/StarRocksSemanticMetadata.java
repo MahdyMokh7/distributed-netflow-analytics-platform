@@ -115,14 +115,14 @@ final class StarRocksSemanticMetadata {
     }
 
     private static String meaning(String name, String comment) {
-        if (comment != null && !comment.isBlank()) {
-            return comment.strip();
-        }
-
         String override = MEANING_OVERRIDES.get(name);
 
         if (override != null) {
             return override;
+        }
+
+        if (comment != null && !comment.isBlank()) {
+            return comment.strip();
         }
 
         String words =

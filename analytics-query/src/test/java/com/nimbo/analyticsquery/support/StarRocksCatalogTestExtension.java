@@ -119,6 +119,26 @@ public final class StarRocksCatalogTestExtension
                                     return false;
                                 }
                             });
+
+            await().alias("StarRocks catalog test EXPLAIN readiness")
+                    .pollInterval(Duration.ofSeconds(1))
+                    .atMost(Duration.ofMinutes(2))
+                    .until(
+                            () -> {
+                                try {
+                                    execute(
+                                            """
+                                    EXPLAIN SELECT ipv4_src_addr, in_bytes
+                                    FROM nimbo.netflow
+                                    WHERE kafka_timestamp >= 1791014400000
+                                      AND kafka_timestamp < 1791018000000
+                                    LIMIT 10
+                                    """);
+                                    return true;
+                                } catch (SQLException exception) {
+                                    return false;
+                                }
+                            });
         }
 
         String jdbcUrl() {
