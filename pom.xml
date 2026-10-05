@@ -26,6 +26,7 @@
         <module>batch-ingester</module>
         <module>batch-processor</module>
         <module>starrocks-writer</module>
+        <module>starrocks-backfill</module>
         <module>rest-api</module>
         <module>analytics-query</module>
     </modules>
