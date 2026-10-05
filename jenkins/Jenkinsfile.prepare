@@ -52,12 +52,24 @@ pipeline {
 
     environment {
         PATH = "/home/team1/.local/bin:${env.PATH}"
+        KUBECONFIG = '/home/team1/.kube/config'
     }
 
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Kubernetes preflight') {
+            steps {
+                sh '''
+                    set -eu
+                    test -r "$KUBECONFIG"
+                    kubectl config current-context
+                    kubectl get namespace "$KUBE_NAMESPACE" --request-timeout=10s >/dev/null
+                '''
             }
         }
 
@@ -142,6 +154,23 @@ pipeline {
             }
         }
 
+        stage('Schema Registry (Helm)') {
+            when {
+                expression {
+                    changed('schema-registry', 'infra/helm-charts/schema-registry/')
+                }
+            }
+            steps {
+                sh """
+                    set -eu
+                    helm upgrade --install schema-registry infra/helm-charts/schema-registry \
+                        --namespace ${params.KUBE_NAMESPACE} \
+                        --wait --timeout 5m
+                """
+                script { env.RAN_SCHEMA_REGISTRY = 'true' }
+            }
+        }
+
         stage('Prometheus (Helm)') {
             when { expression { changed('prometheus', 'infra/helm-charts/prometheus/') } }
             steps {
@@ -175,6 +204,7 @@ pipeline {
                 if (env.RAN_STARROCKS == 'true')        { recordState('starrocks', sha) }
                 if (env.RAN_POSTGRES_CHART == 'true')   { recordState('postgresql-ha', sha) }
                 if (env.RAN_SPARK_CHART == 'true')      { recordState('spark-chart', sha) }
+                if (env.RAN_SCHEMA_REGISTRY == 'true')  { recordState('schema-registry', sha) }
                 if (env.RAN_PROMETHEUS == 'true')       { recordState('prometheus', sha) }
                 if (env.RAN_GRAFANA == 'true')          { recordState('grafana', sha) }
             }
