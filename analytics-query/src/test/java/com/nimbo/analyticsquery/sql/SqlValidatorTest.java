@@ -53,14 +53,14 @@ class SqlValidatorTest {
         SqlGenerationContext context = context(
                 AnalysisDataSource.STARROCKS,
                 "nimbo.netflow",
-                "kafka_timestamp",
+                "process_time",
                 "ipv4_src_addr");
         ParsedSql parsedSql = parse(
                 AnalysisDataSource.STARROCKS,
                 """
                 SELECT ipv4_src_addr, COUNT(*) AS flow_count
                 FROM nimbo.netflow
-                WHERE kafka_timestamp BETWEEN 1791014400000 AND 1791018000000
+                WHERE process_time BETWEEN 1791014400000 AND 1791018000000
                 GROUP BY ipv4_src_addr
                 ORDER BY flow_count DESC
                 LIMIT 10
@@ -242,7 +242,7 @@ class SqlValidatorTest {
         SqlGenerationContext context = context(
                 AnalysisDataSource.STARROCKS,
                 "nimbo.netflow",
-                "kafka_timestamp",
+                "process_time",
                 "ipv4_src_addr");
         ParsedSql parsedSql = parse(
                 AnalysisDataSource.POSTGRESQL,

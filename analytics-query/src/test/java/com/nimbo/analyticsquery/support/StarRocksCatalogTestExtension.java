@@ -100,7 +100,7 @@ public final class StarRocksCatalogTestExtension
                                     execute(
                                             """
                                     CREATE TABLE nimbo.netflow (
-                                        kafka_timestamp BIGINT NOT NULL COMMENT 'Kafka event timestamp',
+                                        PROCESS_TIME BIGINT NOT NULL COMMENT 'Kafka event timestamp',
                                         ipv4_src_addr VARCHAR(15) NULL COMMENT 'Source IPv4 address',
                                         ipv4_dst_addr VARCHAR(15) NULL COMMENT 'Destination IPv4 address',
                                         in_bytes BIGINT NULL COMMENT 'Inbound bytes',
@@ -109,8 +109,8 @@ public final class StarRocksCatalogTestExtension
                                         new_flow_bytes BIGINT NULL COMMENT 'New flow byte count'
                                     )
                                     ENGINE = OLAP
-                                    DUPLICATE KEY(kafka_timestamp)
-                                    DISTRIBUTED BY HASH(kafka_timestamp)
+                                    DUPLICATE KEY(PROCESS_TIME)
+                                    DISTRIBUTED BY HASH(PROCESS_TIME)
                                     BUCKETS 1
                                     PROPERTIES ("replication_num" = "1")
                                     """);

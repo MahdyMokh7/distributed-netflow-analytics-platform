@@ -46,8 +46,8 @@ class SqlAstParserTest {
                         SELECT ipv4_src_addr,
                                COUNT(DISTINCT l4_dst_port) AS destination_port_count
                         FROM nimbo.netflow
-                        WHERE kafka_timestamp >= 1791014400000
-                          AND kafka_timestamp < 1791018000000
+                        WHERE process_time >= 1791014400000
+                          AND process_time < 1791018000000
                         GROUP BY ipv4_src_addr
                         ORDER BY destination_port_count DESC
                         LIMIT 10

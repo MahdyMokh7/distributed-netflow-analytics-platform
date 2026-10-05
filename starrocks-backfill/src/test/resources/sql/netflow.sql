@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS nimbo.netflow
 
     ipv4_src_addr VARCHAR(15) NOT NULL,
     ipv4_dst_addr VARCHAR(15) NOT NULL,
-    kafka_timestamp BIGINT NOT NULL,
+    PROCESS_TIME BIGINT NOT NULL,
 
 
     kafka_topic VARCHAR(255) NOT NULL,
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS nimbo.netflow
 
     PARTITION BY date_trunc(
                                'day',
-                               from_unixtime_ms(kafka_timestamp)
+                               from_unixtime_ms(PROCESS_TIME)
     )
 
     DISTRIBUTED BY HASH(ipv4_src_addr, ipv4_dst_addr)

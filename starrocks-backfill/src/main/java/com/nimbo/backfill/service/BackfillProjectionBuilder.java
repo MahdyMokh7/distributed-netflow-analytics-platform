@@ -16,8 +16,6 @@ import com.nimbo.backfill.model.SchemaColumn;
 
 public final class BackfillProjectionBuilder {
 
-    private static final String PROCESS_TIME = "process_time";
-    private static final String KAFKA_TIMESTAMP = "kafka_timestamp";
     private static final Set<String> NUMBER_TYPES = Set.of("tinyint", "smallint", "int", "integer", "bigint",
             "largeint", "float", "double", "decimal", "decimal32", "decimal64", "decimal128", "decimal256");
 
@@ -48,7 +46,6 @@ public final class BackfillProjectionBuilder {
         rejectHdfsOnlyColumns(starRocksTable, starRocksColumnsByName, hdfsColumnsByName, hdfsSchema.path());
 
         List<String> expressions = new ArrayList<>();
-        List<String> generatedMappings = new ArrayList<>();
         int directlyMappedCount = 0;
         int nullFilledCount = 0;
 
@@ -57,15 +54,7 @@ public final class BackfillProjectionBuilder {
             String normalizedName = normalize(starRocksColumn.name());
             SchemaColumn hdfsColumn = hdfsColumnsByName.get(normalizedName);
 
-            if (KAFKA_TIMESTAMP.equals(normalizedName)) {
-                SchemaColumn processTime = requireProcessTime(hdfsColumnsByName, hdfsSchema.path());
-                requireCompatibleTypes(processTime, starRocksColumn, hdfsSchema.path());
-
-                expressions.add(
-                        "CAST(" + identifier(processTime.name()) + " AS " + starRocksColumn.type() + ")");
-                generatedMappings.add("kafka_timestamp <- PROCESS_TIME");
-
-            } else if (hdfsColumn != null) {
+            if (hdfsColumn != null) {
                 requireCompatibleTypes(hdfsColumn, starRocksColumn, hdfsSchema.path());
                 expressions.add("CAST(" + identifier(hdfsColumn.name()) + " AS " + starRocksColumn.type() + ")");
                 directlyMappedCount++;
@@ -77,16 +66,14 @@ public final class BackfillProjectionBuilder {
             }
         }
 
-        String mappingSummary = directlyMappedCount + " matched, " + generatedMappings.size() + " generated"
-                + (nullFilledCount == 0 ? "" : ", " + nullFilledCount + " NULL-filled")
-                + (generatedMappings.isEmpty() ? "" : " (" + String.join(", ", generatedMappings) + ")");
+        String mappingSummary = directlyMappedCount + " matched"
+                + (nullFilledCount == 0 ? "" : ", " + nullFilledCount + " NULL-filled");
         return new HdfsPathColumnMapping(hdfsSchema.path(), expressions, mappingSummary);
     }
 
     private void rejectHdfsOnlyColumns(String starRocksTable, Map<String, SchemaColumn> starRocksColumnsByName,
             Map<String, SchemaColumn> hdfsColumnsByName, String path) {
         List<SchemaColumn> missing = hdfsColumnsByName.values().stream()
-                .filter(column -> !PROCESS_TIME.equals(normalize(column.name())))
                 .filter(column -> !starRocksColumnsByName.containsKey(normalize(column.name()))).toList();
         if (missing.isEmpty()) {
             return;
@@ -107,14 +94,6 @@ public final class BackfillProjectionBuilder {
                 + starRocksColumn.name() + ". Old Parquet files cannot be changed; allow NULL for old versions, "
                 + "for example: ALTER TABLE " + starRocksTable + " MODIFY COLUMN "
                 + identifier(starRocksColumn.name()) + " " + starRocksColumn.type() + " NULL;");
-    }
-
-    private SchemaColumn requireProcessTime(Map<String, SchemaColumn> hdfsColumnsByName, String path) {
-        SchemaColumn processTime = hdfsColumnsByName.get(PROCESS_TIME);
-        if (processTime == null) {
-            throw new BackfillException("HDFS path " + path + " has no PROCESS_TIME for kafka_timestamp");
-        }
-        return processTime;
     }
 
     private void requireCompatibleTypes(SchemaColumn hdfsColumn, SchemaColumn starRocksColumn, String path) {

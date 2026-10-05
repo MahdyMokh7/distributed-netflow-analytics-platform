@@ -140,7 +140,7 @@ class BackfillServiceTest {
         private BackfillMetrics stagingIntervalMetrics = sourceIntervalMetrics;
         private boolean stagingPartitionExists;
         private SQLException publishFailure;
-        private final BackfillProjection projection = new BackfillProjection(List.of("kafka_timestamp"),
+        private final BackfillProjection projection = new BackfillProjection(List.of("PROCESS_TIME"),
                 List.of(new HdfsPathColumnMapping("hdfs://team1/netflow/parquetFiles/2026-09-26/10/*.parquet",
                         List.of("CAST(PROCESS_TIME AS BIGINT)"), "mapping")),
                 List.of());

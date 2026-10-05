@@ -20,7 +20,7 @@ If the HDFS and StarRocks interval metrics already match, the run stops without 
 interval into a temporary partition, validates it, deletes that exact interval from the formal table,
 inserts the staged rows, validates the published interval, and drops the temporary partition. The final
 insert does not name a formal partition. StarRocks expression partitioning routes every row by
-`kafka_timestamp` and automatically creates the daily partition if it does not already exist.
+`PROCESS_TIME` and automatically creates the daily partition if it does not already exist.
 
 All touched hours are joined with `UNION ALL` inside one HDFS load `INSERT`, so a multi-hour stage is
 committed as one StarRocks transaction. After execution, row count, byte and packet sums, and minimum
@@ -34,8 +34,8 @@ not copy, read, or stage the other 23.5 hours. Empty hourly directories are repo
 The load mapping is not hardcoded:
 
 - Columns present on both sides are matched without case sensitivity and cast to the StarRocks type.
-- `kafka_timestamp` is mapped directly from Parquet `PROCESS_TIME`; both store the Kafka record timestamp
-  in milliseconds.
+- `PROCESS_TIME` is matched directly like every other shared column; both writers store it in epoch
+  milliseconds.
 - `KAFKA_TOPIC`, `KAFKA_PARTITION`, and `KAFKA_OFFSET` are read directly from Parquet like normal
   columns. Missing required metadata stops the run before writing; no synthetic fallback is generated.
 - A nullable StarRocks-only evolution column is filled with `NULL` for older Parquet files.

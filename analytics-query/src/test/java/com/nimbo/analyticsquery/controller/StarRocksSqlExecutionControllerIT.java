@@ -49,7 +49,7 @@ class StarRocksSqlExecutionControllerIT {
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<String> request = new HttpEntity<>("""
                 {
-                  "sql": "SELECT ipv4_src_addr, in_bytes FROM nimbo.netflow WHERE kafka_timestamp >= 1791014400000 AND kafka_timestamp < 1791018000000 LIMIT 10"
+                  "sql": "SELECT ipv4_src_addr, in_bytes FROM nimbo.netflow WHERE PROCESS_TIME >= 1791014400000 AND PROCESS_TIME < 1791018000000 LIMIT 10"
                 }
                 """, headers);
 

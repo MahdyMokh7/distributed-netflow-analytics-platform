@@ -28,7 +28,7 @@ class NetflowBackfillSqlTest {
         Clock clock = Clock.fixed(Instant.parse("2026-09-28T12:00:00Z"), ZoneOffset.UTC);
         config = BackfillConfig.fromEnvironment(validEnvironment(), clock);
         plan = new BackfillPlanner().createPlans(config).get(0);
-        projection = new BackfillProjection(List.of("ipv4_src_addr", "kafka_timestamp", "kafka_topic"),
+        projection = new BackfillProjection(List.of("ipv4_src_addr", "PROCESS_TIME", "kafka_topic"),
                 List.of(mapping(plan.hdfsPaths().get(0)), mapping(plan.hdfsPaths().get(1))), List.of());
     }
 
@@ -56,13 +56,13 @@ class NetflowBackfillSqlTest {
     void deletesAndInsertsOnlyTheExactInterval() {
         assertThat(NetflowBackfillSql.deleteTargetInterval(config, plan)).contains("DELETE FROM `nimbo`.`netflow`")
                 .doesNotContain("PARTITION")
-                .contains("kafka_timestamp >= " + plan.fromMillis()).contains("kafka_timestamp < " + plan.toMillis());
+                .contains("PROCESS_TIME >= " + plan.fromMillis()).contains("PROCESS_TIME < " + plan.toMillis());
 
         assertThat(NetflowBackfillSql.publishStagedInterval(config, plan, projection))
                 .contains("INSERT INTO `nimbo`.`netflow` (")
                 .doesNotContain("INSERT INTO `nimbo`.`netflow` PARTITION")
                 .contains("TEMPORARY PARTITION (`" + plan.stagingPartitionName() + "`)")
-                .contains("kafka_timestamp >= " + plan.fromMillis()).contains("kafka_timestamp < " + plan.toMillis());
+                .contains("PROCESS_TIME >= " + plan.fromMillis()).contains("PROCESS_TIME < " + plan.toMillis());
     }
 
     @Test

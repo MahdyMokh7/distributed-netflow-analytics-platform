@@ -71,8 +71,8 @@ public final class NetflowBackfillSql {
                 SELECT
                 %s
                 FROM %s TEMPORARY PARTITION (%s)
-                WHERE kafka_timestamp >= %d
-                  AND kafka_timestamp < %d
+                WHERE PROCESS_TIME >= %d
+                  AND PROCESS_TIME < %d
                 """.formatted(starRocksTable(config), columns, columns, starRocksTable(config),
                 identifier(plan.stagingPartitionName()), plan.fromMillis(), plan.toMillis());
     }
@@ -80,8 +80,8 @@ public final class NetflowBackfillSql {
     public static String deleteTargetInterval(BackfillConfig config, DailyBackfillPlan plan) {
         return """
                 DELETE FROM %s
-                WHERE kafka_timestamp >= %d
-                  AND kafka_timestamp < %d
+                WHERE PROCESS_TIME >= %d
+                  AND PROCESS_TIME < %d
                 """.formatted(starRocksTable(config), plan.fromMillis(), plan.toMillis());
     }
 
@@ -133,11 +133,11 @@ public final class NetflowBackfillSql {
                        COALESCE(SUM(out_bytes), 0) AS out_bytes,
                        COALESCE(SUM(in_pkts), 0) AS in_packets,
                        COALESCE(SUM(out_pkts), 0) AS out_packets,
-                       MIN(kafka_timestamp) AS minimum_timestamp,
-                       MAX(kafka_timestamp) AS maximum_timestamp
+                       MIN(PROCESS_TIME) AS minimum_timestamp,
+                       MAX(PROCESS_TIME) AS maximum_timestamp
                 FROM %s %s
-                WHERE kafka_timestamp >= %d
-                  AND kafka_timestamp < %d
+                WHERE PROCESS_TIME >= %d
+                  AND PROCESS_TIME < %d
                 """.formatted(starRocksTable(config), partitionClause, plan.fromMillis(), plan.toMillis());
     }
 

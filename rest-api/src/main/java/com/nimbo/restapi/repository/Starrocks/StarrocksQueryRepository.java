@@ -60,7 +60,7 @@ public class StarrocksQueryRepository {
         WITH hourly_source AS (
             SELECT
                 ipv4_src_addr,
-                CAST(FLOOR(kafka_timestamp / 3600000) * 3600000 AS BIGINT) AS window_start,
+                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
                 in_bytes,
                 out_bytes,
                 in_pkts,
@@ -116,7 +116,7 @@ public class StarrocksQueryRepository {
             SELECT
                 ipv4_src_addr,
                 ipv4_dst_addr,
-                CAST(FLOOR(kafka_timestamp / 3600000) * 3600000 AS BIGINT) AS window_start,
+                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
                 in_bytes,
                 out_bytes,
                 in_pkts,
@@ -156,7 +156,7 @@ public class StarrocksQueryRepository {
             SELECT
                 ipv4_src_addr,
                 ipv4_dst_addr,
-                CAST(FLOOR(kafka_timestamp / 3600000) * 3600000 AS BIGINT) AS window_start
+                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start
             FROM %s
         )
             SELECT COUNT(*)
@@ -198,7 +198,7 @@ public class StarrocksQueryRepository {
         WITH endpoint_rows AS (
             SELECT
                 ipv4_src_addr AS ip,
-                CAST(FLOOR(kafka_timestamp / 3600000) * 3600000 AS BIGINT) AS window_start,
+                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
                 in_bytes AS inbound_bytes,
                 out_bytes AS outbound_bytes,
                 in_pkts AS inbound_packets,
@@ -209,7 +209,7 @@ public class StarrocksQueryRepository {
 
             SELECT
                 ipv4_dst_addr AS ip,
-                CAST(FLOOR(kafka_timestamp / 3600000) * 3600000 AS BIGINT) AS window_start,
+                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
                 out_bytes AS inbound_bytes,
                 in_bytes AS outbound_bytes,
                 out_pkts AS inbound_packets,
@@ -271,7 +271,7 @@ public class StarrocksQueryRepository {
         WITH hourly AS (
             SELECT
                 l7_proto,
-                CAST(FLOOR(kafka_timestamp / 3600000) * 3600000 AS BIGINT) AS window_start,
+                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
                 in_bytes,
                 out_bytes,
                 in_pkts,

@@ -45,7 +45,7 @@ final class StarRocksSemanticMetadata {
                     "ipv4_src_addr", "Source IPv4 address.",
                     "ipv4_dst_addr", "Destination IPv4 address.",
                     "l7_proto", "Layer-7 protocol identifier.",
-                    "kafka_timestamp", "Kafka record timestamp in epoch milliseconds.");
+                    "process_time", "Kafka record timestamp in epoch milliseconds.");
 
     private static final Set<String> STRING_TYPES = Set.of("char", "varchar", "string");
 
@@ -72,7 +72,7 @@ final class StarRocksSemanticMetadata {
 
     private static Optional<Set<SemanticColumn.Role>> inferRoles(String name, String dataType) {
 
-        if (name.equals("kafka_timestamp") || name.endsWith("_timestamp")) {
+        if (name.equals("process_time") || name.endsWith("_timestamp")) {
             return Optional.of(Set.of(TIME));
         }
 

@@ -36,7 +36,7 @@ class IntentPromptFactoryTest {
     @Test
     void givenCuratedCatalogWhenPromptIsCreatedThenOnlyApprovedSemanticsAreExposed() {
         // Given: the current curated semantic catalog
-        String physicalStarRocksColumn = "kafka_timestamp";
+        String physicalStarRocksColumn = "process_time";
 
         // When: the intent system prompt is created
         String prompt = promptFactory.createSystemPrompt();

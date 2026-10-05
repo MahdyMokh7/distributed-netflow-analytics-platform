@@ -124,14 +124,14 @@ class StarRocksBackfillIT {
         try (Connection connection = STARROCKS.connection();
              Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery("""
-                     SELECT ipv4_src_addr, kafka_timestamp, kafka_topic, kafka_partition, kafka_offset,
+                     SELECT ipv4_src_addr, PROCESS_TIME, kafka_topic, kafka_partition, kafka_offset,
                             in_bytes, out_bytes, in_pkts, out_pkts
                      FROM nimbo.netflow
-                     ORDER BY kafka_timestamp
+                     ORDER BY PROCESS_TIME
                      """)) {
             while (result.next()) {
                 rows.add(new PersistedRow(result.getString("ipv4_src_addr"),
-                        result.getLong("kafka_timestamp"), result.getString("kafka_topic"),
+                        result.getLong("PROCESS_TIME"), result.getString("kafka_topic"),
                         result.getInt("kafka_partition"), result.getLong("kafka_offset"),
                         result.getLong("in_bytes"), result.getLong("out_bytes"),
                         result.getLong("in_pkts"), result.getLong("out_pkts")));

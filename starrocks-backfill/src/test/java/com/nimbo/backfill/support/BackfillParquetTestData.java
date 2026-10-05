@@ -23,7 +23,6 @@ import org.apache.parquet.hadoop.util.HadoopOutputFile;
 public final class BackfillParquetTestData {
 
     private static final String TARGET_TABLE = "nimbo.netflow";
-    private static final String KAFKA_TIMESTAMP = "kafka_timestamp";
     private static final String PROCESS_TIME = "PROCESS_TIME";
 
     private BackfillParquetTestData() {
@@ -58,9 +57,7 @@ public final class BackfillParquetTestData {
              ResultSet result = statement.executeQuery("DESC " + TARGET_TABLE)) {
             while (result.next()) {
                 String starRocksName = result.getString("Field");
-                String sourceName = KAFKA_TIMESTAMP.equalsIgnoreCase(starRocksName)
-                        ? PROCESS_TIME
-                        : starRocksName.toUpperCase(Locale.ROOT);
+                String sourceName = starRocksName.toUpperCase(Locale.ROOT);
                 fields.add(new Schema.Field(sourceName, avroType(result.getString("Type")), null, (Object) null));
             }
         }

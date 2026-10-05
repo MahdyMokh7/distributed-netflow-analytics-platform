@@ -68,13 +68,13 @@ class SqlGenerationContextFactoryTest {
                         AnalysisDataSource.STARROCKS,
                         "Raw NetFlow records.",
                         "one NetFlow record",
-                        "kafka_timestamp",
+                        "process_time",
                         null,
                         List.of(
                                 column(
-                                        "kafka_timestamp",
+                                        "process_time",
                                         "BIGINT",
-                                        "Kafka timestamp in epoch milliseconds.",
+                                        "Kafka record timestamp in epoch milliseconds.",
                                         Set.of(SemanticColumn.Role.TIME),
                                         null,
                                         Set.of()),
@@ -109,9 +109,9 @@ class SqlGenerationContextFactoryTest {
                             assertThat(table.name()).isEqualTo("nimbo.netflow");
                             assertThat(table.columns())
                                     .extracting(SemanticColumn::name)
-                                    .containsExactly("kafka_timestamp", "ipv4_src_addr");
+                                    .containsExactly("process_time", "ipv4_src_addr");
                             assertThat(table.columns())
-                                    .filteredOn(column -> column.name().equals("kafka_timestamp"))
+                                    .filteredOn(column -> column.name().equals("process_time"))
                                     .singleElement()
                                     .extracting(SemanticColumn::meaning)
                                     .asString()

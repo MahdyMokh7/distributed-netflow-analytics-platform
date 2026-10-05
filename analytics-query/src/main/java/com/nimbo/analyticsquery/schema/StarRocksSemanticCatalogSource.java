@@ -151,7 +151,7 @@ public class StarRocksSemanticCatalogSource implements SemanticCatalogSource {
                         .toList();
 
         boolean hasTimestamp =
-                approved.stream().anyMatch(column -> column.name().equals("kafka_timestamp"));
+                approved.stream().anyMatch(column -> column.name().equals("process_time"));
 
         if (!hasTimestamp) {
             throw new CatalogRefreshException("Approved StarRocks timestamp column is unavailable");
@@ -162,7 +162,7 @@ public class StarRocksSemanticCatalogSource implements SemanticCatalogSource {
                 AnalysisDataSource.STARROCKS,
                 "Raw/recent NetFlow records stored in StarRocks.",
                 "one ingested NetFlow record",
-                "kafka_timestamp",
+                "process_time",
                 null,
                 approved,
                 List.of(

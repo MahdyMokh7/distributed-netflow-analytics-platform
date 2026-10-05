@@ -36,7 +36,8 @@ class BackfillProjectionBuilderTest {
         BackfillProjection projection = builder.build(TABLE, starRocksColumns(), List.of(schema), List.of());
 
         assertThat(projection.hdfsColumnMappings().get(0).expressions())
-                .contains("CAST(`KAFKA_TOPIC` AS varchar(255))", "CAST(`KAFKA_PARTITION` AS int)",
+                .contains("CAST(`PROCESS_TIME` AS bigint)", "CAST(`KAFKA_TOPIC` AS varchar(255))",
+                        "CAST(`KAFKA_PARTITION` AS int)",
                         "CAST(`KAFKA_OFFSET` AS bigint)")
                 .noneMatch(value -> value.startsWith("COALESCE"));
     }
@@ -44,7 +45,7 @@ class BackfillProjectionBuilderTest {
     @Test
     void fillsNullableStarRocksOnlyColumnWithNull() {
         List<SchemaColumn> starRocksColumns =
-                List.of(column("kafka_timestamp", "bigint", false), column("optional_v2", "varchar(20)", true));
+                List.of(column("PROCESS_TIME", "bigint", false), column("optional_v2", "varchar(20)", true));
         HdfsSchema hdfsSchema = new HdfsSchema(PATH, List.of(column("PROCESS_TIME", "bigint", true)));
 
         BackfillProjection projection = builder.build(TABLE, starRocksColumns, List.of(hdfsSchema), List.of());
@@ -58,7 +59,7 @@ class BackfillProjectionBuilderTest {
         HdfsSchema hdfsSchema = new HdfsSchema(PATH,
                 List.of(column("PROCESS_TIME", "bigint", true), column("NEW_FIELD", "bigint", true)));
 
-        assertThatThrownBy(() -> builder.build(TABLE, List.of(column("kafka_timestamp", "bigint", false)),
+        assertThatThrownBy(() -> builder.build(TABLE, List.of(column("PROCESS_TIME", "bigint", false)),
                 List.of(hdfsSchema), List.of())).isInstanceOf(BackfillException.class)
                 .hasMessageContaining("StarRocks is missing HDFS column(s) NEW_FIELD")
                 .hasMessageContaining("ALTER TABLE `nimbo`.`netflow` ADD COLUMN `new_field` bigint NULL;");
@@ -67,7 +68,7 @@ class BackfillProjectionBuilderTest {
     @Test
     void rejectsMissingRequiredTargetColumn() {
         List<SchemaColumn> starRocksColumns =
-                List.of(column("kafka_timestamp", "bigint", false), column("required_v2", "int", false));
+                List.of(column("PROCESS_TIME", "bigint", false), column("required_v2", "int", false));
         HdfsSchema hdfsSchema = new HdfsSchema(PATH, List.of(column("PROCESS_TIME", "bigint", true)));
 
         assertThatThrownBy(() -> builder.build(TABLE, starRocksColumns, List.of(hdfsSchema), List.of()))
@@ -79,7 +80,7 @@ class BackfillProjectionBuilderTest {
     @Test
     void rejectsIncompatibleTypesBeforeWriting() {
         List<SchemaColumn> starRocksColumns =
-                List.of(column("kafka_timestamp", "bigint", false), column("value", "bigint", false));
+                List.of(column("PROCESS_TIME", "bigint", false), column("value", "bigint", false));
         HdfsSchema hdfsSchema = new HdfsSchema(PATH,
                 List.of(column("PROCESS_TIME", "bigint", true), column("VALUE", "varchar(20)", true)));
 
@@ -91,7 +92,7 @@ class BackfillProjectionBuilderTest {
     @Test
     void rejectsLossyNumericConversionBeforeWriting() {
         List<SchemaColumn> starRocksColumns =
-                List.of(column("kafka_timestamp", "bigint", false), column("value", "int", false));
+                List.of(column("PROCESS_TIME", "bigint", false), column("value", "int", false));
         HdfsSchema hdfsSchema = new HdfsSchema(PATH,
                 List.of(column("PROCESS_TIME", "bigint", true), column("VALUE", "bigint", true)));
 
@@ -101,7 +102,7 @@ class BackfillProjectionBuilderTest {
     }
 
     private List<SchemaColumn> starRocksColumns() {
-        return List.of(column("ipv4_src_addr", "varchar(15)", false), column("kafka_timestamp", "bigint", false),
+        return List.of(column("ipv4_src_addr", "varchar(15)", false), column("PROCESS_TIME", "bigint", false),
                 column("kafka_topic", "varchar(255)", false), column("kafka_partition", "int", false),
                 column("kafka_offset", "bigint", false));
     }

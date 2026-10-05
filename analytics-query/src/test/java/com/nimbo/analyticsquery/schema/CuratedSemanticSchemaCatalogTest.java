@@ -56,7 +56,7 @@ class CuratedSemanticSchemaCatalogTest {
     @Test
     void givenPhysicalButUnapprovedFieldWhenLookedUpThenFieldIsUnavailable() {
         // Given: a StarRocks physical field not approved semantically
-        String fieldName = "kafka_timestamp";
+        String fieldName = "process_time";
 
         // When: the catalog is queried for that field
         var result = catalog.find(fieldName);
