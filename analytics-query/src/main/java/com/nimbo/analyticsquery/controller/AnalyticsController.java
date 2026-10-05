@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
 @RestController
-@RequestMapping("/analytics")
+@RequestMapping("/api/analytics")
 @Tag(name = "Analytics", description = "Natural-language analytics and controlled SQL query API")
 public class AnalyticsController {
 
@@ -47,8 +47,9 @@ public class AnalyticsController {
     @PostMapping("/query")
     @Operation(summary = "Execute an analytics question",
             description = "Interprets a natural-language analytics question and executes it "
-                    + "through an approved PostgreSQL cube tool. Unsupported requests "
-                    + "return a controlled status."
+                    + "through an approved analytics tool or guarded SQL fallback. "
+                    + "The response status identifies success, clarification, unsupported, "
+                    + "rejected, and dependency-failure outcomes."
     )
     public AnalyticsQueryResponse query(@Valid @RequestBody AnalyticsQueryRequest request) {
         long startedAt = System.nanoTime();
@@ -78,7 +79,8 @@ public class AnalyticsController {
     @PostMapping("/sql/generate")
     @Operation(summary = "Generate validated SQL",
             description = "Generates and validates SQL for a natural-language analytics question "
-                    + "without executing the query."
+                    + "without executing the query. Controlled failures are returned in the "
+                    + "response status."
     )
     public SqlGenerationResponse generateSql(@Valid @RequestBody SqlGenerationRequest request) {
         long startedAt = System.nanoTime();
@@ -101,7 +103,7 @@ public class AnalyticsController {
     @PostMapping("/sql/execute")
     @Operation(summary = "Validate and execute SQL",
             description = "Validates the supplied SQL against the analytics query security policy "
-                    + "before read-only execution."
+                    + "before read-only execution. Unsafe SQL returns QUERY_REJECTED."
     )
     public SqlExecutionResponse executeSql(@Valid @RequestBody SqlExecutionRequest request) {
         long startedAt = System.nanoTime();

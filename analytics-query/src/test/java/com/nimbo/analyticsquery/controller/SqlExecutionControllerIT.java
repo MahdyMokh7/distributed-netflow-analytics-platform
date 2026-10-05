@@ -59,7 +59,7 @@ class SqlExecutionControllerIT {
         // When: the protected SQL execution endpoint receives the query
         ResponseEntity<JsonNode> response =
                 restTemplate.postForEntity(
-                        "/analytics/sql/execute",
+                        "/api/analytics/sql/execute",
                         request,
                         JsonNode.class);
 
@@ -86,7 +86,7 @@ class SqlExecutionControllerIT {
         // When: the protected SQL execution endpoint receives the write
         ResponseEntity<JsonNode> response =
                 restTemplate.postForEntity(
-                        "/analytics/sql/execute",
+                        "/api/analytics/sql/execute",
                         request,
                         JsonNode.class);
 
@@ -110,7 +110,7 @@ class SqlExecutionControllerIT {
         // When: datasource identification evaluates the submitted query
         ResponseEntity<JsonNode> response =
                 restTemplate.postForEntity(
-                        "/analytics/sql/execute",
+                        "/api/analytics/sql/execute",
                         request,
                         JsonNode.class);
 
@@ -133,7 +133,7 @@ class SqlExecutionControllerIT {
 
         // When: the protected SQL execution endpoint receives both statements
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/execute", request, JsonNode.class);
 
         // Then: the single-statement policy rejects the submission
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -152,7 +152,7 @@ class SqlExecutionControllerIT {
 
         // When: datasource identification evaluates the system-table query
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/execute", request, JsonNode.class);
 
         // Then: system metadata remains outside the approved catalog
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -171,7 +171,7 @@ class SqlExecutionControllerIT {
 
         // When: datasource identification evaluates the mixed query
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/execute", request, JsonNode.class);
 
         // Then: no single datasource is authorized to execute it
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);

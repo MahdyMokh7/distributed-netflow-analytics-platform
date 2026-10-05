@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Ask questions about Nimbo network activity and receive clear, structured insights.">
+  <meta name="theme-color" content="#0b1739">
+  <title>Nimbo Insights</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Nimbo Insights home">
+      <span class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </span>
+      <span>
+        <strong>Nimbo</strong>
+        <small>Network insights</small>
+      </span>
+    </a>
+    <div class="availability"><span aria-hidden="true"></span>Analytics workspace</div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <p class="eyebrow">Clear answers from network activity</p>
+        <h1 id="page-title">Ask your network data a question.</h1>
+        <p class="hero-description">
+          Describe what you want to understand in everyday language. Nimbo will return the
+          available records and a concise interpretation.
+        </p>
+      </div>
+
+      <div class="query-card">
+        <form id="question-form" novalidate>
+          <div class="input-heading">
+            <label for="question">What would you like to know?</label>
+            <span id="character-count">0 / 2,000</span>
+          </div>
+          <textarea
+              id="question"
+              name="question"
+              maxlength="2000"
+              rows="4"
+              required
+              aria-describedby="question-hint"
+              placeholder="For example: Which 10 IP addresses used the most bandwidth in the last two hours?"></textarea>
+
+          <div id="clarification" class="clarification" role="alert" hidden>
+            <span class="clarification-icon" aria-hidden="true">?</span>
+            <div>
+              <strong>One more detail will help</strong>
+              <p id="clarification-message"></p>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <p id="question-hint">Press Ctrl + Enter to submit</p>
+            <button id="submit-button" type="submit">
+              <span>Explore data</span>
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M4 10h11M11 5l5 5-5 5"></path>
+              </svg>
+            </button>
+          </div>
+        </form>
+
+        <aside class="guidance" aria-labelledby="guidance-title">
+          <div class="guidance-title">
+            <span aria-hidden="true">i</span>
+            <div>
+              <h2 id="guidance-title">For a more precise answer</h2>
+              <p>Include the details that matter to your question.</p>
+            </div>
+          </div>
+          <ul>
+            <li><strong>When</strong><span>Last hour, last 7 days, or exact UTC times</span></li>
+            <li><strong>What</strong><span>An IP, protocol, or all traffic</span></li>
+            <li><strong>Measure</strong><span>Bytes, packets, bandwidth, or connections</span></li>
+            <li><strong>Focus</strong><span>Source, destination, direction, and top/bottom limit</span></li>
+          </ul>
+        </aside>
+      </div>
+
+      <div class="examples" aria-labelledby="examples-title">
+        <p id="examples-title">Try an example</p>
+        <div class="example-list">
+          <button type="button" class="example-question">Which 10 IP addresses used the most bandwidth in the last two hours?</button>
+          <button type="button" class="example-question">Show connections involving 10.0.0.15 during the last hour.</button>
+          <button type="button" class="example-question">Compare protocol usage by bytes during the last 24 hours.</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="loading" class="state-card loading-card" aria-live="polite" hidden>
+      <div class="loading-orbit" aria-hidden="true"><span></span></div>
+      <div>
+        <h2>Reviewing network activity</h2>
+        <p>This can take a moment for broader questions.</p>
+      </div>
+    </section>
+
+    <section id="error-state" class="state-card error-card" role="alert" hidden>
+      <div class="state-icon" aria-hidden="true">!</div>
+      <div>
+        <h2>We could not complete that request</h2>
+        <p id="error-message"></p>
+      </div>
+    </section>
+
+    <section id="results" class="results" aria-labelledby="results-title" hidden>
+      <div class="results-heading">
+        <div>
+          <p class="eyebrow">Your results</p>
+          <h2 id="results-title">Network activity overview</h2>
+        </div>
+        <div id="result-count" class="result-count"></div>
+      </div>
+
+      <article id="explanation-card" class="explanation-card" hidden>
+        <div class="insight-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"></path></svg>
+        </div>
+        <div>
+          <p>Key insight</p>
+          <h3 id="explanation-text"></h3>
+        </div>
+      </article>
+
+      <div id="empty-results" class="empty-results" hidden>
+        <div aria-hidden="true">○</div>
+        <h3>No matching activity found</h3>
+        <p>Try a broader time period or revise the filters in your question.</p>
+      </div>
+
+      <div id="table-card" class="table-card" hidden>
+        <div class="table-toolbar">
+          <h3>Detailed results</h3>
+          <p>Values returned for your selected period</p>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead id="results-head"></thead>
+            <tbody id="results-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Insights are based on the network records currently available to Nimbo.</p>
+  </footer>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

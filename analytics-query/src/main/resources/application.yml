@@ -13,16 +13,16 @@ spring:
 springdoc:
   api-docs:
     enabled: true
-    path: /api-docs
+    path: /api/api-docs
 
   swagger-ui:
     enabled: true
-    path: /swagger-ui.html
+    path: /api/swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha
 
   packages-to-scan: com.nimbo.analyticsquery.controller
-  paths-to-match: /analytics/**
+  paths-to-match: /api/analytics/**
 
 analytics-query:
   explanation:
@@ -94,9 +94,6 @@ rest-api:
 server:
   port: ${SERVER_PORT:8080}
 
-  servlet:
-    context-path: /api
-
   tomcat:
     threads:
       max: ${ANALYTICS_QUERY_HTTP_MAX_THREADS:32}
@@ -113,6 +110,7 @@ management:
 
   endpoints:
     web:
+      base-path: /api/actuator
       exposure:
         include: health,info,metrics,prometheus
 

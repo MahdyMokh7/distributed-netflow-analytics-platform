@@ -69,6 +69,23 @@ class AnalyticsControllerIT {
     @Autowired private MeterRegistry meterRegistry;
 
     @Test
+    void givenTheAnalyticsApplicationWhenBrowserRootIsOpenedThenStakeholderUiIsServed() {
+        // Given: the analytics application is running
+
+        // When: a stakeholder opens the browser root
+        ResponseEntity<String> response = restTemplate.getForEntity("/", String.class);
+
+        // Then: the question interface is returned without changing API paths
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody())
+                .contains(
+                        "Nimbo Insights",
+                        "Ask your network data a question",
+                        "/app.js",
+                        "/style.css");
+    }
+
+    @Test
     void givenSupportedAnalyticsQuestionWhenQueryEndpointIsCalledThenToolDataIsReturned(
             CapturedOutput output) {
         // Given: a supported question with valid LLM intent and REST data
@@ -86,7 +103,7 @@ class AnalyticsControllerIT {
 
         // When: the analytics query endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: the complete tool-first path returns normalized PostgreSQL data
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -129,7 +146,7 @@ class AnalyticsControllerIT {
 
         // When: the analytics query endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: the controlled status is returned without executing a tool
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -152,7 +169,7 @@ class AnalyticsControllerIT {
 
         // When: the analytics query endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: the user receives the specific question without tool execution
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -179,7 +196,7 @@ class AnalyticsControllerIT {
 
         // When: the analytics query endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: SQL fallback validates, plans and executes without invoking REST
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -220,7 +237,7 @@ class AnalyticsControllerIT {
 
         // When: the analytics query endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: no data remains a successful empty tool result
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -244,7 +261,7 @@ class AnalyticsControllerIT {
 
         // When: explanation generation fails after successful execution
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: authoritative data remains successful and explanation is omitted
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -262,7 +279,7 @@ class AnalyticsControllerIT {
 
         // When: the analytics query endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: a controlled dependency status is returned without tool execution
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -281,7 +298,7 @@ class AnalyticsControllerIT {
 
         // When: the analytics query endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: invalid model output is controlled without tool execution
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -299,7 +316,7 @@ class AnalyticsControllerIT {
 
         // When: the analytics query endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: incomplete model output is controlled without tool execution
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -322,7 +339,7 @@ class AnalyticsControllerIT {
 
         // When: the analytics query endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: request validation rejects the blank question
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -346,7 +363,7 @@ class AnalyticsControllerIT {
 
         // When: the analytics query endpoint receives the malformed request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/query", request, JsonNode.class);
 
         // Then: malformed JSON is rejected with the expected API error
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -372,7 +389,7 @@ class AnalyticsControllerIT {
 
         // When: the SQL generation endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/generate", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/generate", request, JsonNode.class);
 
         // Then: validated SQL is returned without calling the REST API
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -413,7 +430,7 @@ class AnalyticsControllerIT {
 
         // When: the SQL generation endpoint validates the generated statement
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/generate", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/generate", request, JsonNode.class);
 
         // Then: validation fails closed and no query is executed
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -440,7 +457,7 @@ class AnalyticsControllerIT {
 
         // When: the SQL generation endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/generate", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/generate", request, JsonNode.class);
 
         // Then: the controlled status returns before routing or SQL generation
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -465,7 +482,7 @@ class AnalyticsControllerIT {
 
         // When: the SQL generation endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/generate", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/generate", request, JsonNode.class);
 
         // Then: request validation rejects the blank question
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -486,7 +503,7 @@ class AnalyticsControllerIT {
 
         // When: the SQL execution endpoint receives the request
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/execute", request, JsonNode.class);
 
         // Then: request validation rejects the blank SQL
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -501,7 +518,7 @@ class AnalyticsControllerIT {
 
         // When: the protected SQL execution endpoint receives the query
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/execute", request, JsonNode.class);
 
         // Then: validation, EXPLAIN and read-only execution return normalized data
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -527,7 +544,7 @@ class AnalyticsControllerIT {
 
         // When: the protected SQL execution endpoint receives the write
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/execute", request, JsonNode.class);
 
         // Then: policy rejects the statement before the executor changes data
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -557,11 +574,11 @@ class AnalyticsControllerIT {
         // When: the request completes and Prometheus metrics are read
         ResponseEntity<JsonNode> queryResponse =
                 restTemplate.postForEntity(
-                        "/analytics/query",
+                        "/api/analytics/query",
                         analyticsQuestion(),
                         JsonNode.class);
         ResponseEntity<String> metricsResponse =
-                restTemplate.getForEntity("/actuator/prometheus", String.class);
+                restTemplate.getForEntity("/api/actuator/prometheus", String.class);
 
         // Then: request and failure counters increment and all custom metrics are exposed
         assertThat(queryResponse.getStatusCode()).isEqualTo(HttpStatus.OK);

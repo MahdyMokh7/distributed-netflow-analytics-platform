@@ -55,7 +55,7 @@ class StarRocksSqlExecutionControllerIT {
 
         // When: the protected SQL execution endpoint receives the query
         ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
+                restTemplate.postForEntity("/api/analytics/sql/execute", request, JsonNode.class);
 
         // Then: StarRocks validation, EXPLAIN and execution return a normalized result
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
