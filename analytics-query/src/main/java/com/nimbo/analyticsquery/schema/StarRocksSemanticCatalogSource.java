@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import jakarta.annotation.PostConstruct;
@@ -27,6 +28,9 @@ import lombok.extern.slf4j.Slf4j;
         name = "enabled",
         havingValue = "true")
 public class StarRocksSemanticCatalogSource implements SemanticCatalogSource {
+
+    private static final int STARTUP_REFRESH_ATTEMPTS = 5;
+    private static final long STARTUP_RETRY_DELAY_SECONDS = 2;
 
     private static final String COLUMN_QUERY =
             """
@@ -62,7 +66,19 @@ public class StarRocksSemanticCatalogSource implements SemanticCatalogSource {
 
     @PostConstruct
     void initialize() {
-        refresh();
+        for (int attempt = 1; attempt <= STARTUP_REFRESH_ATTEMPTS; attempt++) {
+            if (refresh() || attempt == STARTUP_REFRESH_ATTEMPTS) {
+                return;
+            }
+
+            try {
+                TimeUnit.SECONDS.sleep(STARTUP_RETRY_DELAY_SECONDS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                log.warn("StarRocks semantic catalog startup retry was interrupted");
+                return;
+            }
+        }
     }
 
     @Scheduled(
