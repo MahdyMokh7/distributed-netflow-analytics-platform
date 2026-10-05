@@ -160,10 +160,10 @@ public class StarRocksWriterMetrics {
 
   public void backpressure(int worker, boolean paused) {
     counter(
-            "nimbo.StarRocksWriter.backpressure.events",
-            worker,
-            "event",
-            paused ? "pause" : "resume")
+        "nimbo.StarRocksWriter.backpressure.events",
+        worker,
+        "event",
+        paused ? "pause" : "resume")
         .increment();
   }
 
@@ -194,6 +194,7 @@ public class StarRocksWriterMetrics {
   }
 
   private static final class WorkerState {
+
     final AtomicInteger running = new AtomicInteger();
     final AtomicInteger openBatchRows = new AtomicInteger();
     final AtomicLong openBatchAge = new AtomicLong();

@@ -33,7 +33,7 @@ class StarRocksWriterIT {
     infrastructure.kafka().awaitConsumerGroupMembers(2);
 
     Schema schema = loadAvroSchema();
-    long firstTimestamp = 1_725_000_000_000L;
+    long firstTimestamp = System.currentTimeMillis();
     GenericRecord first = validNetflowRecord(schema, "192.0.2.10", 1234L);
     GenericRecord invalid = validNetflowRecord(schema, "not-an-ip", 9999L);
     GenericRecord second = validNetflowRecord(schema, "192.0.2.11", 5678L);
@@ -73,7 +73,7 @@ class StarRocksWriterIT {
     infrastructure.kafka().awaitConsumerGroupMembers(2);
 
     Schema schema = loadAvroSchema();
-    long timestamp = 1_726_000_000_000L;
+    long timestamp = System.currentTimeMillis();
     GenericRecord genericRecord = validNetflowRecord(schema, "192.0.2.30", 4242L);
     assertThat(produce(genericRecord, schema, timestamp)).isZero();
 
@@ -98,37 +98,26 @@ class StarRocksWriterIT {
     return infrastructure.kafka().produce(payload, timestamp, partition);
   }
 
-  private void assertPersistedRow(
-      String sourceIp,
-      int expectedPartition,
-      long expectedOffset,
-      long expectedTimestamp,
-      long expectedBytes)
-      throws SQLException {
-    infrastructure
-        .starRocks()
-        .withDatabase(
-            connection -> {
-              try (Statement statement = connection.createStatement();
-                  ResultSet row =
-                      statement.executeQuery(
-                          """
-                          SELECT kafka_topic, kafka_partition, kafka_offset, PROCESS_TIME,
-                                 ipv4_dst_addr, in_bytes
-                          FROM nimbo.netflow
-                          WHERE ipv4_src_addr = '%s'
-                          """
-                              .formatted(sourceIp))) {
-                assertThat(row.next()).isTrue();
-                assertThat(row.getString("kafka_topic")).isEqualTo(infrastructure.kafka().topic());
-                assertThat(row.getInt("kafka_partition")).isEqualTo(expectedPartition);
-                assertThat(row.getLong("kafka_offset")).isEqualTo(expectedOffset);
-                assertThat(row.getLong("PROCESS_TIME")).isEqualTo(expectedTimestamp);
-                assertThat(row.getString("ipv4_dst_addr")).isEqualTo("198.51.100.20");
-                assertThat(row.getLong("in_bytes")).isEqualTo(expectedBytes);
-                assertThat(row.next()).isFalse();
-              }
-            });
+  private void assertPersistedRow(String sourceIp, int expectedPartition, long expectedOffset,
+      long expectedTimestamp, long expectedBytes) throws SQLException {
+    infrastructure.starRocks().withDatabase(connection -> {
+      try (Statement statement = connection.createStatement();
+          ResultSet row = statement.executeQuery("""
+              SELECT kafka_topic, kafka_partition, kafka_offset, PROCESS_TIME,
+                 ipv4_dst_addr, in_bytes
+              FROM nimbo.netflow
+              WHERE ipv4_src_addr = '%s'
+              """.formatted(sourceIp))) {
+        assertThat(row.next()).isTrue();
+        assertThat(row.getString("kafka_topic")).isEqualTo(infrastructure.kafka().topic());
+        assertThat(row.getInt("kafka_partition")).isEqualTo(expectedPartition);
+        assertThat(row.getLong("kafka_offset")).isEqualTo(expectedOffset);
+        assertThat(row.getLong("PROCESS_TIME")).isEqualTo(expectedTimestamp);
+        assertThat(row.getString("ipv4_dst_addr")).isEqualTo("198.51.100.20");
+        assertThat(row.getLong("in_bytes")).isEqualTo(expectedBytes);
+        assertThat(row.next()).isFalse();
+      }
+    });
   }
 
   private Schema loadAvroSchema() {

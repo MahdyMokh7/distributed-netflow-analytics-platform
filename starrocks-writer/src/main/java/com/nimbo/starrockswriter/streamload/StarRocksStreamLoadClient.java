@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class StarRocksStreamLoadClient {
+
   private final CsvFormatter csvFormatter;
   private final StarRocksProperties starRocksProperties;
   private final ObjectMapper objectMapper;

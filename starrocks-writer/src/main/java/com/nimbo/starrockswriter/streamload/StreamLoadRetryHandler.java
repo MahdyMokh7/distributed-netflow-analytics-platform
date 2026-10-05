@@ -61,7 +61,8 @@ public class StreamLoadRetryHandler {
 
   private CompletableFuture<StreamLoadResult> retry(List<StarRocksRow> rows, String label) {
     return CompletableFuture.runAsync(
-            () -> {},
+            () -> {
+            },
             CompletableFuture.delayedExecutor(
                 properties.getRetryBackoffMs(), TimeUnit.MILLISECONDS))
         .thenCompose(ignored -> sendAttempt(rows, label));

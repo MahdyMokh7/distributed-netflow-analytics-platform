@@ -24,36 +24,36 @@ class NetflowValidationServiceTest {
         new Schema.Parser()
             .parse(
                 """
-                {
-                  "type":"record",
-                  "name":"NetFlowV2Record",
-                  "fields":[
-                    {"name":"IPV4_SRC_ADDR","type":["null","string"],"default":null},
-                    {"name":"IPV4_DST_ADDR","type":["null","string"],"default":null},
-                    {"name":"L4_SRC_PORT","type":["null","int"],"default":null},
-                    {"name":"L4_DST_PORT","type":["null","int"],"default":null},
-                    {"name":"PROTOCOL","type":["null","int"],"default":null},
-                    {"name":"MIN_TTL","type":["null","int"],"default":null},
-                    {"name":"MAX_TTL","type":["null","int"],"default":null},
-                    {"name":"MIN_IP_PKT_LEN","type":["null","int"],"default":null},
-                    {"name":"MAX_IP_PKT_LEN","type":["null","int"],"default":null},
-                    {"name":"ICMP_TYPE","type":["null","int"],"default":null},
-                    {"name":"ICMP_IPV4_TYPE","type":["null","int"],"default":null},
-                    {"name":"DNS_QUERY_ID","type":["null","int"],"default":null},
-                    {"name":"DNS_QUERY_TYPE","type":["null","int"],"default":null},
-                    {"name":"IN_BYTES","type":["null","long"],"default":null},
-                    {"name":"OUT_BYTES","type":["null","long"],"default":null},
-                    {"name":"IN_PKTS","type":["null","long"],"default":null},
-                    {"name":"OUT_PKTS","type":["null","long"],"default":null},
-                    {"name":"FLOW_DURATION_MILLISECONDS","type":["null","long"],"default":null},
-                    {"name":"DURATION_IN","type":["null","long"],"default":null},
-                    {"name":"DURATION_OUT","type":["null","long"],"default":null},
-                    {"name":"LONGEST_FLOW_PKT","type":["null","long"],"default":null},
-                    {"name":"SHORTEST_FLOW_PKT","type":["null","long"],"default":null},
-                    {"name":"L7_PROTO","type":["null","double"],"default":null}
-                  ]
-                }
-                """);
+                    {
+                     "type":"record",
+                     "name":"NetFlowV2Record",
+                     "fields":[
+                      {"name":"IPV4_SRC_ADDR","type":["null","string"],"default":null},
+                      {"name":"IPV4_DST_ADDR","type":["null","string"],"default":null},
+                      {"name":"L4_SRC_PORT","type":["null","int"],"default":null},
+                      {"name":"L4_DST_PORT","type":["null","int"],"default":null},
+                      {"name":"PROTOCOL","type":["null","int"],"default":null},
+                      {"name":"MIN_TTL","type":["null","int"],"default":null},
+                      {"name":"MAX_TTL","type":["null","int"],"default":null},
+                      {"name":"MIN_IP_PKT_LEN","type":["null","int"],"default":null},
+                      {"name":"MAX_IP_PKT_LEN","type":["null","int"],"default":null},
+                      {"name":"ICMP_TYPE","type":["null","int"],"default":null},
+                      {"name":"ICMP_IPV4_TYPE","type":["null","int"],"default":null},
+                      {"name":"DNS_QUERY_ID","type":["null","int"],"default":null},
+                      {"name":"DNS_QUERY_TYPE","type":["null","int"],"default":null},
+                      {"name":"IN_BYTES","type":["null","long"],"default":null},
+                      {"name":"OUT_BYTES","type":["null","long"],"default":null},
+                      {"name":"IN_PKTS","type":["null","long"],"default":null},
+                      {"name":"OUT_PKTS","type":["null","long"],"default":null},
+                      {"name":"FLOW_DURATION_MILLISECONDS","type":["null","long"],"default":null},
+                      {"name":"DURATION_IN","type":["null","long"],"default":null},
+                      {"name":"DURATION_OUT","type":["null","long"],"default":null},
+                      {"name":"LONGEST_FLOW_PKT","type":["null","long"],"default":null},
+                      {"name":"SHORTEST_FLOW_PKT","type":["null","long"],"default":null},
+                      {"name":"L7_PROTO","type":["null","double"],"default":null}
+                     ]
+                    }
+                    """);
   }
 
   @Test

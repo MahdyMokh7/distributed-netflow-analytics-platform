@@ -28,9 +28,8 @@ public class StarRocksSchemaEvolutionManager {
   private final JdbcTemplate jdbcTemplate;
   private final StarRocksProperties properties;
   private final SchemaMapping schemaMapping;
-
-  private volatile List<String> netFlowColumns = List.of();
   private final Set<Long> ensuredSchemas = ConcurrentHashMap.newKeySet();
+  private volatile List<String> netFlowColumns = List.of();
 
   public void ensureSchema(Schema writerSchema) {
     long fingerprint = SchemaNormalization.parsingFingerprint64(writerSchema);
@@ -49,16 +48,14 @@ public class StarRocksSchemaEvolutionManager {
 
   private void ensureSchemaOnce(Schema writerSchema) {
     List<TableColumn> tableColumns = loadTableColumns();
-    Set<String> existing =
-        tableColumns.stream()
-            .map(TableColumn::name)
-            .map(name -> name.toLowerCase(Locale.ROOT))
-            .collect(Collectors.toCollection(HashSet::new));
+    Set<String> existing = tableColumns.stream()
+        .map(TableColumn::name)
+        .map(name -> name.toLowerCase(Locale.ROOT))
+        .collect(Collectors.toCollection(HashSet::new));
 
-    List<Schema.Field> missing =
-        writerSchema.getFields().stream()
-            .filter(field -> !existing.contains(field.name().toLowerCase(Locale.ROOT)))
-            .toList();
+    List<Schema.Field> missing = writerSchema.getFields().stream()
+        .filter(field -> !existing.contains(field.name().toLowerCase(Locale.ROOT)))
+        .toList();
 
     if (!missing.isEmpty()) {
       addColumnsAndWait(missing);
@@ -83,11 +80,11 @@ public class StarRocksSchemaEvolutionManager {
   }
 
   private void evolveExistingColumnTypes(Schema writerSchema, List<TableColumn> tableColumns) {
-    Map<String, TableColumn> byName =
-        tableColumns.stream()
-            .collect(
-                Collectors.toMap(
-                    column -> column.name().toLowerCase(Locale.ROOT), Function.identity()));
+    Map<String, TableColumn> byName = tableColumns.stream()
+        .collect(Collectors.toMap(
+            column -> column.name().toLowerCase(Locale.ROOT),
+            Function.identity()
+        ));
 
     for (Schema.Field field : writerSchema.getFields()) {
       String name = field.name().toLowerCase(Locale.ROOT);
@@ -96,8 +93,7 @@ public class StarRocksSchemaEvolutionManager {
         continue;
       }
 
-      SchemaMapping.TypeEvolution evolution =
-          schemaMapping.typeEvolution(column.columnType(), field.schema());
+      SchemaMapping.TypeEvolution evolution = schemaMapping.typeEvolution(column.columnType(), field.schema());
       if (evolution == SchemaMapping.TypeEvolution.COMPATIBLE) {
         continue;
       }
@@ -105,51 +101,42 @@ public class StarRocksSchemaEvolutionManager {
       String desiredType = schemaMapping.starRocksType(field.schema());
       if (evolution == SchemaMapping.TypeEvolution.INCOMPATIBLE) {
         throw new IllegalStateException(
-            "Unsafe StarRocks type change for column "
-                + name
-                + ": existing="
-                + column.columnType()
-                + ", Avro requires="
-                + desiredType
-                + ". Automatic schema evolution only performs lossless widening.");
+            "Unsafe StarRocks type change for column " + name
+                + ": existing=" + column.columnType()
+                + ", Avro requires=" + desiredType
+                + ". Automatic schema evolution only performs lossless widening."
+        );
       }
 
       if (column.isKey()) {
         throw new IllegalStateException(
-            "Automatic type widening is not performed for StarRocks key column "
-                + name
-                + ". Existing="
-                + column.columnType()
-                + ", requested="
-                + desiredType);
+            "Automatic type widening is not performed for StarRocks key column " + name
+                + ". Existing=" + column.columnType() + ", requested=" + desiredType
+        );
       }
 
       modifyColumnAndWait(field, column);
-      byName.put(
-          name,
-          loadTableColumns().stream()
-              .filter(current -> current.name().equalsIgnoreCase(name))
-              .findFirst()
-              .orElseThrow());
+      byName.put(name, loadTableColumns().stream()
+          .filter(current -> current.name().equalsIgnoreCase(name))
+          .findFirst()
+          .orElseThrow());
     }
   }
 
   private void addColumnsAndWait(List<Schema.Field> missing) {
-    Set<String> targetColumns =
-        missing.stream()
-            .map(Schema.Field::name)
-            .map(name -> name.toLowerCase(Locale.ROOT))
-            .collect(Collectors.toSet());
+    Set<String> targetColumns = missing.stream()
+        .map(Schema.Field::name)
+        .map(name -> name.toLowerCase(Locale.ROOT))
+        .collect(Collectors.toSet());
 
     long deadline = System.currentTimeMillis() + properties.getSchemaEvolutionTimeoutMs();
     boolean submitted = false;
 
     while (System.currentTimeMillis() < deadline) {
-      Set<String> existing =
-          loadTableColumns().stream()
-              .map(TableColumn::name)
-              .map(name -> name.toLowerCase(Locale.ROOT))
-              .collect(Collectors.toSet());
+      Set<String> existing = loadTableColumns().stream()
+          .map(TableColumn::name)
+          .map(name -> name.toLowerCase(Locale.ROOT))
+          .collect(Collectors.toSet());
 
       if (existing.containsAll(targetColumns)) {
         log.info("StarRocks schema evolution complete. Added columns={}", targetColumns);
@@ -157,21 +144,18 @@ public class StarRocksSchemaEvolutionManager {
       }
 
       if (!submitted) {
-        List<Schema.Field> stillMissing =
-            missing.stream()
-                .filter(field -> !existing.contains(field.name().toLowerCase(Locale.ROOT)))
-                .toList();
+        List<Schema.Field> stillMissing = missing.stream()
+            .filter(field -> !existing.contains(field.name().toLowerCase(Locale.ROOT)))
+            .toList();
         try {
           jdbcTemplate.execute(buildAddColumnsSql(stillMissing));
           submitted = true;
-          log.info(
-              "Submitted StarRocks ADD COLUMN for fields={}",
+          log.info("Submitted StarRocks ADD COLUMN for fields={}",
               stillMissing.stream().map(Schema.Field::name).toList());
         } catch (CannotGetJdbcConnectionException exception) {
           throw exception;
         } catch (DataAccessException exception) {
-          log.warn(
-              "StarRocks ADD COLUMN was not accepted yet; will re-check table schema: {}",
+          log.warn("StarRocks ADD COLUMN was not accepted yet; will re-check table schema: {}",
               exception.getMostSpecificCause().getMessage());
         }
       }
@@ -180,7 +164,8 @@ public class StarRocksSchemaEvolutionManager {
     }
 
     throw new IllegalStateException(
-        "Timed out waiting for StarRocks schema evolution. Missing columns=" + targetColumns);
+        "Timed out waiting for StarRocks schema evolution. Missing columns=" + targetColumns
+    );
   }
 
   private void modifyColumnAndWait(Schema.Field field, TableColumn originalColumn) {
@@ -190,19 +175,14 @@ public class StarRocksSchemaEvolutionManager {
     boolean submitted = false;
 
     while (System.currentTimeMillis() < deadline) {
-      TableColumn current =
-          loadTableColumns().stream()
-              .filter(column -> column.name().equalsIgnoreCase(columnName))
-              .findFirst()
-              .orElseThrow(
-                  () -> new IllegalStateException("StarRocks column disappeared: " + columnName));
+      TableColumn current = loadTableColumns().stream()
+          .filter(column -> column.name().equalsIgnoreCase(columnName))
+          .findFirst()
+          .orElseThrow(() -> new IllegalStateException("StarRocks column disappeared: " + columnName));
 
       if (schemaMapping.typeEvolution(current.columnType(), field.schema())
           == SchemaMapping.TypeEvolution.COMPATIBLE) {
-        log.info(
-            "StarRocks type evolution complete. Column={} type={}",
-            columnName,
-            current.columnType());
+        log.info("StarRocks type evolution complete. Column={} type={}", columnName, current.columnType());
         return;
       }
 
@@ -210,16 +190,12 @@ public class StarRocksSchemaEvolutionManager {
         try {
           jdbcTemplate.execute(buildModifyColumnSql(field, originalColumn));
           submitted = true;
-          log.info(
-              "Submitted StarRocks MODIFY COLUMN: column={}, from={}, to={}",
-              columnName,
-              originalColumn.columnType(),
-              desiredType);
+          log.info("Submitted StarRocks MODIFY COLUMN: column={}, from={}, to={}",
+              columnName, originalColumn.columnType(), desiredType);
         } catch (CannotGetJdbcConnectionException exception) {
           throw exception;
         } catch (DataAccessException exception) {
-          log.warn(
-              "StarRocks MODIFY COLUMN was not accepted yet; will re-check table schema: {}",
+          log.warn("StarRocks MODIFY COLUMN was not accepted yet; will re-check table schema: {}",
               exception.getMostSpecificCause().getMessage());
         }
       }
@@ -228,10 +204,9 @@ public class StarRocksSchemaEvolutionManager {
     }
 
     throw new IllegalStateException(
-        "Timed out waiting for StarRocks type evolution. Column="
-            + columnName
-            + ", requestedType="
-            + desiredType);
+        "Timed out waiting for StarRocks type evolution. Column=" + columnName
+            + ", requestedType=" + desiredType
+    );
   }
 
   private String buildAddColumnsSql(List<Schema.Field> fields) {
@@ -239,28 +214,24 @@ public class StarRocksSchemaEvolutionManager {
       throw new IllegalArgumentException("No columns to add");
     }
 
-    String definitions =
-        fields.stream()
-            .map(
-                field ->
-                    quoteIdentifier(field.name().toLowerCase(Locale.ROOT))
-                        + " "
-                        + schemaMapping.starRocksType(field.schema())
-                        + " NULL"
-                        + commentClause(schemaMapping.fieldComment(field)))
-            .collect(Collectors.joining(", "));
+    String definitions = fields.stream()
+        .map(field -> quoteIdentifier(field.name().toLowerCase(Locale.ROOT))
+            + " " + schemaMapping.starRocksType(field.schema())
+            + " NULL"
+            + commentClause(schemaMapping.fieldComment(field)))
+        .collect(Collectors.joining(", "));
 
-    return "ALTER TABLE " + qualifiedTable() + " ADD COLUMN (" + definitions + ")";
+    return "ALTER TABLE " + qualifiedTable()
+        + " ADD COLUMN (" + definitions + ")";
   }
 
   private String buildModifyColumnSql(Schema.Field field, TableColumn column) {
-    StringBuilder sql =
-        new StringBuilder("ALTER TABLE ")
-            .append(qualifiedTable())
-            .append(" MODIFY COLUMN ")
-            .append(quoteIdentifier(column.name()))
-            .append(" ")
-            .append(schemaMapping.starRocksType(field.schema()));
+    StringBuilder sql = new StringBuilder("ALTER TABLE ")
+        .append(qualifiedTable())
+        .append(" MODIFY COLUMN ")
+        .append(quoteIdentifier(column.name()))
+        .append(" ")
+        .append(schemaMapping.starRocksType(field.schema()));
 
     if (column.isKey()) {
       sql.append(" KEY");
@@ -268,7 +239,9 @@ public class StarRocksSchemaEvolutionManager {
     sql.append(column.nullable() ? " NULL" : " NOT NULL");
 
     if (column.defaultValue() != null) {
-      sql.append(" DEFAULT \"").append(escapeSqlString(column.defaultValue())).append("\"");
+      sql.append(" DEFAULT \"")
+          .append(escapeSqlString(column.defaultValue()))
+          .append("\"");
     }
 
     String comment = schemaMapping.fieldComment(field);
@@ -291,50 +264,45 @@ public class StarRocksSchemaEvolutionManager {
   }
 
   private List<TableColumn> loadTableColumns() {
-    String sql =
-        """
+    String sql = """
         SELECT COLUMN_NAME,
-               ORDINAL_POSITION,
-               COLUMN_TYPE,
-               IS_NULLABLE,
-               COLUMN_KEY,
-               COLUMN_DEFAULT,
-               COLUMN_COMMENT
+         ORDINAL_POSITION,
+         COLUMN_TYPE,
+         IS_NULLABLE,
+         COLUMN_KEY,
+         COLUMN_DEFAULT,
+         COLUMN_COMMENT
         FROM information_schema.columns
         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
         ORDER BY ORDINAL_POSITION
         """;
 
-    List<TableColumn> columns =
-        jdbcTemplate.query(
-            sql,
-            (rs, rowNum) ->
-                new TableColumn(
-                    rs.getString("COLUMN_NAME"),
-                    rs.getInt("ORDINAL_POSITION"),
-                    rs.getString("COLUMN_TYPE"),
-                    "YES".equalsIgnoreCase(rs.getString("IS_NULLABLE")),
-                    rs.getString("COLUMN_KEY"),
-                    rs.getString("COLUMN_DEFAULT"),
-                    rs.getString("COLUMN_COMMENT")),
-            properties.getDatabase(),
-            properties.getTable());
+    List<TableColumn> columns = jdbcTemplate.query(
+        sql,
+        (rs, rowNum) -> new TableColumn(
+            rs.getString("COLUMN_NAME"),
+            rs.getInt("ORDINAL_POSITION"),
+            rs.getString("COLUMN_TYPE"),
+            "YES".equalsIgnoreCase(rs.getString("IS_NULLABLE")),
+            rs.getString("COLUMN_KEY"),
+            rs.getString("COLUMN_DEFAULT"),
+            rs.getString("COLUMN_COMMENT")
+        ),
+        properties.getDatabase(),
+        properties.getTable()
+    );
 
     if (columns.isEmpty()) {
-      throw new IllegalStateException(
-          "StarRocks table does not exist: "
-              + properties.getDatabase()
-              + "."
-              + properties.getTable());
+      throw new IllegalStateException("StarRocks table does not exist: "
+          + properties.getDatabase() + "." + properties.getTable());
     }
-    return columns;
+    return columns.stream().filter(column -> !column.isInternal()).toList();
   }
 
   private void updateColumnSnapshot(List<TableColumn> columns) {
-    Set<String> kafkaColumns =
-        SchemaMapping.KAFKA_COLUMNS.stream()
-            .map(column -> column.toLowerCase(Locale.ROOT))
-            .collect(Collectors.toCollection(HashSet::new));
+    Set<String> kafkaColumns = SchemaMapping.KAFKA_COLUMNS.stream()
+        .map(column -> column.toLowerCase(Locale.ROOT))
+        .collect(Collectors.toCollection(HashSet::new));
     List<String> dynamicColumns = new ArrayList<>();
 
     for (TableColumn column : columns) {
@@ -362,8 +330,7 @@ public class StarRocksSchemaEvolutionManager {
       Thread.sleep(millis);
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
-      throw new IllegalStateException(
-          "Interrupted while waiting for StarRocks schema evolution", exception);
+      throw new IllegalStateException("Interrupted while waiting for StarRocks schema evolution", exception);
     }
   }
 
@@ -374,9 +341,15 @@ public class StarRocksSchemaEvolutionManager {
       boolean nullable,
       String columnKey,
       String defaultValue,
-      String comment) {
+      String comment
+  ) {
+
     boolean isKey() {
       return columnKey != null && !columnKey.isBlank();
+    }
+
+    boolean isInternal() {
+      return name != null && name.startsWith("__");
     }
   }
 }

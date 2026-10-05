@@ -13,6 +13,7 @@ public record PendingLoad(
     CompletableFuture<StreamLoadResult> future,
     long submittedNanos,
     AtomicLong completedNanos) {
+
   public PendingLoad(
       String label,
       int rowCount,

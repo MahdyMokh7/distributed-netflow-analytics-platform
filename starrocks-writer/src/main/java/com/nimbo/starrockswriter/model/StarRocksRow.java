@@ -11,6 +11,7 @@ public record StarRocksRow(
     long kafkaOffset,
     long processTime,
     Map<String, Object> netFlowValues) {
+
   public StarRocksRow {
     netFlowValues = new LinkedHashMap<>(netFlowValues);
   }

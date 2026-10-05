@@ -15,15 +15,15 @@ class StarRocksRecordMapperTest {
     return new Schema.Parser()
         .parse(
             """
-            {
-              "type":"record",
-              "name":"Netflow",
-              "fields":[
-                {"name":"SRC_IP","type":["null","string"],"default":null},
-                {"name":"BYTES","type":["null","long"],"default":null}
-              ]
-            }
-            """);
+                {
+                 "type":"record",
+                 "name":"Netflow",
+                 "fields":[
+                  {"name":"SRC_IP","type":["null","string"],"default":null},
+                  {"name":"BYTES","type":["null","long"],"default":null}
+                 ]
+                }
+                """);
   }
 
   @Test

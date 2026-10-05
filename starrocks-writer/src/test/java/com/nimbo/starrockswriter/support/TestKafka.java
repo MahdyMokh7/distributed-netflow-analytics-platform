@@ -98,12 +98,12 @@ public final class TestKafka {
             () -> {
               try (AdminClient admin = adminClient()) {
                 return admin
-                        .describeConsumerGroups(List.of(CONSUMER_GROUP))
-                        .describedGroups()
-                        .get(CONSUMER_GROUP)
-                        .get(5, TimeUnit.SECONDS)
-                        .members()
-                        .size()
+                    .describeConsumerGroups(List.of(CONSUMER_GROUP))
+                    .describedGroups()
+                    .get(CONSUMER_GROUP)
+                    .get(5, TimeUnit.SECONDS)
+                    .members()
+                    .size()
                     == expected;
               }
             });
