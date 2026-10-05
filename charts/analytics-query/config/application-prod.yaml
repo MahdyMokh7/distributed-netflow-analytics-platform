@@ -1,0 +1,115 @@
+spring:
+  application:
+    name: analytics-query
+
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${SERVER_PORT}
+
+  tomcat:
+    threads:
+      max: ${ANALYTICS_QUERY_HTTP_MAX_THREADS}
+    max-connections: ${ANALYTICS_QUERY_HTTP_MAX_CONNECTIONS}
+    accept-count: ${ANALYTICS_QUERY_HTTP_ACCEPT_COUNT}
+
+  shutdown: graceful
+
+analytics-query:
+
+  explanation:
+    timeout: ${ANALYTICS_QUERY_EXPLANATION_TIMEOUT}
+    max-rows: ${ANALYTICS_QUERY_EXPLANATION_MAX_ROWS}
+    max-payload-characters: ${ANALYTICS_QUERY_EXPLANATION_MAX_PAYLOAD_CHARACTERS}
+
+  intent:
+    max-time-range: ${ANALYTICS_QUERY_MAX_TIME_RANGE}
+
+  schema:
+    starrocks:
+      enabled: ${ANALYTICS_QUERY_STARROCKS_CATALOG_ENABLED}
+      jdbc-url: ${ANALYTICS_QUERY_STARROCKS_JDBC_URL}
+      username: ${ANALYTICS_QUERY_STARROCKS_USERNAME}
+      password: ${ANALYTICS_QUERY_STARROCKS_PASSWORD}
+      database: ${ANALYTICS_QUERY_STARROCKS_DATABASE}
+      table: ${ANALYTICS_QUERY_STARROCKS_TABLE}
+      refresh-interval: ${ANALYTICS_QUERY_STARROCKS_REFRESH_INTERVAL}
+      connection-timeout: ${ANALYTICS_QUERY_STARROCKS_CONNECTION_TIMEOUT}
+      pool-size: ${ANALYTICS_QUERY_STARROCKS_POOL_SIZE}
+      query-timeout-seconds: ${ANALYTICS_QUERY_STARROCKS_QUERY_TIMEOUT_SECONDS}
+
+  sql-generation:
+    max-sql-length: ${ANALYTICS_QUERY_MAX_SQL_LENGTH}
+
+  query-plan-safety:
+    explain-timeout: ${ANALYTICS_QUERY_EXPLAIN_TIMEOUT}
+    max-explain-size: ${ANALYTICS_QUERY_MAX_EXPLAIN_SIZE}
+    max-estimated-rows: ${ANALYTICS_QUERY_MAX_ESTIMATED_ROWS}
+    postgres-max-total-cost: ${ANALYTICS_QUERY_POSTGRES_MAX_TOTAL_COST}
+
+  sql-execution:
+    statement-timeout: ${ANALYTICS_QUERY_SQL_STATEMENT_TIMEOUT}
+    max-result-size: ${ANALYTICS_QUERY_SQL_MAX_RESULT_SIZE}
+
+    postgresql:
+      enabled: ${ANALYTICS_QUERY_POSTGRESQL_EXECUTION_ENABLED}
+      jdbc-url: ${ANALYTICS_QUERY_POSTGRESQL_JDBC_URL}
+      username: ${ANALYTICS_QUERY_POSTGRESQL_USERNAME}
+      password: ${ANALYTICS_QUERY_POSTGRESQL_PASSWORD}
+      pool-size: ${ANALYTICS_QUERY_POSTGRESQL_POOL_SIZE}
+      connection-timeout: ${ANALYTICS_QUERY_POSTGRESQL_CONNECTION_TIMEOUT}
+
+    starrocks:
+      enabled: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_ENABLED}
+      jdbc-url: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_JDBC_URL}
+      username: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_USERNAME}
+      password: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_PASSWORD}
+      pool-size: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_POOL_SIZE}
+      connection-timeout: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_CONNECTION_TIMEOUT}
+
+llm:
+  base-url: ${ANALYTICS_QUERY_LLM_BASE_URL}
+  api-key: ${ANALYTICS_QUERY_LLM_API_KEY}
+  model: ${ANALYTICS_QUERY_LLM_MODEL}
+  chat-completions-path: ${ANALYTICS_QUERY_LLM_CHAT_COMPLETIONS_PATH}
+
+  timeout:
+    connect: ${ANALYTICS_QUERY_LLM_CONNECT_TIMEOUT}
+    read: ${ANALYTICS_QUERY_LLM_READ_TIMEOUT}
+
+rest-api:
+  base-url: ${ANALYTICS_QUERY_REST_API_BASE_URL}
+
+  timeout:
+    connect: ${ANALYTICS_QUERY_REST_API_CONNECT_TIMEOUT}
+    read: ${ANALYTICS_QUERY_REST_API_READ_TIMEOUT}
+
+management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+  endpoints:
+    web:
+      base-path: /api/actuator
+      exposure:
+        include: health,info,metrics,prometheus
+
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true

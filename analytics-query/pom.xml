@@ -124,6 +124,21 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
             </plugin>
 
+            <plugin>
+                <groupId>com.google.cloud.tools</groupId>
+                <artifactId>jib-maven-plugin</artifactId>
+
+                <configuration>
+                    <to>
+                        <image>${env.NEXUS_PUSH_REGISTRY}/${jib.image.prefix}-${project.artifactId}:${jib.image.tag}</image>
+                    </to>
+
+                    <container>
+                        <mainClass>com.nimbo.analyticsquery.AnalyticsQueryApplication</mainClass>
+                    </container>
+                </configuration>
+            </plugin>
+
         </plugins>
     </build>
 

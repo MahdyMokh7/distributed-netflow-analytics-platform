@@ -1,0 +1,120 @@
+replicaCount: 2
+
+rollingUpdate:
+  maxUnavailable: 0
+  maxSurge: 1
+
+image:
+  repository: zoraq.inside.sahab.ir:9462/nimbo-nimbyte-analytics-query
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+containerPort: 18084
+springProfile: prod
+
+terminationGracePeriodSeconds: 30
+
+service:
+  type: LoadBalancer
+  port: 80
+  loadBalancerIP: 10.10.61.78
+
+restApi:
+  baseUrl: http://rest-api:18083/api
+  connectTimeout: 3s
+  readTimeout: 15s
+
+llm:
+  baseUrl: http://saca-api.inside.sahab.ir:3100
+  model: AliBaba/Qwen3.8-27B
+  chatCompletionsPath: /v1/chat/completions
+  connectTimeout: 10s
+  readTimeout: 240s
+
+postgresql:
+  enabled: true
+  jdbcUrl: jdbc:postgresql://postgresql-ha-postgresql-master:5432/nimbo_db
+  poolSize: 2
+  connectionTimeout: 3s
+
+starrocks:
+  jdbcUrl: jdbc:mysql://10.10.61.53:9030/nimbo
+  database: nimbo
+  table: netflow
+
+  catalog:
+    enabled: true
+    refreshInterval: 15m
+    connectionTimeout: 5s
+    poolSize: 1
+    queryTimeoutSeconds: 10
+
+  execution:
+    enabled: true
+    connectionTimeout: 3s
+    poolSize: 2
+
+intent:
+  maxTimeRange: 7d
+
+explanation:
+  timeout: 10s
+  maxRows: 20
+  maxPayloadCharacters: 32000
+
+sqlGeneration:
+  maxSqlLength: 20000
+
+queryPlanSafety:
+  explainTimeout: 5s
+  maxExplainSize: 256KB
+  maxEstimatedRows: 10000000
+  postgresMaxTotalCost: 1000000
+
+sqlExecution:
+  statementTimeout: 30s
+  maxResultSize: 2MB
+
+http:
+  maxThreads: 32
+  maxConnections: 64
+  acceptCount: 32
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+probes:
+  startup:
+    path: /api/actuator/health/liveness
+    timeoutSeconds: 3
+    failureThreshold: 30
+    periodSeconds: 5
+
+  readiness:
+    path: /api/actuator/health/readiness
+    timeoutSeconds: 3
+    failureThreshold: 3
+    periodSeconds: 5
+
+  liveness:
+    path: /api/actuator/health/liveness
+    timeoutSeconds: 3
+    failureThreshold: 3
+    periodSeconds: 10
+
+secret:
+  # Create this Secret outside Helm. Its keys must match the environment
+  # variables referenced by config/application-prod.yaml:
+  # ANALYTICS_QUERY_LLM_API_KEY
+  # ANALYTICS_QUERY_POSTGRESQL_USERNAME / ANALYTICS_QUERY_POSTGRESQL_PASSWORD
+  # ANALYTICS_QUERY_STARROCKS_USERNAME / ANALYTICS_QUERY_STARROCKS_PASSWORD
+  # ANALYTICS_QUERY_STARROCKS_EXECUTION_USERNAME / ANALYTICS_QUERY_STARROCKS_EXECUTION_PASSWORD
+  # A future ANALYTICS_QUERY_REST_API_TOKEN can be added without changing this chart.
+  existingName: analytics-query-secret
+
+extraEnv: []

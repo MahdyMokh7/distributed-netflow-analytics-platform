@@ -1,0 +1,217 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "MODULE.fullname" . }}
+  labels:
+    {{- include "MODULE.labels" . | nindent 4 }}
+
+spec:
+  replicas: {{ .Values.replicaCount }}
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: {{ .Values.rollingUpdate.maxUnavailable }}
+      maxSurge: {{ .Values.rollingUpdate.maxSurge }}
+
+  selector:
+    matchLabels:
+      {{- include "MODULE.labels" . | nindent 6 }}
+
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "MODULE.labels" . | nindent 8 }}
+
+    spec:
+      automountServiceAccountToken: false
+
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+
+      containers:
+        - name: {{ .Chart.Name }}
+
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ .Values.springProfile | quote }}
+
+            - name: SERVER_PORT
+              value: {{ .Values.containerPort | quote }}
+
+            - name: SPRING_CONFIG_ADDITIONAL_LOCATION
+              value: "file:/config/application-prod.yaml"
+
+            - name: ANALYTICS_QUERY_REST_API_BASE_URL
+              value: {{ .Values.restApi.baseUrl | quote }}
+
+            - name: ANALYTICS_QUERY_REST_API_CONNECT_TIMEOUT
+              value: {{ .Values.restApi.connectTimeout | quote }}
+
+            - name: ANALYTICS_QUERY_REST_API_READ_TIMEOUT
+              value: {{ .Values.restApi.readTimeout | quote }}
+
+            - name: ANALYTICS_QUERY_LLM_BASE_URL
+              value: {{ .Values.llm.baseUrl | quote }}
+
+            - name: ANALYTICS_QUERY_LLM_MODEL
+              value: {{ .Values.llm.model | quote }}
+
+            - name: ANALYTICS_QUERY_LLM_CHAT_COMPLETIONS_PATH
+              value: {{ .Values.llm.chatCompletionsPath | quote }}
+
+            - name: ANALYTICS_QUERY_LLM_CONNECT_TIMEOUT
+              value: {{ .Values.llm.connectTimeout | quote }}
+
+            - name: ANALYTICS_QUERY_LLM_READ_TIMEOUT
+              value: {{ .Values.llm.readTimeout | quote }}
+
+            - name: ANALYTICS_QUERY_MAX_TIME_RANGE
+              value: {{ .Values.intent.maxTimeRange | quote }}
+
+            - name: ANALYTICS_QUERY_EXPLANATION_TIMEOUT
+              value: {{ .Values.explanation.timeout | quote }}
+
+            - name: ANALYTICS_QUERY_EXPLANATION_MAX_ROWS
+              value: {{ .Values.explanation.maxRows | quote }}
+
+            - name: ANALYTICS_QUERY_EXPLANATION_MAX_PAYLOAD_CHARACTERS
+              value: {{ .Values.explanation.maxPayloadCharacters | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_CATALOG_ENABLED
+              value: {{ .Values.starrocks.catalog.enabled | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_JDBC_URL
+              value: {{ .Values.starrocks.jdbcUrl | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_DATABASE
+              value: {{ .Values.starrocks.database | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_TABLE
+              value: {{ .Values.starrocks.table | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_REFRESH_INTERVAL
+              value: {{ .Values.starrocks.catalog.refreshInterval | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_CONNECTION_TIMEOUT
+              value: {{ .Values.starrocks.catalog.connectionTimeout | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_POOL_SIZE
+              value: {{ .Values.starrocks.catalog.poolSize | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_QUERY_TIMEOUT_SECONDS
+              value: {{ .Values.starrocks.catalog.queryTimeoutSeconds | quote }}
+
+            - name: ANALYTICS_QUERY_MAX_SQL_LENGTH
+              value: {{ .Values.sqlGeneration.maxSqlLength | quote }}
+
+            - name: ANALYTICS_QUERY_EXPLAIN_TIMEOUT
+              value: {{ .Values.queryPlanSafety.explainTimeout | quote }}
+
+            - name: ANALYTICS_QUERY_MAX_EXPLAIN_SIZE
+              value: {{ .Values.queryPlanSafety.maxExplainSize | quote }}
+
+            - name: ANALYTICS_QUERY_MAX_ESTIMATED_ROWS
+              value: {{ .Values.queryPlanSafety.maxEstimatedRows | quote }}
+
+            - name: ANALYTICS_QUERY_POSTGRES_MAX_TOTAL_COST
+              value: {{ .Values.queryPlanSafety.postgresMaxTotalCost | quote }}
+
+            - name: ANALYTICS_QUERY_SQL_STATEMENT_TIMEOUT
+              value: {{ .Values.sqlExecution.statementTimeout | quote }}
+
+            - name: ANALYTICS_QUERY_SQL_MAX_RESULT_SIZE
+              value: {{ .Values.sqlExecution.maxResultSize | quote }}
+
+            - name: ANALYTICS_QUERY_POSTGRESQL_EXECUTION_ENABLED
+              value: {{ .Values.postgresql.enabled | quote }}
+
+            - name: ANALYTICS_QUERY_POSTGRESQL_JDBC_URL
+              value: {{ .Values.postgresql.jdbcUrl | quote }}
+
+            - name: ANALYTICS_QUERY_POSTGRESQL_POOL_SIZE
+              value: {{ .Values.postgresql.poolSize | quote }}
+
+            - name: ANALYTICS_QUERY_POSTGRESQL_CONNECTION_TIMEOUT
+              value: {{ .Values.postgresql.connectionTimeout | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_EXECUTION_ENABLED
+              value: {{ .Values.starrocks.execution.enabled | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_EXECUTION_JDBC_URL
+              value: {{ .Values.starrocks.jdbcUrl | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_EXECUTION_POOL_SIZE
+              value: {{ .Values.starrocks.execution.poolSize | quote }}
+
+            - name: ANALYTICS_QUERY_STARROCKS_EXECUTION_CONNECTION_TIMEOUT
+              value: {{ .Values.starrocks.execution.connectionTimeout | quote }}
+
+            - name: ANALYTICS_QUERY_HTTP_MAX_THREADS
+              value: {{ .Values.http.maxThreads | quote }}
+
+            - name: ANALYTICS_QUERY_HTTP_MAX_CONNECTIONS
+              value: {{ .Values.http.maxConnections | quote }}
+
+            - name: ANALYTICS_QUERY_HTTP_ACCEPT_COUNT
+              value: {{ .Values.http.acceptCount | quote }}
+
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+          envFrom:
+            - secretRef:
+                name: {{ required "secret.existingName is required" .Values.secret.existingName | quote }}
+
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+
+          startupProbe:
+            httpGet:
+              path: {{ .Values.probes.startup.path }}
+              port: http
+            timeoutSeconds: {{ .Values.probes.startup.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: http
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "MODULE.fullname" . }}-config

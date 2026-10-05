@@ -1796,6 +1796,12 @@ Chart must configure:
 * Prometheus scraping configuration;
 * secret references.
 
+Keep one Service, one load balancer and one IP in this phase. Do not change the
+current `server.servlet.context-path: /api` while creating the chart, because it
+also affects controllers, Actuator, OpenAPI and Spring-served static resources.
+Resolve the browser root-path behavior deliberately with the static UI in Phase
+6.10.
+
 ---
 
 ### Phase 6.3 — Kubernetes Secrets
@@ -1918,6 +1924,13 @@ When the page first loads, show a short guidance block near the question input. 
 * ranking and limit for top/bottom questions.
 
 Keep the guidance compact and include two or three representative NetFlow examples rather than a long instruction manual. When the API returns `NEEDS_CLARIFICATION`, display its message prominently beside the input so the user can revise and resubmit the question. Do not add conversation memory for V1.
+
+Before finalizing the UI route, account for the current
+`server.servlet.context-path: /api`, which also prefixes Spring static
+resources. Choose and verify a deliberate routing arrangement that serves the
+UI from the browser root while preserving the existing `/api/analytics/**`,
+Actuator and OpenAPI contracts. Do not solve this by introducing another
+Service or load balancer.
 
 ---
 
