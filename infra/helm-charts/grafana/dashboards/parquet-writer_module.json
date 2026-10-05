@@ -1817,7 +1817,7 @@
       "hideTimepicker": false,
       "fiscalYearStartMonth": 0
     },
-    "title": "Parquet Writer Module Health",
+    "title": "Parquet Writer Module",
     "variables": [],
     "preferences": {
       "layout": {

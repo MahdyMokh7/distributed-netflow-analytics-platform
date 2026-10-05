@@ -1506,7 +1506,6 @@
     },
     "preload": false,
     "tags": [
-      "starrocks-writer",
       "kafka",
       "starrocks"
     ],
@@ -1530,7 +1529,7 @@
       "timezone": "browser",
       "to": "now"
     },
-    "title": "StarRocks Writer Module Health",
+    "title": "StarRocks Writer Module",
     "variables": []
   }
 }
