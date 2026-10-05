@@ -7,7 +7,6 @@ import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
-import com.nimbo.analyticsquery.intent.model.QueryRequirements;
 import com.nimbo.analyticsquery.routing.DataSourceRoute;
 import com.nimbo.analyticsquery.schema.SemanticColumn;
 import com.nimbo.analyticsquery.schema.SemanticTable;
@@ -23,7 +22,7 @@ public class SqlGenerationContextFactory {
                     "Do not reference another datasource.",
                     "Use the listed time column for the bounded time range.",
                     "Use only relationships explicitly listed in the context.",
-                    "Return at most " + QueryRequirements.MAX_LIMIT + " rows.");
+                    "Always use a literal LIMIT between 1 and " + SqlPolicyRules.maxResultRows() + " rows.");
 
     private static final Set<SemanticColumn.Role> EXPOSED_ROLES =
             Set.of(

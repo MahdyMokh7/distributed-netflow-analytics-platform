@@ -5,10 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Objects;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -23,9 +26,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.nimbo.analyticsquery.support.RestApiTestServerExtension;
+import com.nimbo.analyticsquery.support.PostgresSqlExecutionTestExtension;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@ExtendWith(OutputCaptureExtension.class)
 class AnalyticsControllerIT {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -36,19 +43,38 @@ class AnalyticsControllerIT {
     @RegisterExtension
     static final RestApiTestServerExtension REST_API = new RestApiTestServerExtension();
 
+    @RegisterExtension
+    static final PostgresSqlExecutionTestExtension POSTGRES =
+            new PostgresSqlExecutionTestExtension();
+
     @DynamicPropertySource
     static void dependencies(DynamicPropertyRegistry registry) {
         registry.add("llm.base-url", () -> LLM.originUrl().toString());
         registry.add("llm.chat-completions-path", () -> "/api/chat/completions");
         registry.add("rest-api.base-url", () -> REST_API.baseUrl().toString());
+        registry.add("analytics-query.sql-execution.postgresql.enabled", () -> true);
+        registry.add(
+                "analytics-query.sql-execution.postgresql.jdbc-url",
+                POSTGRES::jdbcUrl);
+        registry.add(
+                "analytics-query.sql-execution.postgresql.username",
+                POSTGRES::username);
+        registry.add(
+                "analytics-query.sql-execution.postgresql.password",
+                POSTGRES::password);
     }
 
     @Autowired private TestRestTemplate restTemplate;
 
+    @Autowired private MeterRegistry meterRegistry;
+
     @Test
-    void givenSupportedAnalyticsQuestionWhenQueryEndpointIsCalledThenToolDataIsReturned() {
+    void givenSupportedAnalyticsQuestionWhenQueryEndpointIsCalledThenToolDataIsReturned(
+            CapturedOutput output) {
         // Given: a supported question with valid LLM intent and REST data
-        LLM.respondWith(200, llmResponse(successfulTrafficIntent()));
+        LLM.respondWithSequence(
+                llmResponse(successfulTrafficIntent()),
+                llmResponse(explanation("Traffic was observed for one source IP.")));
         REST_API.respondWith(200, trafficResponse());
         HttpEntity<String> request =
                 jsonRequest(
@@ -71,8 +97,22 @@ class AnalyticsControllerIT {
         assertThat(body.path("data").isArray()).isTrue();
         assertThat(body.path("data").get(0).path("srcIp").asText()).isEqualTo("10.0.0.1");
         assertThat(body.path("data").get(0).path("recordCount").asLong()).isEqualTo(4);
-        assertThat(LLM.requestCount()).isEqualTo(1);
+        assertThat(body.path("explanation").asText())
+                .isEqualTo("Traffic was observed for one source IP.");
+        assertThat(LLM.requestCount()).isEqualTo(2);
         assertThat(REST_API.requestCount()).isEqualTo(1);
+        assertThat(output)
+                .contains(
+                        "Matched analytics tool tool=traffic-windows",
+                        "endpoint=QUERY",
+                        "status=SUCCESS",
+                        "executionMode=TOOL",
+                        "datasource=POSTGRESQL",
+                        "rowCount=1",
+                        "durationMs=")
+                .doesNotContain(
+                        "Show traffic windows from the last hour",
+                        "10.0.0.1");
     }
 
     @Test
@@ -123,9 +163,12 @@ class AnalyticsControllerIT {
     }
 
     @Test
-    void givenIntentWithoutMatchingToolWhenQueryEndpointIsCalledThenUnsupportedIsReturned() {
-        // Given: a valid NetFlow intent unsupported by the current tools
-        LLM.respondWith(200, llmResponse(unsupportedIntent()));
+    void givenIntentWithoutMatchingToolWhenQueryEndpointIsCalledThenSqlFallbackExecutes() {
+        // Given: an eligible intent followed by safe SQL for its routed datasource
+        LLM.respondWithSequence(
+                llmResponse(unsupportedIntent()),
+                llmResponse(generatedPostgresqlSql()),
+                llmResponse(explanation("10.0.0.1 has the highest inbound byte total.")));
         HttpEntity<String> request =
                 jsonRequest(
                         """
@@ -138,19 +181,27 @@ class AnalyticsControllerIT {
         ResponseEntity<JsonNode> response =
                 restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
 
-        // Then: SQL fallback routes and stops before generation without invoking REST
+        // Then: SQL fallback validates, plans and executes without invoking REST
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         JsonNode body = requireBody(response);
-        assertThat(body.path("status").asText()).isEqualTo("UNSUPPORTED_ANALYSIS");
-        assertThat(body.path("message").asText())
-                .isEqualTo("SQL generation is not implemented yet");
+        assertThat(body.path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(body.path("executionMode").asText()).isEqualTo("GENERATED_SQL");
+        assertThat(body.path("dataSource").asText()).isEqualTo("POSTGRESQL");
+        assertThat(body.path("data").isArray()).isTrue();
+        assertThat(body.path("data").get(0).path("src_ip").asText())
+                .isEqualTo("10.0.0.1");
+        assertThat(body.path("explanation").asText())
+                .isEqualTo("10.0.0.1 has the highest inbound byte total.");
+        assertThat(LLM.requestCount()).isEqualTo(3);
         assertThat(REST_API.requestCount()).isZero();
     }
 
     @Test
     void givenSupportedQuestionWithoutDataWhenQueryEndpointIsCalledThenEmptySuccessIsReturned() {
         // Given: a supported intent and the REST API no-data response
-        LLM.respondWith(200, llmResponse(successfulTrafficIntent()));
+        LLM.respondWithSequence(
+                llmResponse(successfulTrafficIntent()),
+                llmResponse(explanation("No matching traffic rows were found.")));
         REST_API.respondWith(
                 404,
                 """
@@ -177,7 +228,30 @@ class AnalyticsControllerIT {
         assertThat(body.path("status").asText()).isEqualTo("SUCCESS");
         assertThat(body.path("data").isArray()).isTrue();
         assertThat(body.path("data")).isEmpty();
+        assertThat(body.path("explanation").asText())
+                .isEqualTo("No matching traffic rows were found.");
         assertThat(REST_API.requestCount()).isEqualTo(1);
+    }
+
+    @Test
+    void givenExplanationFailureWhenQuerySucceedsThenDataRemainsSuccessful() {
+        // Given: a successful tool result followed by malformed explanation output
+        LLM.respondWithSequence(
+                llmResponse(successfulTrafficIntent()),
+                llmResponse("not-json"));
+        REST_API.respondWith(200, trafficResponse());
+        HttpEntity<String> request = analyticsQuestion();
+
+        // When: explanation generation fails after successful execution
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/query", request, JsonNode.class);
+
+        // Then: authoritative data remains successful and explanation is omitted
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = requireBody(response);
+        assertThat(body.path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(body.path("data")).hasSize(1);
+        assertThat(body.has("explanation")).isFalse();
     }
 
     @Test
@@ -308,7 +382,11 @@ class AnalyticsControllerIT {
         assertThat(body.path("sql").asText())
                 .isEqualTo(
                         "SELECT src_ip, SUM(in_bytes) FROM traffic_aggregates "
+                                + "WHERE window_start >= TIMESTAMP '2026-10-01 08:00:00' "
+                                + "AND window_start < TIMESTAMP '2026-10-01 09:00:00' "
                                 + "GROUP BY src_ip LIMIT 10");
+        assertThat(body.has("data")).isFalse();
+        assertThat(body.has("rowCount")).isFalse();
         assertThat(LLM.requestCount()).isEqualTo(2);
         assertThat(REST_API.requestCount()).isZero();
     }
@@ -396,26 +474,6 @@ class AnalyticsControllerIT {
     }
 
     @Test
-    void givenValidSqlWhenExecuteEndpointIsCalledThenNotImplementedIsReturned() {
-        // Given: a valid SQL execution request
-        HttpEntity<String> request =
-                jsonRequest(
-                        """
-                {
-                  "sql": "SELECT * FROM traffic_aggregates LIMIT 10"
-                }
-                """);
-
-        // When: the SQL execution endpoint receives the request
-        ResponseEntity<JsonNode> response =
-                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
-
-        // Then: the endpoint reports that SQL execution is not implemented yet
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_IMPLEMENTED);
-        assertThat(requireBody(response).path("status").asInt()).isEqualTo(501);
-    }
-
-    @Test
     void givenBlankSqlWhenExecuteEndpointIsCalledThenBadRequestIsReturned() {
         // Given: a SQL execution request with blank SQL
         HttpEntity<String> request =
@@ -436,6 +494,99 @@ class AnalyticsControllerIT {
                 .isEqualTo("SQL must not be blank");
     }
 
+    @Test
+    void givenApprovedSqlWhenExecuteEndpointIsCalledThenValidatedRowsAreReturned() {
+        // Given: a bounded read-only query over an approved PostgreSQL cube
+        HttpEntity<String> request = approvedSqlExecutionRequest();
+
+        // When: the protected SQL execution endpoint receives the query
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
+
+        // Then: validation, EXPLAIN and read-only execution return normalized data
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = requireBody(response);
+        assertThat(body.path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(body.path("dataSource").asText()).isEqualTo("POSTGRESQL");
+        assertThat(body.path("rowCount").asInt()).isEqualTo(2);
+        assertThat(body.path("data").get(0).path("src_ip").asText())
+                .isEqualTo("10.0.0.1");
+    }
+
+    @Test
+    void givenWriteSqlWhenExecuteEndpointIsCalledThenExecutorIsNotReached() {
+        // Given: a write statement and two existing aggregate rows
+        HttpEntity<String> request =
+                jsonRequest(
+                        """
+                {
+                  "sql": "DELETE FROM traffic_aggregates"
+                }
+                """);
+        assertThat(POSTGRES.trafficRowCount()).isEqualTo(2);
+
+        // When: the protected SQL execution endpoint receives the write
+        ResponseEntity<JsonNode> response =
+                restTemplate.postForEntity("/analytics/sql/execute", request, JsonNode.class);
+
+        // Then: policy rejects the statement before the executor changes data
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(requireBody(response).path("status").asText())
+                .isEqualTo("QUERY_REJECTED");
+        assertThat(POSTGRES.trafficRowCount()).isEqualTo(2);
+    }
+
+    @Test
+    void givenSuccessfulRequestAndControlledFailureWhenPrometheusIsReadThenMetricsAreWired() {
+        // Given: baseline counters and a successful query with failed explanation
+        double requestCount = meterRegistry.counter(
+                        "analytics.query.requests",
+                        "endpoint", "query",
+                        "status", "success")
+                .count();
+        double failureCount = meterRegistry.counter(
+                        "analytics.query.failures",
+                        "stage", "explanation",
+                        "reason", "explanation")
+                .count();
+        LLM.respondWithSequence(
+                llmResponse(successfulTrafficIntent()),
+                llmResponse("not-json"));
+        REST_API.respondWith(200, trafficResponse());
+
+        // When: the request completes and Prometheus metrics are read
+        ResponseEntity<JsonNode> queryResponse =
+                restTemplate.postForEntity(
+                        "/analytics/query",
+                        analyticsQuestion(),
+                        JsonNode.class);
+        ResponseEntity<String> metricsResponse =
+                restTemplate.getForEntity("/actuator/prometheus", String.class);
+
+        // Then: request and failure counters increment and all custom metrics are exposed
+        assertThat(queryResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(meterRegistry.counter(
+                        "analytics.query.requests",
+                        "endpoint", "query",
+                        "status", "success")
+                .count()).isEqualTo(requestCount + 1);
+        assertThat(meterRegistry.counter(
+                        "analytics.query.failures",
+                        "stage", "explanation",
+                        "reason", "explanation")
+                .count()).isEqualTo(failureCount + 1);
+        assertThat(metricsResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(metricsResponse.getBody())
+                .contains(
+                        "analytics_query_requests_total",
+                        "analytics_query_request_duration_seconds",
+                        "analytics_query_dependency_duration_seconds",
+                        "analytics_query_failures_total",
+                        "analytics_query_active_requests",
+                        "analytics_query_stage_duration_seconds",
+                        "analytics_query_execution_total");
+    }
+
     private HttpEntity<String> jsonRequest(String body) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -448,6 +599,15 @@ class AnalyticsControllerIT {
                 """
                 {
                   "question": "Show traffic windows from the last hour"
+                }
+                """);
+    }
+
+    private HttpEntity<String> approvedSqlExecutionRequest() {
+        return jsonRequest(
+                """
+                {
+                  "sql": "SELECT src_ip, in_bytes FROM traffic_aggregates WHERE window_start >= TIMESTAMP '2026-10-01 08:00:00' AND window_start < TIMESTAMP '2026-10-01 09:00:00' ORDER BY src_ip LIMIT 10"
                 }
                 """);
     }
@@ -481,6 +641,14 @@ class AnalyticsControllerIT {
             throw new IllegalStateException(
                     "Failed to build the deterministic LLM response", exception);
         }
+    }
+
+    private static String explanation(String value) {
+        return """
+                {
+                  "explanation": "%s"
+                }
+                """.formatted(value);
     }
 
     private static String successfulTrafficIntent() {
@@ -643,7 +811,7 @@ class AnalyticsControllerIT {
         return """
                 {
                   "dataSource": "POSTGRESQL",
-                  "sql": "SELECT src_ip, SUM(in_bytes) FROM traffic_aggregates GROUP BY src_ip LIMIT 10"
+                  "sql": "SELECT src_ip, SUM(in_bytes) FROM traffic_aggregates WHERE window_start >= TIMESTAMP '2026-10-01 08:00:00' AND window_start < TIMESTAMP '2026-10-01 09:00:00' GROUP BY src_ip LIMIT 10"
                 }
                 """;
     }

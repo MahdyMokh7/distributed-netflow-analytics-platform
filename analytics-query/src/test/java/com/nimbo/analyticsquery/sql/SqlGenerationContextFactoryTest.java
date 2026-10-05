@@ -54,7 +54,9 @@ class SqlGenerationContextFactoryTest {
         assertThat(context.queryRestrictions())
                 .contains(
                         "Do not reference another datasource.",
-                        "Return at most " + QueryRequirements.MAX_LIMIT + " rows.");
+                        "Always use a literal LIMIT between 1 and "
+                                + QueryRequirements.MAX_LIMIT
+                                + " rows.");
     }
 
     @Test

@@ -25,6 +25,11 @@ springdoc:
   paths-to-match: /analytics/**
 
 analytics-query:
+  explanation:
+    timeout: ${ANALYTICS_QUERY_EXPLANATION_TIMEOUT:10s}
+    max-rows: ${ANALYTICS_QUERY_EXPLANATION_MAX_ROWS:20}
+    max-payload-characters: ${ANALYTICS_QUERY_EXPLANATION_MAX_PAYLOAD_CHARACTERS:32000}
+
   intent:
     max-time-range: ${ANALYTICS_QUERY_MAX_TIME_RANGE:7d}
 
@@ -43,6 +48,32 @@ analytics-query:
 
   sql-generation:
     max-sql-length: 20000
+
+  query-plan-safety:
+    explain-timeout: ${ANALYTICS_QUERY_EXPLAIN_TIMEOUT:5s}
+    max-explain-size: ${ANALYTICS_QUERY_MAX_EXPLAIN_SIZE:256KB}
+    max-estimated-rows: ${ANALYTICS_QUERY_MAX_ESTIMATED_ROWS:10000000}
+    postgres-max-total-cost: ${ANALYTICS_QUERY_POSTGRES_MAX_TOTAL_COST:1000000}
+
+  sql-execution:
+    statement-timeout: ${ANALYTICS_QUERY_SQL_STATEMENT_TIMEOUT:10s}
+    max-result-size: ${ANALYTICS_QUERY_SQL_MAX_RESULT_SIZE:2MB}
+
+    postgresql:
+      enabled: ${ANALYTICS_QUERY_POSTGRESQL_EXECUTION_ENABLED:false}
+      jdbc-url: ${ANALYTICS_QUERY_POSTGRESQL_JDBC_URL:}
+      username: ${ANALYTICS_QUERY_POSTGRESQL_USERNAME:}
+      password: ${ANALYTICS_QUERY_POSTGRESQL_PASSWORD:}
+      pool-size: ${ANALYTICS_QUERY_POSTGRESQL_POOL_SIZE:2}
+      connection-timeout: ${ANALYTICS_QUERY_POSTGRESQL_CONNECTION_TIMEOUT:3s}
+
+    starrocks:
+      enabled: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_ENABLED:false}
+      jdbc-url: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_JDBC_URL:}
+      username: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_USERNAME:}
+      password: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_PASSWORD:}
+      pool-size: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_POOL_SIZE:2}
+      connection-timeout: ${ANALYTICS_QUERY_STARROCKS_EXECUTION_CONNECTION_TIMEOUT:3s}
 
 llm:
   base-url: ${ANALYTICS_QUERY_LLM_BASE_URL:http://saca-api.inside.sahab.ir:3100}
@@ -66,9 +97,20 @@ server:
   servlet:
     context-path: /api
 
+  tomcat:
+    threads:
+      max: ${ANALYTICS_QUERY_HTTP_MAX_THREADS:32}
+    max-connections: ${ANALYTICS_QUERY_HTTP_MAX_CONNECTIONS:64}
+    accept-count: ${ANALYTICS_QUERY_HTTP_ACCEPT_COUNT:32}
+
   shutdown: graceful
 
 management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
   endpoints:
     web:
       exposure:

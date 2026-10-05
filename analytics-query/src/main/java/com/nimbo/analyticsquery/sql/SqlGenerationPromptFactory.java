@@ -1,6 +1,7 @@
 package com.nimbo.analyticsquery.sql;
 
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
@@ -26,8 +27,14 @@ public class SqlGenerationPromptFactory {
     public String createSystemPrompt(QueryRequirements requirements, SqlGenerationContext context) {
 
         Objects.requireNonNull(requirements, "queryRequirements must not be null");
-
         Objects.requireNonNull(context, "sqlGenerationContext must not be null");
+
+        String allowedFunctions = SqlPolicyRules.allowedFunctions(context.dataSource())
+                        .stream()
+                        .sorted()
+                        .collect(Collectors.joining(", "));
+
+        String resultLimitRule = resultLimitRule(requirements);
 
         return """
                 You are the SQL generation component of a controlled
@@ -56,8 +63,11 @@ public class SqlGenerationPromptFactory {
                   mappings and meanings.
                 - Preserve the validated QueryRequirements exactly.
                 - Honor filters, IP roles, traffic direction, grouping,
-                  aggregation, distinctness, sorting and limit requirements.
+                  aggregation, distinctness and sorting requirements.
                 - Follow every queryRestriction in the approved context.
+                - Use only these approved SQL functions:
+                  %s
+                - %s
                 - The generated SQL must not exceed %d characters.
                 - Do not include Markdown.
                 - Do not include code fences.
@@ -84,8 +94,26 @@ public class SqlGenerationPromptFactory {
                         context.dataSource(),
                         toJson(requirements),
                         toJson(context),
+                        allowedFunctions,
+                        resultLimitRule,
                         properties.maxSqlLength(),
-                        context.dataSource());
+                        context.dataSource()
+                );
+    }
+
+    private String resultLimitRule(
+            QueryRequirements requirements) {
+
+        if (requirements.limit() != null) {
+            return "Use exactly LIMIT "
+                    + requirements.limit()
+                    + " because this limit is part of the user's validated request.";
+        }
+
+        return "QueryRequirements.limit is null. Add LIMIT "
+                + SqlPolicyRules.maxResultRows()
+                + " as the system safety limit. "
+                + "This operational limit must not be interpreted as part of the user's analytics meaning.";
     }
 
     public String createUserPrompt(String question) {

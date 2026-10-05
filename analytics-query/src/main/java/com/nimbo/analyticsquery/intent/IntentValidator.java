@@ -108,16 +108,7 @@ public class IntentValidator {
         }
     }
 
-    private void validateRequirements(
-            QueryRequirements requirements) {
-
-        validateUniqueFields(
-                requirements.dimensions(),
-                "dimensions");
-
-        validateUniqueFields(
-                requirements.groupBy(),
-                "groupBy");
+    private void validateRequirements(QueryRequirements requirements) {
 
         validateDimensions(requirements);
         validateMetrics(requirements);

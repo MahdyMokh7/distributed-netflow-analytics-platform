@@ -60,18 +60,6 @@ public class ApiExceptionHandler {
                 Map.of());
     }
 
-    @ExceptionHandler(FeatureNotImplementedException.class)
-    public ResponseEntity<ErrorResponse> handleNotImplemented(
-            FeatureNotImplementedException exception,
-            HttpServletRequest request) {
-
-        return response(
-                HttpStatus.NOT_IMPLEMENTED,
-                exception.getMessage(),
-                request,
-                Map.of());
-    }
-
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(
             Exception exception,

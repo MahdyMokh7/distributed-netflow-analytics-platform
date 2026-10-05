@@ -48,6 +48,20 @@ public record AnalyticsResult(
                 metadata);
     }
 
+    public static AnalyticsResult generatedSql(
+            AnalysisDataSource dataSource,
+            List<String> columns,
+            List<Map<String, Object>> rows) {
+
+        return new AnalyticsResult(
+                dataSource,
+                ExecutionMode.GENERATED_SQL,
+                columns,
+                rows,
+                rows.size(),
+                Map.of());
+    }
+
     public static AnalyticsResult emptyPostgresTool(
             List<String> columns) {
 

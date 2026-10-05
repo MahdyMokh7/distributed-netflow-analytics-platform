@@ -104,11 +104,35 @@ public final class PostgresContainerExtension implements BeforeAllCallback {
         private SharedPostgres() {
             container.start();
             createDatabaseIfMissing();
+            createAnalyticsReaderRoleIfMissing();
             Flyway.configure()
                     .dataSource(jdbcUrlFor(DATABASE_NAME), container.getUsername(), container.getPassword())
                     .locations("classpath:db.migration")
                     .load()
                     .migrate();
+        }
+
+        private void createAnalyticsReaderRoleIfMissing() {
+            try (Connection connection = DriverManager.getConnection(
+                    container.getJdbcUrl(), container.getUsername(), container.getPassword());
+                 Statement statement = connection.createStatement()) {
+                statement.execute("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM pg_roles
+                                WHERE rolname = 'analytics_query_reader'
+                            ) THEN
+                                CREATE ROLE analytics_query_reader NOLOGIN;
+                            END IF;
+                        END
+                        $$
+                        """);
+            } catch (SQLException exception) {
+                throw new IllegalStateException(
+                        "Failed to create analytics-query reader role",
+                        exception);
+            }
         }
 
         private void createDatabaseIfMissing() {

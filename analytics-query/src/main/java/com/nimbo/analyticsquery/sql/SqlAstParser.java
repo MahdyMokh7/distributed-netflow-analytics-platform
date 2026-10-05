@@ -18,14 +18,28 @@ public class SqlAstParser {
 
         Objects.requireNonNull(candidate, "generatedSqlCandidate must not be null");
 
-        try {
-            Statements statements = parseStatements(candidate.sql(), candidate.dataSource());
+        return parse(candidate.sql(), candidate.dataSource());
+    }
 
-            return new ParsedSql(candidate.dataSource(), candidate.sql(), statements);
+    public ParsedSql parse(
+            String sql,
+            AnalysisDataSource dataSource) {
+
+        if (sql == null || sql.isBlank()) {
+            throw new IllegalArgumentException("sql must not be blank");
+        }
+
+        Objects.requireNonNull(dataSource, "dataSource must not be null");
+
+        try {
+            Statements statements = parseStatements(sql, dataSource);
+
+            return new ParsedSql(dataSource, sql, statements);
 
         } catch (JSQLParserException exception) {
             throw new SqlParsingException(
-                    "Generated SQL could not be parsed for " + candidate.dataSource(), exception);
+                    "SQL could not be parsed for " + dataSource,
+                    exception);
         }
     }
 

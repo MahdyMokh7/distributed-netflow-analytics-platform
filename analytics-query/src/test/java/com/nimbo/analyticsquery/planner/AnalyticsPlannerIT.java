@@ -2,7 +2,6 @@ package com.nimbo.analyticsquery.planner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -10,29 +9,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.springframework.web.client.RestClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-
-import com.nimbo.analyticsquery.client.restapi.RestApiClient;
-import com.nimbo.analyticsquery.config.RestApiClientConfiguration;
-import com.nimbo.analyticsquery.config.RestApiProperties;
 import com.nimbo.analyticsquery.intent.model.AnalysisIntent;
 import com.nimbo.analyticsquery.intent.model.ClarificationRequirement;
 import com.nimbo.analyticsquery.intent.model.QueryRequirements;
 import com.nimbo.analyticsquery.model.AnalysisStatus;
 import com.nimbo.analyticsquery.model.PlannerResult;
-import com.nimbo.analyticsquery.routing.DataSourceRouter;
-import com.nimbo.analyticsquery.schema.CuratedSemanticSchemaCatalog;
-import com.nimbo.analyticsquery.schema.PostgresSemanticCatalogSource;
 import com.nimbo.analyticsquery.schema.SemanticFieldNames;
-import com.nimbo.analyticsquery.sql.SqlGenerationContextFactory;
 import com.nimbo.analyticsquery.support.RestApiTestServerExtension;
-import com.nimbo.analyticsquery.tool.ToolMatcher;
-import com.nimbo.analyticsquery.tool.ToolRegistry;
-import com.nimbo.analyticsquery.tool.TrafficWindowsTool;
 
+@SpringBootTest
+@ActiveProfiles("test")
 class AnalyticsPlannerIT {
 
     private static final Instant START = Instant.parse("2026-10-01T08:00:00Z");
@@ -40,6 +32,14 @@ class AnalyticsPlannerIT {
 
     @RegisterExtension
     static final RestApiTestServerExtension REST_API = new RestApiTestServerExtension();
+
+    @DynamicPropertySource
+    static void dependencies(DynamicPropertyRegistry registry) {
+        registry.add("rest-api.base-url", () -> REST_API.baseUrl().toString());
+        registry.add("llm.base-url", () -> REST_API.originUrl().toString());
+    }
+
+    @Autowired private AnalyticsPlanner planner;
 
     @ParameterizedTest
     @EnumSource(
@@ -49,10 +49,9 @@ class AnalyticsPlannerIT {
 
         // Given: a validated non-successful analysis intent
         AnalysisIntent intent = terminalIntent(status);
-        AnalyticsPlanner planner = planner();
 
         // When: the intent is planned
-        PlannerResult result = planner.plan(intent);
+        PlannerResult result = planner.plan("question", intent);
 
         // Then: its status is preserved and no downstream request occurs
         assertThat(result.status()).isEqualTo(status);
@@ -70,10 +69,9 @@ class AnalyticsPlannerIT {
         // Given: a supported traffic intent and a successful REST response
         REST_API.respondWith(200, trafficResponse());
         AnalysisIntent intent = successfulIntent(trafficRequirements());
-        AnalyticsPlanner planner = planner();
 
         // When: the intent is planned and executed
-        PlannerResult result = planner.plan(intent);
+        PlannerResult result = planner.plan("Show traffic", intent);
 
         // Then: normalized traffic data is returned as a successful tool result
         assertThat(result.status()).isEqualTo(AnalysisStatus.SUCCESS);
@@ -83,22 +81,6 @@ class AnalyticsPlannerIT {
                 .containsEntry("srcIp", "10.0.0.1")
                 .containsEntry("recordCount", java.math.BigInteger.valueOf(4));
         assertThat(REST_API.requestCount()).isEqualTo(1);
-    }
-
-    @Test
-    void givenSuccessfulIntentWithoutMatchingToolWhenPlannedThenUnsupportedIsReturned() {
-        // Given: a valid intent unsupported by the current REST tools
-        AnalysisIntent intent = successfulIntent(unsupportedRequirements());
-        AnalyticsPlanner planner = planner();
-
-        // When: the intent is planned
-        PlannerResult result = planner.plan(intent);
-
-        // Then: SQL fallback routes and stops before generation without calling REST
-        assertThat(result.status()).isEqualTo(AnalysisStatus.UNSUPPORTED_ANALYSIS);
-        assertThat(result.result()).isNull();
-        assertThat(result.message()).isEqualTo("SQL generation is not implemented yet");
-        assertThat(REST_API.requestCount()).isZero();
     }
 
     @Test
@@ -113,10 +95,9 @@ class AnalyticsPlannerIT {
                 }
                 """);
         AnalysisIntent intent = successfulIntent(trafficRequirements());
-        AnalyticsPlanner planner = planner();
 
         // When: the selected tool is executed
-        PlannerResult result = planner.plan(intent);
+        PlannerResult result = planner.plan("Show traffic", intent);
 
         // Then: zero rows remain a successful result without fallback
         assertThat(result.status()).isEqualTo(AnalysisStatus.SUCCESS);
@@ -137,10 +118,9 @@ class AnalyticsPlannerIT {
                 }
                 """);
         AnalysisIntent intent = successfulIntent(trafficRequirements());
-        AnalyticsPlanner planner = planner();
 
         // When: the selected tool encounters the server failure
-        PlannerResult result = planner.plan(intent);
+        PlannerResult result = planner.plan("Show traffic", intent);
 
         // Then: a controlled dependency failure is returned without fallback
         assertThat(result.status()).isEqualTo(AnalysisStatus.DEPENDENCY_UNAVAILABLE);
@@ -154,10 +134,9 @@ class AnalyticsPlannerIT {
         // Given: a supported traffic intent and malformed downstream JSON
         REST_API.respondWith(200, "{not-json");
         AnalysisIntent intent = successfulIntent(trafficRequirements());
-        AnalyticsPlanner planner = planner();
 
         // When: the selected tool processes the malformed response
-        PlannerResult result = planner.plan(intent);
+        PlannerResult result = planner.plan("Show traffic", intent);
 
         // Then: a controlled execution failure is returned without response details
         assertThat(result.status()).isEqualTo(AnalysisStatus.EXECUTION_FAILED);
@@ -172,12 +151,11 @@ class AnalyticsPlannerIT {
         REST_API.respondWith(200, trafficResponse());
         REST_API.holdResponse();
         AnalysisIntent intent = successfulIntent(trafficRequirements());
-        AnalyticsPlanner planner = planner(Duration.ofMillis(100));
 
         // When: the selected tool reaches its configured read timeout
         PlannerResult result;
         try {
-            result = planner.plan(intent);
+            result = planner.plan("Show traffic", intent);
         } finally {
             REST_API.releaseResponse();
         }
@@ -187,33 +165,6 @@ class AnalyticsPlannerIT {
         assertThat(result.result()).isNull();
         assertThat(result.message()).isEqualTo("Analytics data service is temporarily unavailable");
         assertThat(REST_API.requestCount()).isEqualTo(1);
-    }
-
-    private AnalyticsPlanner planner() {
-        return planner(Duration.ofSeconds(2));
-    }
-
-    private AnalyticsPlanner planner(Duration readTimeout) {
-        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        RestApiProperties properties =
-                new RestApiProperties(
-                        REST_API.baseUrl(),
-                        new RestApiProperties.Timeout(Duration.ofSeconds(1), readTimeout));
-        RestApiClient client =
-                new RestApiClient(
-                        new RestApiClientConfiguration()
-                                .restApiRestClient(RestClient.builder(), properties),
-                        objectMapper);
-        TrafficWindowsTool trafficTool = new TrafficWindowsTool(client);
-
-        CuratedSemanticSchemaCatalog catalog =
-                new CuratedSemanticSchemaCatalog(List.of(new PostgresSemanticCatalogSource()));
-
-        return new AnalyticsPlanner(
-                new ToolMatcher(new ToolRegistry(List.of(trafficTool))),
-                new SqlFallbackEligibilityPolicy(catalog),
-                new DataSourceRouter(catalog),
-                new SqlGenerationContextFactory());
     }
 
     private static AnalysisIntent successfulIntent(QueryRequirements requirements) {
@@ -245,23 +196,6 @@ class AnalyticsPlannerIT {
                 QueryRequirements.TrafficDirection.BOTH,
                 new QueryRequirements.TimeRange(START, END),
                 List.of(),
-                null,
-                List.of(),
-                10,
-                false);
-    }
-
-    private static QueryRequirements unsupportedRequirements() {
-        return new QueryRequirements(
-                List.of(SemanticFieldNames.SOURCE_IP),
-                List.of(
-                        new QueryRequirements.MetricRequirement(
-                                SemanticFieldNames.IN_BYTES, QueryRequirements.Aggregation.SUM)),
-                List.of(),
-                List.of(),
-                QueryRequirements.TrafficDirection.BOTH,
-                new QueryRequirements.TimeRange(START, END),
-                List.of(SemanticFieldNames.SOURCE_IP),
                 null,
                 List.of(),
                 10,

@@ -10,8 +10,10 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import com.nimbo.analyticsquery.intent.model.QueryRequirements.Aggregation;
 import com.nimbo.analyticsquery.model.AnalysisDataSource;
 import com.nimbo.analyticsquery.schema.SemanticColumn;
+import com.nimbo.analyticsquery.schema.SemanticFieldNames;
 
 class SqlValidatorTest {
 
@@ -19,153 +21,257 @@ class SqlValidatorTest {
     private final SqlValidator validator = new SqlValidator();
 
     @Test
-    void givenApprovedPostgresqlSelectWhenValidatedThenParsedSqlIsAccepted() {
-        // Given: one PostgreSQL SELECT referencing its routed table
+    void givenApprovedPostgresqlQueryWhenValidatedThenParsedSqlIsAccepted() {
+        // Given: a bounded aggregate query using approved PostgreSQL syntax
         SqlGenerationContext context = context(
                 AnalysisDataSource.POSTGRESQL,
                 "traffic_aggregates",
-                "window_start");
+                "window_start",
+                "src_ip");
         ParsedSql parsedSql = parse(
                 AnalysisDataSource.POSTGRESQL,
-                "SELECT src_ip FROM traffic_aggregates LIMIT 10");
+                """
+                SELECT src_ip, SUM(in_bytes) AS total_bytes
+                FROM traffic_aggregates
+                WHERE window_start >= TIMESTAMP '2026-10-03 08:00:00'
+                  AND window_start < TIMESTAMP '2026-10-03 09:00:00'
+                GROUP BY src_ip
+                ORDER BY total_bytes DESC
+                LIMIT 10
+                """);
 
-        // When: first-stage SQL validation runs
+        // When: full V1 SQL policy validation runs
         ParsedSql validatedSql = validator.validate(parsedSql, context);
 
-        // Then: the parsed SQL is accepted unchanged
+        // Then: the approved query is accepted unchanged
         assertThat(validatedSql).isSameAs(parsedSql);
     }
 
     @Test
-    void givenApprovedStarRocksSelectWhenValidatedThenQualifiedTableIsAccepted() {
-        // Given: one StarRocks SELECT referencing the qualified routed table
+    void givenApprovedStarRocksQueryWhenValidatedThenParsedSqlIsAccepted() {
+        // Given: a bounded query using approved StarRocks columns and functions
         SqlGenerationContext context = context(
                 AnalysisDataSource.STARROCKS,
                 "nimbo.netflow",
-                "kafka_timestamp");
+                "kafka_timestamp",
+                "ipv4_src_addr");
         ParsedSql parsedSql = parse(
                 AnalysisDataSource.STARROCKS,
-                "SELECT ipv4_src_addr FROM nimbo.netflow LIMIT 10");
+                """
+                SELECT ipv4_src_addr, COUNT(*) AS flow_count
+                FROM nimbo.netflow
+                WHERE kafka_timestamp BETWEEN 1791014400000 AND 1791018000000
+                GROUP BY ipv4_src_addr
+                ORDER BY flow_count DESC
+                LIMIT 10
+                """);
 
-        // When: first-stage SQL validation runs
+        // When: full V1 SQL policy validation runs
         ParsedSql validatedSql = validator.validate(parsedSql, context);
 
-        // Then: the qualified StarRocks table is accepted
+        // Then: the routed StarRocks query is accepted
         assertThat(validatedSql).isSameAs(parsedSql);
     }
 
     @Test
-    void givenMultipleStatementsWhenValidatedThenSqlIsRejected() {
+    void givenMultipleStatementsWhenValidatedThenStatementCountIsRejected() {
         // Given: two syntactically valid SELECT statements
-        SqlGenerationContext context = context(
-                AnalysisDataSource.POSTGRESQL,
-                "traffic_aggregates",
-                "window_start");
+        SqlGenerationContext context = postgresContext();
         ParsedSql parsedSql = parse(
                 AnalysisDataSource.POSTGRESQL,
-                "SELECT src_ip FROM traffic_aggregates; "
-                        + "SELECT dst_ip FROM connection_aggregates");
+                "SELECT src_ip FROM traffic_aggregates; SELECT 1");
 
-        // When: first-stage SQL validation runs
+        // When: the statements are validated
         var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
 
-        // Then: multiple statements are rejected
-        assertion
-                .isInstanceOf(SqlValidationException.class)
-                .hasMessage("Generated SQL must contain exactly one statement");
+        // Then: the controlled statement-count policy reason is returned
+        assertViolation(assertion, SqlPolicyViolation.STATEMENT_COUNT);
     }
 
     @Test
-    void givenNonSelectStatementWhenValidatedThenSqlIsRejected() {
-        // Given: one syntactically valid mutating statement
-        SqlGenerationContext context = context(
-                AnalysisDataSource.POSTGRESQL,
-                "traffic_aggregates",
-                "window_start");
+    void givenMutatingStatementWhenValidatedThenReadOnlyPolicyRejectsIt() {
+        // Given: one syntactically valid DELETE statement
+        SqlGenerationContext context = postgresContext();
         ParsedSql parsedSql = parse(
                 AnalysisDataSource.POSTGRESQL,
                 "DELETE FROM traffic_aggregates");
 
-        // When: first-stage SQL validation runs
+        // When: the statement is validated
         var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
 
-        // Then: unsupported statement types are rejected
-        assertion
-                .isInstanceOf(SqlValidationException.class)
-                .hasMessage("Generated SQL must be a SELECT statement");
+        // Then: the read-only policy rejects the statement
+        assertViolation(assertion, SqlPolicyViolation.READ_ONLY_REQUIRED);
     }
 
     @Test
-    void givenUnknownTableWhenValidatedThenSqlIsRejected() {
-        // Given: a SELECT referencing a table outside the routed context
-        SqlGenerationContext context = context(
-                AnalysisDataSource.POSTGRESQL,
-                "traffic_aggregates",
-                "window_start");
+    void givenUnknownOrCrossDatasourceTableWhenValidatedThenTablePolicyRejectsIt() {
+        // Given: PostgreSQL-routed SQL referencing the StarRocks table
+        SqlGenerationContext context = postgresContext();
         ParsedSql parsedSql = parse(
                 AnalysisDataSource.POSTGRESQL,
-                "SELECT ipv4_src_addr FROM nimbo.netflow");
+                "SELECT ipv4_src_addr FROM nimbo.netflow LIMIT 10");
 
-        // When: first-stage SQL validation runs
+        // When: the table reference is validated
         var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
 
-        // Then: the unapproved table is rejected
-        assertion
-                .isInstanceOf(SqlValidationException.class)
-                .hasMessageContaining("nimbo.netflow");
+        // Then: cross-datasource table access is rejected
+        assertViolation(assertion, SqlPolicyViolation.TABLE_NOT_ALLOWED);
     }
 
     @Test
-    void givenDifferentSelectedDatasourceWhenValidatedThenSqlIsRejected() {
-        // Given: parsed PostgreSQL SQL with a StarRocks generation context
+    void givenSystemCatalogTableWhenValidatedThenTablePolicyRejectsIt() {
+        // Given: a query attempting to inspect the PostgreSQL catalog
+        SqlGenerationContext context = postgresContext();
+        ParsedSql parsedSql = parse(
+                AnalysisDataSource.POSTGRESQL,
+                "SELECT tablename FROM pg_catalog.pg_tables LIMIT 10");
+
+        // When: the system table reference is validated
+        var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
+
+        // Then: catalog access is rejected by the table allowlist
+        assertViolation(assertion, SqlPolicyViolation.TABLE_NOT_ALLOWED);
+    }
+
+    @Test
+    void givenUnknownColumnWhenValidatedThenColumnPolicyRejectsIt() {
+        // Given: an otherwise bounded query referencing an unapproved column
+        SqlGenerationContext context = postgresContext();
+        ParsedSql parsedSql = parse(
+                AnalysisDataSource.POSTGRESQL,
+                boundedPostgresQuery("secret_column", "LIMIT 10"));
+
+        // When: column references are validated
+        var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
+
+        // Then: the unapproved column is rejected
+        assertViolation(assertion, SqlPolicyViolation.COLUMN_NOT_ALLOWED);
+    }
+
+    @Test
+    void givenWildcardProjectionWhenValidatedThenColumnPolicyRejectsIt() {
+        // Given: a bounded query requesting every physical column
+        SqlGenerationContext context = postgresContext();
+        ParsedSql parsedSql = parse(
+                AnalysisDataSource.POSTGRESQL,
+                boundedPostgresQuery("*", "LIMIT 10"));
+
+        // When: the projection is validated
+        var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
+
+        // Then: wildcard projection is rejected
+        assertViolation(assertion, SqlPolicyViolation.COLUMN_NOT_ALLOWED);
+    }
+
+    @Test
+    void givenUnapprovedFunctionWhenValidatedThenFunctionPolicyRejectsIt() {
+        // Given: a bounded SELECT invoking an administrative PostgreSQL function
+        SqlGenerationContext context = postgresContext();
+        ParsedSql parsedSql = parse(
+                AnalysisDataSource.POSTGRESQL,
+                boundedPostgresQuery("PG_SLEEP(1)", "LIMIT 10"));
+
+        // When: function use is validated
+        var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
+
+        // Then: the function allowlist rejects it
+        assertViolation(assertion, SqlPolicyViolation.FUNCTION_NOT_ALLOWED);
+    }
+
+    @Test
+    void givenJoinWhenValidatedThenJoinPolicyRejectsIt() {
+        // Given: a query joining two analytics tables without an approved join contract
+        SqlGenerationContext context = postgresContext();
+        ParsedSql parsedSql = parse(
+                AnalysisDataSource.POSTGRESQL,
+                """
+                SELECT t.src_ip
+                FROM traffic_aggregates t
+                JOIN connection_aggregates c ON c.src_ip = t.src_ip
+                WHERE t.window_start >= TIMESTAMP '2026-10-03 08:00:00'
+                  AND t.window_start < TIMESTAMP '2026-10-03 09:00:00'
+                LIMIT 10
+                """);
+
+        // When: join use is validated
+        var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
+
+        // Then: the V1 fail-closed join policy rejects it
+        assertViolation(assertion, SqlPolicyViolation.JOIN_NOT_ALLOWED);
+    }
+
+    @Test
+    void givenTimeBoundsOnlyInsideOrWhenValidatedThenTimePolicyRejectsIt() {
+        // Given: apparent time bounds that can be bypassed through an OR branch
+        SqlGenerationContext context = postgresContext();
+        ParsedSql parsedSql = parse(
+                AnalysisDataSource.POSTGRESQL,
+                """
+                SELECT src_ip
+                FROM traffic_aggregates
+                WHERE window_start >= TIMESTAMP '2026-10-03 08:00:00'
+                   OR window_start < TIMESTAMP '2026-10-03 09:00:00'
+                LIMIT 10
+                """);
+
+        // When: time bounds are validated
+        var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
+
+        // Then: non-conjunctive bounds are not treated as a bounded scan
+        assertViolation(assertion, SqlPolicyViolation.TIME_BOUND_REQUIRED);
+    }
+
+    @Test
+    void givenExcessiveLimitWhenValidatedThenLimitPolicyRejectsIt() {
+        // Given: a bounded query exceeding the V1 result limit
+        SqlGenerationContext context = postgresContext();
+        ParsedSql parsedSql = parse(
+                AnalysisDataSource.POSTGRESQL,
+                boundedPostgresQuery("src_ip", "LIMIT 1001"));
+
+        // When: the result bound is validated
+        var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
+
+        // Then: the oversized result limit is rejected
+        assertViolation(assertion, SqlPolicyViolation.RESULT_LIMIT_REQUIRED);
+    }
+
+    @Test
+    void givenDifferentSelectedDatasourceWhenValidatedThenDatasourcePolicyRejectsIt() {
+        // Given: parsed PostgreSQL SQL paired with a StarRocks context
         SqlGenerationContext context = context(
                 AnalysisDataSource.STARROCKS,
                 "nimbo.netflow",
-                "kafka_timestamp");
+                "kafka_timestamp",
+                "ipv4_src_addr");
         ParsedSql parsedSql = parse(
                 AnalysisDataSource.POSTGRESQL,
-                "SELECT src_ip FROM traffic_aggregates");
+                boundedPostgresQuery("src_ip", "LIMIT 10"));
 
-        // When: first-stage SQL validation runs
+        // When: datasource consistency is validated
         var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
 
-        // Then: the datasource mismatch is rejected
-        assertion
-                .isInstanceOf(SqlValidationException.class)
-                .hasMessage("Generated SQL datasource does not match the selected datasource");
+        // Then: the mismatch is rejected before AST policy evaluation
+        assertViolation(assertion, SqlPolicyViolation.DATASOURCE_MISMATCH);
     }
 
-    @Test
-    void givenSelectWithoutTableWhenValidatedThenSqlIsRejected() {
-        // Given: a SELECT that does not use analytics data
-        SqlGenerationContext context = context(
+    private ParsedSql parse(AnalysisDataSource dataSource, String sql) {
+        return parser.parse(new GeneratedSqlCandidate(dataSource, sql));
+    }
+
+    private static SqlGenerationContext postgresContext() {
+        return context(
                 AnalysisDataSource.POSTGRESQL,
                 "traffic_aggregates",
-                "window_start");
-        ParsedSql parsedSql = parse(
-                AnalysisDataSource.POSTGRESQL,
-                "SELECT 1");
-
-        // When: first-stage SQL validation runs
-        var assertion = assertThatThrownBy(() -> validator.validate(parsedSql, context));
-
-        // Then: a query without an approved table is rejected
-        assertion
-                .isInstanceOf(SqlValidationException.class)
-                .hasMessage("Generated SQL must reference an approved table");
-    }
-
-    private ParsedSql parse(
-            AnalysisDataSource dataSource,
-            String sql) {
-
-        return parser.parse(new GeneratedSqlCandidate(dataSource, sql));
+                "window_start",
+                "src_ip");
     }
 
     private static SqlGenerationContext context(
             AnalysisDataSource dataSource,
             String tableName,
-            String timeColumn) {
+            String timeColumn,
+            String dimensionColumn) {
 
         SemanticColumn timestamp = new SemanticColumn(
                 timeColumn,
@@ -173,6 +279,22 @@ class SqlValidatorTest {
                 "UTC event or window timestamp.",
                 Set.of(SemanticColumn.Role.TIME),
                 false);
+        SemanticColumn dimension = new SemanticColumn(
+                dimensionColumn,
+                "VARCHAR(64)",
+                "Approved NetFlow dimension.",
+                Set.of(SemanticColumn.Role.DIMENSION),
+                false,
+                SemanticFieldNames.SOURCE_IP,
+                Set.of(Aggregation.COUNT_DISTINCT));
+        SemanticColumn metric = new SemanticColumn(
+                "in_bytes",
+                "BIGINT",
+                "Inbound bytes.",
+                Set.of(SemanticColumn.Role.METRIC),
+                false,
+                SemanticFieldNames.IN_BYTES,
+                Set.of(Aggregation.SUM));
 
         return new SqlGenerationContext(
                 dataSource,
@@ -184,8 +306,28 @@ class SqlValidatorTest {
                                 timeColumn,
                                 ZoneOffset.UTC,
                                 Duration.ofHours(1)),
-                        List.of(timestamp),
+                        List.of(timestamp, dimension, metric),
                         List.of())),
                 List.of("Generate one read-only SELECT statement."));
+    }
+
+    private static String boundedPostgresQuery(String projection, String limit) {
+        return """
+                SELECT %s
+                FROM traffic_aggregates
+                WHERE window_start >= TIMESTAMP '2026-10-03 08:00:00'
+                  AND window_start < TIMESTAMP '2026-10-03 09:00:00'
+                %s
+                """
+                .formatted(projection, limit);
+    }
+
+    private static void assertViolation(
+            org.assertj.core.api.AbstractThrowableAssert<?, ? extends Throwable> assertion,
+            SqlPolicyViolation expected) {
+
+        assertion.isInstanceOfSatisfying(
+                SqlValidationException.class,
+                exception -> assertThat(exception.violation()).isEqualTo(expected));
     }
 }

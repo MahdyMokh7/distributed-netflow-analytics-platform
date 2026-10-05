@@ -7,6 +7,10 @@ import com.nimbo.analyticsquery.intent.InvalidIntentException;
 import com.nimbo.analyticsquery.intent.model.AnalysisIntent;
 import com.nimbo.analyticsquery.llm.LlmClientException;
 import com.nimbo.analyticsquery.model.AnalysisStatus;
+import com.nimbo.analyticsquery.metrics.AnalyticsQueryMetrics;
+import com.nimbo.analyticsquery.metrics.AnalyticsQueryMetrics.Dependency;
+import com.nimbo.analyticsquery.metrics.AnalyticsQueryMetrics.FailureReason;
+import com.nimbo.analyticsquery.metrics.AnalyticsQueryMetrics.Stage;
 import com.nimbo.analyticsquery.routing.DataSourceRoute;
 import com.nimbo.analyticsquery.routing.DataSourceRouter;
 import com.nimbo.analyticsquery.sql.GeneratedSqlCandidate;
@@ -33,6 +37,7 @@ public class SqlGenerationService {
     private final SqlGenerator sqlGenerator;
     private final SqlAstParser sqlAstParser;
     private final SqlValidator sqlValidator;
+    private final AnalyticsQueryMetrics metrics;
 
     public SqlGenerationService(
             IntentInterpreter intentInterpreter,
@@ -41,7 +46,8 @@ public class SqlGenerationService {
             SqlGenerationContextFactory contextFactory,
             SqlGenerator sqlGenerator,
             SqlAstParser sqlAstParser,
-            SqlValidator sqlValidator) {
+            SqlValidator sqlValidator,
+            AnalyticsQueryMetrics metrics) {
         this.intentInterpreter = intentInterpreter;
         this.eligibilityPolicy = eligibilityPolicy;
         this.dataSourceRouter = dataSourceRouter;
@@ -49,26 +55,35 @@ public class SqlGenerationService {
         this.sqlGenerator = sqlGenerator;
         this.sqlAstParser = sqlAstParser;
         this.sqlValidator = sqlValidator;
+        this.metrics = metrics;
     }
 
     public SqlGenerationResult generate(String question) {
         try {
-            AnalysisIntent intent = intentInterpreter.interpret(question);
+            AnalysisIntent intent = metrics.observeStage(
+                    Stage.INTENT,
+                    () -> metrics.observeDependency(
+                            Dependency.LLM,
+                            () -> intentInterpreter.interpret(question)));
 
             if (intent.status() != AnalysisStatus.SUCCESS) {
                 return terminalResult(intent);
             }
 
-            SqlFallbackEligibility eligibility =
-                    eligibilityPolicy.evaluate(intent.queryRequirements());
+            SqlFallbackEligibility eligibility = metrics.observeStage(
+                    Stage.SQL_ELIGIBILITY,
+                    () -> eligibilityPolicy.evaluate(intent.queryRequirements()),
+                    SqlFallbackEligibility::eligible);
 
             if (!eligibility.eligible()) {
                 return SqlGenerationResult.failure(
                         eligibility.status(), eligibility.message());
             }
 
-            DataSourceRoute route = dataSourceRouter
-                    .route(intent.queryRequirements())
+            DataSourceRoute route = metrics.observeStage(
+                    Stage.ROUTING,
+                    () -> dataSourceRouter.route(intent.queryRequirements()),
+                    java.util.Optional::isPresent)
                     .orElse(null);
 
             if (route == null) {
@@ -78,14 +93,29 @@ public class SqlGenerationService {
             }
 
             SqlGenerationContext context = contextFactory.create(route);
-            GeneratedSqlCandidate candidate =
-                    sqlGenerator.generate(question, intent.queryRequirements(), context);
-            ParsedSql parsedSql = sqlAstParser.parse(candidate);
+            GeneratedSqlCandidate candidate = metrics.observeStage(
+                    Stage.SQL_GENERATION,
+                    () -> metrics.observeDependency(
+                            Dependency.LLM,
+                            () -> sqlGenerator.generate(
+                                    question,
+                                    intent.queryRequirements(),
+                                    context)));
+            ParsedSql parsedSql = metrics.observeStage(
+                    Stage.SQL_VALIDATION,
+                    () -> sqlAstParser.parse(candidate));
 
-            return SqlGenerationResult.success(sqlValidator.validate(parsedSql, context));
+            return SqlGenerationResult.success(metrics.observeStage(
+                    Stage.SQL_VALIDATION,
+                    () -> sqlValidator.validate(parsedSql, context)));
 
         } catch (LlmClientException exception) {
             log.warn("LLM processing failed during SQL generation with kind {}", exception.kind());
+            metrics.recordFailure(
+                    Stage.SQL_GENERATION,
+                    exception.kind() == LlmClientException.Kind.UNAVAILABLE
+                            ? FailureReason.DEPENDENCY_UNAVAILABLE
+                            : FailureReason.INVALID_LLM_RESPONSE);
 
             if (exception.kind() == LlmClientException.Kind.UNAVAILABLE) {
                 return SqlGenerationResult.failure(
@@ -97,10 +127,19 @@ public class SqlGenerationService {
 
         } catch (InvalidIntentException exception) {
             log.warn("LLM returned an invalid analytics intent during SQL generation");
+            metrics.recordFailure(Stage.INTENT, FailureReason.INVALID_INTENT);
             return generationFailure();
 
-        } catch (SqlParsingException | SqlValidationException exception) {
-            log.warn("Generated SQL was rejected: {}", exception.getMessage());
+        } catch (SqlParsingException exception) {
+            log.warn("Generated SQL could not be parsed");
+            metrics.recordFailure(Stage.SQL_VALIDATION, FailureReason.SQL_PARSE);
+            return SqlGenerationResult.failure(
+                    AnalysisStatus.QUERY_REJECTED,
+                    "Generated SQL did not satisfy the query safety policy");
+
+        } catch (SqlValidationException exception) {
+            log.warn("Generated SQL was rejected by policy: {}", exception.violation());
+            metrics.recordFailure(Stage.SQL_VALIDATION, FailureReason.SQL_POLICY);
             return SqlGenerationResult.failure(
                     AnalysisStatus.QUERY_REJECTED,
                     "Generated SQL did not satisfy the query safety policy");

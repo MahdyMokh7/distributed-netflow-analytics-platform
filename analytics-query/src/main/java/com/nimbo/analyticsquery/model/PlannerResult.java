@@ -5,6 +5,7 @@ import java.util.Objects;
 public record PlannerResult(
         AnalysisStatus status,
         AnalyticsResult result,
+        String explanation,
         String message
 ) {
 
@@ -23,17 +24,27 @@ public record PlannerResult(
             if (message == null || message.isBlank()) {
                 throw new IllegalArgumentException("failed result must contain a message");
             }
+            if (explanation != null) {
+                throw new IllegalArgumentException("failed result must not contain an explanation");
+            }
         }
     }
 
     public static PlannerResult success(AnalyticsResult result) {
 
-        return new PlannerResult(AnalysisStatus.SUCCESS, result, null);
+        return new PlannerResult(AnalysisStatus.SUCCESS, result, null, null);
     }
 
+    public PlannerResult withExplanation(String explanation) {
+        if (status != AnalysisStatus.SUCCESS) {
+            return this;
+        }
+
+        return new PlannerResult(status, result, explanation, null);
+    }
 
     public static PlannerResult failure(AnalysisStatus status, String message) {
 
-        return new PlannerResult(status, null, message);
+        return new PlannerResult(status, null, null, message);
     }
 }

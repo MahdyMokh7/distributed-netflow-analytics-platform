@@ -16,15 +16,19 @@ public record AnalyticsQueryResponse(
         ExecutionMode executionMode,
         AnalysisDataSource dataSource,
         List<Map<String, Object>> data,
+        Map<String, Object> metadata,
         String explanation,
         String message) {
 
-    public static AnalyticsQueryResponse from(PlannerResult plannerResult) {
+    public static AnalyticsQueryResponse from(
+            PlannerResult plannerResult) {
+
         AnalyticsResult result = plannerResult.result();
 
         if (result == null) {
             return new AnalyticsQueryResponse(
                     plannerResult.status(),
+                    null,
                     null,
                     null,
                     null,
@@ -37,7 +41,10 @@ public record AnalyticsQueryResponse(
                 result.executionMode(),
                 result.dataSource(),
                 result.rows(),
-                null,
+                result.metadata().isEmpty()
+                        ? null
+                        : result.metadata(),
+                plannerResult.explanation(),
                 null);
     }
 }
