@@ -20,7 +20,7 @@ PostgreSQL follows the rule that the WAL describing a change must reach durable 
 
 WAL is therefore used for **crash recovery**, **transaction durability**, **streaming replication**, and **point-in-time recovery/backups**. In your Patroni HA PostgreSQL cluster, WAL is also what allows replicas to reproduce changes made by the primary.
 
-### Why WAL matters specifically for your slow Batch Processor
+### Why WAL matters specifically for your slow Cube Maker
 
 Your measurements are very revealing. PostgreSQL has already produced about **524 GB of WAL**, and your live sample showed about **192 MB every 15 seconds**, or roughly **12.8 MB/s**. That corresponds to about **11.5 GB of WAL every 15 minutes**.
 

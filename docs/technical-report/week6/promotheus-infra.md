@@ -49,7 +49,7 @@ A checksum of the rendered ConfigMap is placed on the pod template. A Helm upgra
 
 | Workloads | Method | Why it fits |
 | --- | --- | --- |
-| Parquet Writer, Batch Processor, Realtime, REST API | Namespace-scoped Kubernetes **endpoint discovery** | Their pod IPs change on rollout. Prometheus selects the exact Service name and the port named `http`, so replacement pods are discovered without editing IPs. |
+| Parquet Writer, Cube Maker, Realtime, REST API | Namespace-scoped Kubernetes **endpoint discovery** | Their pod IPs change on rollout. Prometheus selects the exact Service name and the port named `http`, so replacement pods are discovered without editing IPs. |
 | Spark master | Stable internal Kubernetes Service DNS | There is one master endpoint. Prometheus uses the cluster-internal `8080` UI/metrics port, not the public UI LoadBalancer. |
 | Spark workers | DNS discovery of the headless worker Service | DNS returns each worker pod address. Prometheus refreshes it every 30 seconds, allowing workers to be replaced. |
 | PostgreSQL exporter and Patroni | Three explicit StatefulSet pod DNS names | The ordinal identities `0`, `1`, and `2` are stable and match your choice for an easily auditable three-member cluster. |
@@ -65,7 +65,7 @@ The Kubernetes discovery Role can read pods, Services, Endpoints, and EndpointSl
 | --- | ---: | --- |
 | `prometheus` | 1 | Self-scrape at `localhost:9090/metrics`. |
 | `parquet-writer` | 1 pod by current chart | Service endpoint, `/actuator/prometheus`, port `18080`. |
-| `batch-processor` | 1 pod by current chart | Service endpoint, `/actuator/prometheus`, port `18081`. |
+| `cube-maker` | 1 pod by current chart | Service endpoint, `/actuator/prometheus`, port `18081`. |
 | `realtime` | 1 pod by current chart | Service endpoint, `/actuator/prometheus`, port `18082`. |
 | `rest-api` | 2 pods by current chart | Service endpoints, `/api/actuator/prometheus`, port `18083`. The `/api` prefix comes from its servlet context path. |
 | `spark-master` | 1 | Internal `spark-master:8080`, `/metrics/master/prometheus/`. |
@@ -80,9 +80,9 @@ The Kubernetes discovery Role can read pods, Services, Endpoints, and EndpointSl
 | `starrocks-fe` | 4 configured | Nodes 1–4, `8030/metrics`. |
 | `starrocks-be` | 4 configured | Nodes 1–4, `8040/metrics`. |
 
-All four application module POMs include Actuator and the Micrometer Prometheus registry. Their production chart configurations expose `prometheus`; their Service ports are named `http`, matching Prometheus’s endpoint filter. REST API needs its distinct path because of `/api`. The relevant configurations are the [Ingester](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/charts/parquet-writer/config/application-prod.yaml), [Processor](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/charts/batch-processor/config/application-prod.yaml), [Realtime](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/charts/realtime/config/application-prod.yaml), and [REST API](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/charts/rest-api/config/application-prod.yaml) production charts.
+All four application module POMs include Actuator and the Micrometer Prometheus registry. Their production chart configurations expose `prometheus`; their Service ports are named `http`, matching Prometheus’s endpoint filter. REST API needs its distinct path because of `/api`. The relevant configurations are the [Ingester](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/charts/parquet-writer/config/application-prod.yaml), [Processor](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/charts/cube-maker/config/application-prod.yaml), [Realtime](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/charts/realtime/config/application-prod.yaml), and [REST API](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/charts/rest-api/config/application-prod.yaml) production charts.
 
-The [Spark chart](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/infra/helm-charts/spark/templates/configmap.yaml) enables its Prometheus servlet and JVM metric sources. Its public master and History Server addresses (`.71` and `.72`) are for UI access; Prometheus scrapes the **internal** master and worker endpoints. The History Server is intentionally not a scrape target: its tested `/metrics/prometheus/` response was HTML, not Prometheus metrics. Spark master/worker metrics also should not be mistaken for every Batch Processor application-level metric; the Batch Processor’s own Actuator job serves that separate purpose.
+The [Spark chart](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/infra/helm-charts/spark/templates/configmap.yaml) enables its Prometheus servlet and JVM metric sources. Its public master and History Server addresses (`.71` and `.72`) are for UI access; Prometheus scrapes the **internal** master and worker endpoints. The History Server is intentionally not a scrape target: its tested `/metrics/prometheus/` response was HTML, not Prometheus metrics. Spark master/worker metrics also should not be mistaken for every Cube Maker application-level metric; the Cube Maker’s own Actuator job serves that separate purpose.
 
 Kafka’s [Ansible inventory](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/infra/ansible/kafka/inventory.ini) places brokers on four nodes and controllers on nodes 2–4. Its systemd units start separate JMX exporter agents for [brokers](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/infra/ansible/kafka/roles/kafka_broker/templates/kafka-broker.service.j2) and [controllers](/home/mahdi.mokhtari/Desktop/nimbo/Nimbyte/infra/ansible/kafka/roles/kafka_controller/templates/kafka-controller.service.j2). Removing the obsolete node1 controller target prevents a permanent false-down target.
 

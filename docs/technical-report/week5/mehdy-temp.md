@@ -4,10 +4,10 @@
 ### 2. optimize batch size for writing to database
 
 
-### 3. Read once of parquet-files in batch-processor (change architecture and now persist(memory_and_disk) each processor uses the persisted data instead of 8 reads)
+### 3. Read once of parquet-files in cube-maker (change architecture and now persist(memory_and_disk) each processor uses the persisted data instead of 8 reads)
 
 
-### 4. fix all batch-processor and rest-api unit and integration tests
+### 4. fix all cube-maker and rest-api unit and integration tests
 
 
 ### 5. remove the src_port, dest_port, L4_protocol from the table the cube and edited everything necessary so the cardinality decreases and i have less records per cube
@@ -27,7 +27,7 @@
 ### 9. add Grafana dashboard
 
 
-### 10. add extension to rest-api, batch-processor, parquet-writer
+### 10. add extension to rest-api, cube-maker, parquet-writer
 
 
-### 11. update helm charts for kubernetes batch-processor deployment
+### 11. update helm charts for kubernetes cube-maker deployment

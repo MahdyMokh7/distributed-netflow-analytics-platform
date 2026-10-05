@@ -102,12 +102,12 @@
       "panels": [
         {
           "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "description": "Exact current count of completed Parquet files under the Batch Processor HDFS input path.",
+          "description": "Exact current count of completed Parquet files under the Cube Maker HDFS input path.",
           "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 0, "noValue": "NO DATA", "unit": "short"}, "overrides": []},
           "gridPos": {"h": 6, "w": 6, "x": 0, "y": 12},
           "id": 10,
           "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
-          "targets": [{"expr": "max(batch_processor_hdfs_parquet_files{job=\"batch-processor\"})", "instant": true, "range": false, "refId": "A"}],
+          "targets": [{"expr": "max(cube_maker_hdfs_parquet_files{job=\"cube-maker\"})", "instant": true, "range": false, "refId": "A"}],
           "title": "HDFS Parquet Files",
           "type": "stat"
         },

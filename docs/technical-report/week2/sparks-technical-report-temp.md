@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-We are building a **batch processor** for NetFlow analytics as part of Phase 2 of the Nimbo project. The processor reads Parquet files from HDFS (created in Phase 1), performs Spark aggregations, and outputs results to console (Phase 1) with PostgreSQL as the eventual target (Phase 2). We have successfully implemented the complete pipeline, with all tests passing, and the application runs successfully. However, we have encountered a version compatibility bug after aligning our dependencies with the cluster's Spark version (4.1.1), causing a `NoClassDefFoundError` for Netty's epoll native library.
+We are building a **cube maker** for NetFlow analytics as part of Phase 2 of the Nimbo project. The processor reads Parquet files from HDFS (created in Phase 1), performs Spark aggregations, and outputs results to console (Phase 1) with PostgreSQL as the eventual target (Phase 2). We have successfully implemented the complete pipeline, with all tests passing, and the application runs successfully. However, we have encountered a version compatibility bug after aligning our dependencies with the cluster's Spark version (4.1.1), causing a `NoClassDefFoundError` for Netty's epoll native library.
 
 ---
 
@@ -66,10 +66,10 @@ We are building a **batch processor** for NetFlow analytics as part of Phase 2 o
 
 ### 3.1 Project Structure
 ```
-batch-processor/
+cube-maker/
 ├── pom.xml
-├── src/main/java/com/nimbo/batch/
-│   ├── BatchProcessorApplication.java
+├── src/main/java/com/nimbo/cubemaker/
+│   ├── CubeMakerApplication.java
 │   ├── config/
 │   │   ├── SparkConfig.java
 │   │   ├── HdfsConfig.java
@@ -102,7 +102,7 @@ batch-processor/
 ```yaml
 spark:
   master: spark://10.10.61.71:7077
-  app-name: nimbo-batch-processor-dev
+  app-name: nimbo-cube-maker-dev
   executor-memory: 2g
   executor-cores: 2
   num-executors: 2
@@ -391,7 +391,7 @@ spark:
 ## 10. Key Takeaways
 
 ### 10.1 What Works
-- ✅ Complete batch processor with 4 aggregations
+- ✅ Complete cube maker with 4 aggregations
 - ✅ Console output showing aggregation results
 - ✅ Unit tests passing (all 16 tests)
 - ✅ Integration tests passing (reading from real HDFS)
@@ -422,7 +422,7 @@ spark:
 If you need to continue this work elsewhere, here are the key files:
 
 ### 11.1 Core Source Files
-- `BatchProcessorApplication.java`
+- `CubeMakerApplication.java`
 - `SparkConfig.java`
 - `HdfsConfig.java`
 - `OutputConfig.java`
@@ -461,7 +461,7 @@ If you need to continue this work elsewhere, here are the key files:
 
 ## 12. Conclusion
 
-The Nimbo batch processor is **functionally complete** with console output, all tests passing (with the epoll workaround), and the application running successfully. The current bug with epoll is a version compatibility issue that needs proper resolution. Once fixed, the next step is implementing PostgreSQL output to complete the batch path.
+The Nimbo cube maker is **functionally complete** with console output, all tests passing (with the epoll workaround), and the application running successfully. The current bug with epoll is a version compatibility issue that needs proper resolution. Once fixed, the next step is implementing PostgreSQL output to complete the batch path.
 
 The project is well-structured, follows SOLID principles, and is ready for production deployment after the PostgreSQL writer is implemented and the epoll issue is properly resolved.
 

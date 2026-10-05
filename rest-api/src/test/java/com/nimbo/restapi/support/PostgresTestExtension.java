@@ -55,7 +55,7 @@ public final class PostgresTestExtension implements BeforeAllCallback {
                     }
                 }
             } catch (SQLException exception) {
-                throw new IllegalStateException("Failed to create batch-processor test database", exception);
+                throw new IllegalStateException("Failed to create cube-maker test database", exception);
             }
         }
 

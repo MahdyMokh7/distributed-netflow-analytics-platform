@@ -88,13 +88,13 @@ Test and fix REST API endpoints that read from PostgreSQL. You haven't manually 
 
 ---
 
-### 5. **Unit Tests - Batch Processor** ⭐ MEDIUM PRIORITY
+### 5. **Unit Tests - Cube Maker** ⭐ MEDIUM PRIORITY
 **Priority**: P1
 **Dependencies**: Task #2, #3 (fixed code)
 **Estimate**: 8 hours
 
 **Description**:
-Write/update comprehensive unit tests for batch-processor module (you already have the framework).
+Write/update comprehensive unit tests for cube-maker module (you already have the framework).
 
 **Requirements**:
 - Test all 4 processors with deterministic data
@@ -152,7 +152,7 @@ Write unit tests for REST API module reading from PostgreSQL.
 **Estimate**: 3 hours
 
 **Description**:
-Export Prometheus metrics for the batch processor and REST API.
+Export Prometheus metrics for the cube maker and REST API.
 
 **Requirements**:
 - Add `micrometer-registry-prometheus` dependency
@@ -201,21 +201,21 @@ curl --socks5 localhost:1080 http://spark-master.team1:8080
 
 ---
 
-## 🚀 **Week 5 Tasks (Kubernetes Migration) - Batch Processor Only**
+## 🚀 **Week 5 Tasks (Kubernetes Migration) - Cube Maker Only**
 
-### 10. **Kubernetes Helm Chart - Batch Processor** ⭐ CRITICAL
+### 10. **Kubernetes Helm Chart - Cube Maker** ⭐ CRITICAL
 **Priority**: P0 (Week 5)
 **Dependencies**: Task #1 (Production works)
 **Estimate**: 6 hours
 
 **Description**:
-Create Helm chart for batch-processor module to run on Kubernetes.
+Create Helm chart for cube-maker module to run on Kubernetes.
 
 **Requirements**:
-- Create `helm/batch-processor/` directory structure
+- Create `helm/cube-maker/` directory structure
 - `Chart.yaml` with metadata
 - `values.yaml` with all configurable parameters
-- `templates/deployment.yaml` for the batch processor
+- `templates/deployment.yaml` for the cube maker
 - `templates/configmap.yaml` for application config
 - `templates/secret.yaml` for DB credentials
 - `templates/service.yaml` (optional for metrics)
@@ -223,7 +223,7 @@ Create Helm chart for batch-processor module to run on Kubernetes.
 
 **Helm Structure**:
 ```
-helm/batch-processor/
+helm/cube-maker/
 ├── Chart.yaml
 ├── values.yaml
 ├── templates/
@@ -246,7 +246,7 @@ helm/batch-processor/
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: batch-processor-config
+  name: cube-maker-config
 data:
   application.yml: |
     spring:
@@ -271,7 +271,7 @@ Ensure the PostgreSQL driver and required JARs are available on Spark executors 
 1. **Use HDFS for JARs** (Recommended)
    ```yaml
    spark:
-     jars-path: hdfs://10.10.61.53:8020/jars/batch-processor-spark.jar
+     jars-path: hdfs://10.10.61.53:8020/jars/cube-maker-spark.jar
    ```
 
 2. **Use Init Container**
@@ -293,7 +293,7 @@ Ensure the PostgreSQL driver and required JARs are available on Spark executors 
 **Estimate**: 4 hours
 
 **Description**:
-Create Jenkins pipeline for building and deploying batch-processor to K8s.
+Create Jenkins pipeline for building and deploying cube-maker to K8s.
 
 **Pipeline Stages**:
 1. **Checkout** - Pull code from Git
@@ -320,12 +320,12 @@ pipeline {
         }
         stage('Docker Build') {
             steps {
-                sh 'docker build -t ${DOCKER_REGISTRY}/batch-processor:${BUILD_NUMBER} .'
+                sh 'docker build -t ${DOCKER_REGISTRY}/cube-maker:${BUILD_NUMBER} .'
             }
         }
         stage('Helm Deploy') {
             steps {
-                sh 'helm upgrade --install batch-processor ./helm/batch-processor --set image.tag=${BUILD_NUMBER}'
+                sh 'helm upgrade --install cube-maker ./helm/cube-maker --set image.tag=${BUILD_NUMBER}'
             }
         }
     }
@@ -413,7 +413,7 @@ resources:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: batch-processor-hpa
+  name: cube-maker-hpa
 spec:
   minReplicas: 1
   maxReplicas: 3
@@ -464,7 +464,7 @@ spec:
 ### Week 2 (Week 5 Preparation)
 | Day | Tasks |
 |-----|-------|
-| **Day 1** | Helm Chart - Batch Processor |
+| **Day 1** | Helm Chart - Cube Maker |
 | **Day 2** | Spark Classpath Fix on K8s |
 | **Day 3** | CI/CD Pipeline |
 | **Day 4** | Self-Healing Probes |

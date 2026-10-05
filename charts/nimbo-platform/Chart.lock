@@ -2,8 +2,8 @@ dependencies:
 - name: parquet-writer
   repository: file://../parquet-writer
   version: 0.1.0
-- name: batch-processor
-  repository: file://../batch-processor
+- name: cube-maker
+  repository: file://../cube-maker
   version: 0.1.0
 - name: starrocks-writer
   repository: file://../starrocks-writer
@@ -14,5 +14,5 @@ dependencies:
 - name: analytics-query
   repository: file://../analytics-query
   version: 0.1.0
-digest: sha256:4701e3f6cc09d0203707188a6cc7f5730a78913016ebdd2eafbaa82c4e33a722
-generated: "2026-10-05T18:48:21.628274678+03:30"
+digest: sha256:18657c9f57df3d77b544c953c7833c56dfa2a279faa95063d1192d8b955344ea
+generated: "2026-10-05T20:28:11.242624578+03:30"

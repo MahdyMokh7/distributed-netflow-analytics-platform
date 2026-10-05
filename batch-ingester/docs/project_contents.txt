@@ -1,0 +1,4897 @@
+
+========================================================================================================================
+
+File: BatchIngesterApplication.java
+Path: src/main/java/com/nimbo/BatchIngesterApplication.java
+
+========================================================================================================================
+
+package com.nimbo;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+/**
+ * Nimbo Data Ingester Service
+ *
+ * This is the main entry point for the Nimbo data processing pipeline.
+ * The service consumes Netflow data from Kafka, deserializes Avro records,
+ * and writes them as Parquet files to HDFS.
+ *
+ * Modules:
+ *   - Ingester: Kafka consumption and Avro deserialization
+ *   - Storage: HDFS Parquet writing and batch management
+ *
+ * @author Nimbo Team
+ * @version 1.0.0
+ */
+@SpringBootApplication
+@EnableConfigurationProperties
+@EnableScheduling
+public class BatchIngesterApplication {
+
+    public static void main(String[] args) {
+        System.setProperty("HADOOP_USER_NAME", "hadoop");
+        SpringApplication.run(BatchIngesterApplication.class, args);
+    }
+}
+
+========================================================================================================================
+
+File: IngesterConfiguration.java
+Path: src/main/java/com/nimbo/ingester/config/IngesterConfiguration.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.config;
+
+import com.nimbo.ingester.deserializer.AvroDeserializer;
+import org.apache.avro.Schema;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+
+@Configuration
+@EnableConfigurationProperties(KafkaProperties.class)
+public class IngesterConfiguration {
+
+    private static final String AVRO_SCHEMA_PATH = "avro/NetFlowV2Record.avsc";
+
+    @Bean
+    public Schema avroSchema() {
+        try (InputStream schemaStream =
+                     new ClassPathResource(AVRO_SCHEMA_PATH).getInputStream()) {
+
+            return new Schema.Parser().parse(schemaStream);
+
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "Failed to load Avro schema from: " + AVRO_SCHEMA_PATH, e
+            );
+        }
+    }
+
+    @Bean
+    public Schema storageSchema(Schema avroSchema) {
+        Schema.Field processingTimeField = new Schema.Field(
+                "PROCESSING_TIME",
+                Schema.createUnion(
+                        Schema.create(Schema.Type.NULL),
+                        Schema.create(Schema.Type.LONG)
+                ),
+                "Time when the record was ingested into HDFS (UTC epoch microseconds).",
+                (Object) null
+        );
+
+        java.util.List<Schema.Field> fields = new java.util.ArrayList<>();
+        for (Schema.Field field : avroSchema.getFields()) {
+            Schema.Field copy = new Schema.Field(
+                    field.name(),
+                    field.schema(),
+                    field.doc(),
+                    field.defaultVal()
+            );
+            fields.add(copy);
+        }
+
+        fields.add(processingTimeField);
+
+        return Schema.createRecord(
+                avroSchema.getName(),
+                avroSchema.getDoc(),
+                avroSchema.getNamespace(),
+                avroSchema.isError(),
+                fields
+        );
+    }
+
+    @Bean
+    public AvroDeserializer avroDeserializer(Schema avroSchema) {
+        return new AvroDeserializer(avroSchema);
+    }
+
+    @Bean(destroyMethod = "close")
+    public KafkaProducer<byte[], byte[]> kafkaProducer(
+            KafkaProperties properties
+    ) {
+
+        Map<String, Object> configs =
+                new HashMap<>();
+
+        configs.put(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                properties.getBootstrapServers()
+        );
+
+        configs.put(
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                ByteArraySerializer.class.getName()
+        );
+        configs.put(
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                ByteArraySerializer.class.getName()
+        );
+
+        configs.put(
+                ProducerConfig.ACKS_CONFIG,
+                "all"
+        );
+
+        configs.put(
+                ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+                true
+        );
+
+        return new KafkaProducer<>(configs);
+    }
+}
+
+========================================================================================================================
+
+File: KafkaProperties.java
+Path: src/main/java/com/nimbo/ingester/config/KafkaProperties.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.config;
+
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+
+import java.util.Map;
+
+
+@Setter
+@Getter
+@Validated
+@ConfigurationProperties(prefix = "ingester.kafka")
+public class KafkaProperties {
+
+    @NotBlank
+    private String bootstrapServers;
+
+    @NotBlank
+    private String topic;
+
+    @NotBlank
+    private String dlqTopic;
+
+    @NotBlank
+    private String consumerGroup;
+
+    private boolean enableAutoCommit = false;
+    private String autoOffsetReset = "earliest";
+
+    @Min(100)
+    private int pollTimeoutMs = 1000;
+
+    @Min(1)
+    private int maxPollRecords = 500;
+
+    @Min(1000)
+    private int sessionTimeoutMs = 30000;
+
+    @Min(1000)
+    private int heartbeatIntervalMs = 3000;
+
+    @Min(10000)
+    private int maxPollIntervalMs = 300000;
+
+    private Map<String, String> additionalConfigs;
+
+    @Min(1)
+    private int consumerInstances = 1;
+
+}
+
+========================================================================================================================
+
+File: ConsumerManager.java
+Path: src/main/java/com/nimbo/ingester/consumer/ConsumerManager.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.consumer;
+
+import com.nimbo.ingester.config.KafkaProperties;
+import com.nimbo.ingester.deserializer.AvroDeserializer;
+import com.nimbo.ingester.service.DataProcessingService;
+import com.nimbo.ingester.service.DlqService;
+import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.metrics.BatchIngesterMetrics;
+import com.nimbo.storage.config.HdfsProperties;
+import com.nimbo.storage.config.ParquetProperties;
+import com.nimbo.storage.service.NetFlowStorage;
+import com.nimbo.storage.service.batching.BatchPolicy;
+import com.nimbo.storage.service.hdfs.HdfsFileStorage;
+import com.nimbo.storage.service.naming.FileNameGenerator;
+import com.nimbo.storage.service.parquet.ParquetFileWriter;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import com.nimbo.storage.service.hdfs.HdfsFileSystemFactory;
+import org.springframework.stereotype.Component;
+import org.apache.avro.Schema;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+@Slf4j
+@Component
+public class ConsumerManager {
+
+    private final KafkaProperties kafkaProperties;
+    private final AvroDeserializer avroDeserializer;
+    private final NetflowValidationService validationService;
+    private final DlqService dlqService;
+    private final BatchPolicy batchPolicy;
+    private final ParquetProperties parquetProperties;
+    private final FileNameGenerator fileNameGenerator;
+    private final HdfsProperties hdfsProperties;
+    private final KafkaConsumerFactory kafkaConsumerFactory;
+    private final HdfsFileSystemFactory hdfsFileSystemFactory;
+    private final KafkaOffsetCommitter kafkaOffsetCommitter;
+    private final Schema storageSchema;
+    private final BatchIngesterMetrics metrics;
+
+    private final List<NetflowConsumer> consumers = new ArrayList<>();
+    private ExecutorService consumerExecutor;
+
+    public ConsumerManager(
+            KafkaProperties kafkaProperties,
+            AvroDeserializer avroDeserializer,
+            NetflowValidationService validationService,
+            DlqService dlqService,
+            BatchPolicy batchPolicy,
+            ParquetProperties parquetProperties,
+            FileNameGenerator fileNameGenerator,
+            HdfsProperties hdfsProperties,
+            KafkaConsumerFactory kafkaConsumerFactory,
+            HdfsFileSystemFactory hdfsFileSystemFactory,
+            KafkaOffsetCommitter kafkaOffsetCommitter,
+            Schema storageSchema,
+            BatchIngesterMetrics metrics) {
+        this.kafkaProperties = kafkaProperties;
+        this.avroDeserializer = avroDeserializer;
+        this.validationService = validationService;
+        this.dlqService = dlqService;
+        this.batchPolicy = batchPolicy;
+        this.parquetProperties = parquetProperties;
+        this.fileNameGenerator = fileNameGenerator;
+        this.hdfsProperties = hdfsProperties;
+        this.kafkaConsumerFactory = kafkaConsumerFactory;
+        this.hdfsFileSystemFactory = hdfsFileSystemFactory;
+        this.kafkaOffsetCommitter = kafkaOffsetCommitter;
+        this.storageSchema = storageSchema;
+        this.metrics = metrics;
+    }
+
+    @PostConstruct
+    public void start() {
+        int instanceCount = kafkaProperties.getConsumerInstances();
+        log.info("Starting {} consumer instances for topic: {}", instanceCount, kafkaProperties.getTopic());
+
+        consumerExecutor = Executors.newFixedThreadPool(
+                instanceCount,
+                r -> {
+                    Thread t = new Thread(r);
+                    t.setName("consumer-instance-" + t.getId());
+                    t.setDaemon(true);
+                    return t;
+                }
+        );
+
+        for (int i = 0; i < instanceCount; i++) {
+
+            int instanceId = i + 1;
+
+            try {
+
+                metrics.registerInstance(instanceId);
+                FileSystem fs = hdfsFileSystemFactory.create(hdfsProperties);
+                HdfsFileStorage fileStorage = new HdfsFileStorage(fs);
+                ParquetFileWriter parquetWriter = new ParquetFileWriter(fs, parquetProperties);
+
+                NetFlowStorage storage = new NetFlowStorage(
+                        batchPolicy,
+                        parquetWriter,
+                        fileStorage,
+                        fileNameGenerator,
+                        hdfsProperties,
+                        storageSchema,
+                        metrics,
+                        instanceId
+                );
+
+                DataProcessingService processingService = new DataProcessingService(storage);
+
+                KafkaConsumer<byte[], byte[]> kafkaConsumer =
+                        kafkaConsumerFactory.createConsumer(i + 1);
+                metrics.bindKafkaConsumer(kafkaConsumer);
+
+                NetflowConsumer consumer = new NetflowConsumer(
+                        kafkaConsumer,
+                        kafkaProperties,
+                        avroDeserializer,
+                        processingService,
+                        validationService,
+                        dlqService,
+                        kafkaOffsetCommitter,
+                        instanceId,
+                        metrics
+                );
+
+                consumers.add(consumer);
+                consumerExecutor.submit(consumer::start);
+                log.info("Started consumer instance #{}", i + 1);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Thread interrupted while creating consumer instance #{}", i + 1, e);
+                break;
+
+            } catch (IOException | RuntimeException e) {
+                log.error("Failed to create consumer instance #{}", i + 1, e);
+            }
+        }
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        log.info("Shutting down ConsumerManager...");
+
+        for (NetflowConsumer consumer : consumers) {
+            consumer.shutdown();
+        }
+
+        if (consumerExecutor != null) {
+            consumerExecutor.shutdown();
+            try {
+                if (!consumerExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                    consumerExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                consumerExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        log.info("ConsumerManager shutdown complete");
+    }
+}
+
+========================================================================================================================
+
+File: KafkaConsumerFactory.java
+Path: src/main/java/com/nimbo/ingester/consumer/KafkaConsumerFactory.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.consumer;
+
+import com.nimbo.ingester.config.KafkaProperties;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.springframework.stereotype.Component;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Component("nimboKafkaConsumerFactory")
+public class KafkaConsumerFactory {
+
+    private final KafkaProperties kafkaProperties;
+
+    public KafkaConsumerFactory(KafkaProperties kafkaProperties) {
+        this.kafkaProperties = kafkaProperties;
+    }
+
+    public KafkaConsumer<byte[], byte[]> createConsumer(int instanceId) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                kafkaProperties.getBootstrapServers());
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG,
+                kafkaProperties.getConsumerGroup());
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                ByteArrayDeserializer.class.getName());
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                ByteArrayDeserializer.class.getName());
+        configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+                kafkaProperties.isEnableAutoCommit());
+        configs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+                kafkaProperties.getAutoOffsetReset());
+        configs.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG,
+                kafkaProperties.getMaxPollRecords());
+        configs.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
+                kafkaProperties.getSessionTimeoutMs());
+        configs.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
+                kafkaProperties.getHeartbeatIntervalMs());
+        configs.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG,
+                kafkaProperties.getMaxPollIntervalMs());
+        configs.put(ConsumerConfig.CLIENT_ID_CONFIG,
+                "consumer-" + kafkaProperties.getConsumerGroup() + "-" + instanceId);
+
+        if (kafkaProperties.getAdditionalConfigs() != null) {
+            configs.putAll(kafkaProperties.getAdditionalConfigs());
+        }
+
+        return new KafkaConsumer<>(configs);
+    }
+}
+
+========================================================================================================================
+
+File: KafkaOffsetCommitter.java
+Path: src/main/java/com/nimbo/ingester/consumer/KafkaOffsetCommitter.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.consumer;
+
+import com.nimbo.storage.model.TopicPartitionKey;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
+import org.springframework.stereotype.Component;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Component
+@Slf4j
+public class KafkaOffsetCommitter {
+
+    public void commit(KafkaConsumer<byte[], byte[]> kafkaConsumer,
+                       Map<TopicPartitionKey, Long> offsets) {
+        if (offsets == null || offsets.isEmpty()) {
+            return;
+        }
+
+        Map<TopicPartition, OffsetAndMetadata> commitMap = new HashMap<>();
+        offsets.forEach((key, offset) -> {
+            TopicPartition partition = new TopicPartition(key.topic(), key.partition());
+            commitMap.put(partition, new OffsetAndMetadata(offset));
+        });
+
+         kafkaConsumer.commitSync(commitMap);
+    }
+}
+
+========================================================================================================================
+
+File: NetflowConsumer.java
+Path: src/main/java/com/nimbo/ingester/consumer/NetflowConsumer.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.consumer;
+
+import com.nimbo.ingester.config.KafkaProperties;
+import com.nimbo.ingester.deserializer.AvroDeserializer;
+import com.nimbo.ingester.exception.DeserializationException;
+import com.nimbo.ingester.exception.KafkaConsumerException;
+import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.ingester.model.ValidationResult;
+import com.nimbo.ingester.service.DataProcessingService;
+import com.nimbo.ingester.service.DlqService;
+import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.metrics.BatchIngesterMetrics;
+import com.nimbo.storage.exception.StorageException;
+import com.nimbo.storage.model.TopicPartitionKey;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
+
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+@Slf4j
+public class NetflowConsumer {
+
+    private final KafkaConsumer<byte[], byte[]> kafkaConsumer;
+    private final KafkaProperties kafkaProperties;
+    private final AvroDeserializer avroDeserializer;
+    private final DataProcessingService dataProcessingService;
+    private final NetflowValidationService validationService;
+    private final DlqService dlqService;
+    private final int instanceId;
+    private final KafkaOffsetCommitter kafkaOffsetCommitter;
+
+    private final AtomicBoolean running = new AtomicBoolean(true);
+    private Thread consumerThread;
+    private final BatchIngesterMetrics metrics;
+
+    public NetflowConsumer(
+            KafkaConsumer<byte[], byte[]> kafkaConsumer,
+            KafkaProperties kafkaProperties,
+            AvroDeserializer avroDeserializer,
+            DataProcessingService dataProcessingService,
+            NetflowValidationService validationService,
+            DlqService dlqService,
+            KafkaOffsetCommitter kafkaOffsetCommitter,
+            int instanceId,BatchIngesterMetrics metrics) {
+        this.kafkaConsumer = kafkaConsumer;
+        this.kafkaProperties = kafkaProperties;
+        this.avroDeserializer = avroDeserializer;
+        this.dataProcessingService = dataProcessingService;
+        this.validationService = validationService;
+        this.dlqService = dlqService;
+        this.kafkaOffsetCommitter = kafkaOffsetCommitter;
+        this.instanceId = instanceId;
+        this.metrics = metrics;
+    }
+
+    private void registerRebalanceListener() {
+        this.kafkaConsumer.subscribe(
+                Collections.singletonList(kafkaProperties.getTopic()),
+                new ConsumerRebalanceListener() {
+                    @Override
+                    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                        log.info("Instance #{}: Partitions revoked: {}", instanceId, partitions);
+                        try {
+                            Map<TopicPartitionKey, Long> flushedOffsets = dataProcessingService.flush();
+                            kafkaOffsetCommitter.commit(kafkaConsumer, flushedOffsets);
+                            log.info("Instance #{}: Flushed {} offsets during rebalance",
+                                    instanceId, flushedOffsets.size());
+                        } catch (StorageException | KafkaException e) {
+                            log.error("Instance #{}: Failed to flush during rebalance", instanceId, e);
+                        }
+                    }
+
+                    @Override
+                    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                        log.info("Instance #{}: Partitions assigned: {}", instanceId, partitions);
+                    }
+                }
+        );
+    }
+
+    public void start() {
+        log.info("Starting consumer instance #{} for topic: {}",
+                instanceId, kafkaProperties.getTopic());
+        this.consumerThread = new Thread(this::consumeLoop,
+                "consumer-instance-" + instanceId);
+        this.consumerThread.setDaemon(true);
+        this.consumerThread.start();
+    }
+
+    private void consumeLoop() {
+        try {
+            registerRebalanceListener();
+            metrics.consumerStarted(instanceId);
+            log.info("Instance #{}: Subscribed to topic: {}", instanceId, kafkaProperties.getTopic());
+
+            while (running.get()) {
+                consumePoll();
+            }
+
+        } catch (KafkaException | IllegalArgumentException | IllegalStateException e) {
+            log.error("Instance #{}: Fatal error in consumer loop", instanceId, e);
+            throw new KafkaConsumerException("Consumer loop failed", e);
+        } finally {
+            metrics.consumerStopped(instanceId);
+            closeConsumer();
+        }
+    }
+
+    private void consumePoll() {
+        try {
+            ConsumerRecords<byte[], byte[]> records = kafkaConsumer.poll(
+                    Duration.ofMillis(kafkaProperties.getPollTimeoutMs())
+            );
+
+            metrics.recordsPolled(instanceId, records.count());
+            if (records.isEmpty()) {
+                handleEmptyPoll();
+                return;
+            }
+
+            Map<TopicPartitionKey, Long> offsetsToCommit = processRecords(records);
+            commitOffsets(offsetsToCommit);
+
+        } catch (KafkaException e) {
+            log.error("Instance #{}: Kafka error during polling or offset commit", instanceId, e);
+            throw new KafkaConsumerException("Kafka polling failed for consumer instance #" + instanceId, e);
+
+        } catch (StorageException | IllegalStateException e) {
+            log.error("Instance #{}: Error while processing or flushing consumed records", instanceId, e);
+        }
+    }
+
+    private void handleEmptyPoll() {
+        log.debug("No records received from Kafka");
+
+        Map<TopicPartitionKey, Long> offsetsToCommit =
+                dataProcessingService.flushRemaining();
+
+        commitOffsets(offsetsToCommit);
+    }
+
+    private Map<TopicPartitionKey, Long> processRecords(
+            ConsumerRecords<byte[], byte[]> records) {
+
+        Map<TopicPartitionKey, Long> offsetsToCommit = new HashMap<>();
+
+        for (ConsumerRecord<byte[], byte[]> consumerRecord : records) {
+            processRecord(consumerRecord).ifPresent(offsets ->
+                    offsets.forEach((key, offset) ->
+                            offsetsToCommit.merge(key, offset, Math::max)));
+        }
+
+        return offsetsToCommit;
+    }
+
+    private Optional<Map<TopicPartitionKey, Long>> processRecord(ConsumerRecord<byte[], byte[]> consumerRecord) {
+        long nextOffset = consumerRecord.offset() + 1;
+        try {
+            var genericRecord = avroDeserializer.deserialize(consumerRecord.value());
+            ValidationResult result = validationService.validate(genericRecord);
+
+            if (!result.valid()) {
+                metrics.invalidRecord(instanceId, "VALIDATION_ERROR");
+                dlqService.publish(consumerRecord, "VALIDATION_ERROR", result.errorMessage());
+                return dataProcessingService.recordSkippedOffset(
+                        consumerRecord.topic(), consumerRecord.partition(), nextOffset);
+            }
+
+            IngestedRecord ingestedRecord = new IngestedRecord(
+                    genericRecord,
+                    consumerRecord.topic(),
+                    consumerRecord.partition(),
+                    consumerRecord.offset(),
+                    consumerRecord.value().length
+            );
+
+            return dataProcessingService.processRecord(ingestedRecord);
+
+        } catch (DeserializationException e) {
+            metrics.invalidRecord(instanceId, "DESERIALIZATION_ERROR");
+            dlqService.publish(consumerRecord, "DESERIALIZATION_ERROR", e.getMessage());
+            return dataProcessingService.recordSkippedOffset(
+                    consumerRecord.topic(), consumerRecord.partition(), nextOffset);
+        } catch (StorageException e) {
+            log.error("Instance #{}: Error processing record: topic={}, partition={}, offset={}",
+                    instanceId, consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(), e);
+            return Optional.empty();
+        }
+    }
+
+    private void commitOffsets(Map<TopicPartitionKey, Long> offsetsToCommit) {
+        if (kafkaProperties.isEnableAutoCommit() || offsetsToCommit.isEmpty()) {
+            return;
+        }
+
+        kafkaOffsetCommitter.commit(kafkaConsumer, offsetsToCommit);
+
+        log.debug("Instance #{}: Committed offsets: {}",
+                instanceId, offsetsToCommit);
+    }
+
+    private void closeConsumer() {
+        try {
+            kafkaConsumer.close();
+            log.info("Instance #{}: Kafka consumer closed", instanceId);
+        } catch (KafkaException | IllegalStateException e) {
+            log.warn("Instance #{}: Error closing Kafka consumer", instanceId, e);
+        }
+    }
+
+    public void shutdown() {
+        log.info("Instance #{}: Shutting down...", instanceId);
+        running.set(false);
+
+        try {
+            log.info("Flushing remaining buffered records before shutdown...");
+            Map<TopicPartitionKey, Long> flushedOffsets = dataProcessingService.flush();
+
+            if (!flushedOffsets.isEmpty()) {
+                kafkaOffsetCommitter.commit(kafkaConsumer, flushedOffsets);
+                log.info("Instance #{}: Flushed {} offsets during shutdown",
+                        instanceId, flushedOffsets.size());
+            }
+
+        } catch (StorageException | KafkaException | IllegalStateException e) {
+            log.error("Instance #{}: Error flushing during shutdown", instanceId, e);
+        }
+
+        if (consumerThread != null) {
+            try {
+                consumerThread.interrupt();
+                consumerThread.join(5000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        log.info("Instance #{}: Shutdown complete", instanceId);
+    }
+}
+
+========================================================================================================================
+
+File: AvroDeserializer.java
+Path: src/main/java/com/nimbo/ingester/deserializer/AvroDeserializer.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.deserializer;
+
+import com.nimbo.ingester.exception.DeserializationException;
+import lombok.Getter;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.DecoderFactory;
+
+import java.io.IOException;
+
+public class AvroDeserializer {
+
+    @Getter
+    private final Schema schema;
+    private final GenericDatumReader<GenericRecord> reader;
+    private final DecoderFactory decoderFactory = DecoderFactory.get();
+
+    public AvroDeserializer(Schema schema) {
+        this.schema = schema;
+        this.reader = new GenericDatumReader<>(schema);
+    }
+
+    public GenericRecord deserialize(byte[] data) {
+        try {
+            BinaryDecoder decoder = decoderFactory.binaryDecoder(data, null);
+            return reader.read(null, decoder);
+        } catch (IOException | IllegalArgumentException e) {
+            throw new DeserializationException("Failed to deserialize Avro record", e);
+        }
+    }
+
+}
+
+========================================================================================================================
+
+File: DeserializationException.java
+Path: src/main/java/com/nimbo/ingester/exception/DeserializationException.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.exception;
+
+public class DeserializationException extends RuntimeException {
+
+    public DeserializationException(String message) {
+        super(message);
+    }
+
+    public DeserializationException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+========================================================================================================================
+
+File: DlqPublishException.java
+Path: src/main/java/com/nimbo/ingester/exception/DlqPublishException.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.exception;
+
+public class DlqPublishException
+        extends RuntimeException {
+
+    public DlqPublishException(
+            String message,
+            Throwable cause
+    ) {
+        super(message, cause);
+    }
+}
+
+========================================================================================================================
+
+File: KafkaConsumerException.java
+Path: src/main/java/com/nimbo/ingester/exception/KafkaConsumerException.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.exception;
+
+public class KafkaConsumerException extends RuntimeException {
+
+    public KafkaConsumerException(String message) {
+        super(message);
+    }
+
+    public KafkaConsumerException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+========================================================================================================================
+
+File: IngestedRecord.java
+Path: src/main/java/com/nimbo/ingester/model/IngestedRecord.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.model;
+
+
+import org.apache.avro.generic.GenericRecord;
+
+import java.util.Objects;
+
+public record IngestedRecord(
+        GenericRecord record,
+        String topic,
+        int partition,
+        long offset,
+        int serializedSizeBytes
+) {
+
+    public IngestedRecord {
+        Objects.requireNonNull(record, "record must not be null");
+        Objects.requireNonNull(topic, "topic must not be null");
+
+        if (serializedSizeBytes < 0) {
+            throw new IllegalArgumentException(
+                    "serializedSizeBytes must not be negative"
+            );
+        }
+    }
+}
+
+========================================================================================================================
+
+File: ValidationResult.java
+Path: src/main/java/com/nimbo/ingester/model/ValidationResult.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.model;
+
+public record ValidationResult(
+        boolean valid,
+        String errorMessage
+) {
+
+    public static ValidationResult ok() {
+        return new ValidationResult(true, null);
+    }
+
+    public static ValidationResult invalid(String errorMessage) {
+        return new ValidationResult(false, errorMessage);
+    }
+}
+
+========================================================================================================================
+
+File: DataProcessingService.java
+Path: src/main/java/com/nimbo/ingester/service/DataProcessingService.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.service;
+
+import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.storage.model.TopicPartitionKey;
+import com.nimbo.storage.service.NetFlowStorage;
+
+
+import java.util.Map;
+import java.util.Optional;
+
+public class DataProcessingService {
+
+    private final NetFlowStorage netFlowStorage;
+
+    public DataProcessingService(NetFlowStorage netFlowStorage) {
+        this.netFlowStorage = netFlowStorage;
+    }
+
+    public Optional<Map<TopicPartitionKey, Long>> processRecord(
+            IngestedRecord ingestedRecord) {
+
+        return netFlowStorage.accept(ingestedRecord);
+    }
+
+    // rebalance/shutdown
+    public Map<TopicPartitionKey, Long> flush() {
+        return netFlowStorage.flush();
+    }
+
+    public Map<TopicPartitionKey, Long> flushRemaining() {
+        return netFlowStorage.flushRemaining();
+    }
+
+    public Optional<Map<TopicPartitionKey, Long>> recordSkippedOffset(
+            String topic,
+            int partition,
+            long nextOffset) {
+
+        return netFlowStorage.recordSkippedOffset(
+                topic,
+                partition,
+                nextOffset
+        );
+    }
+}
+
+========================================================================================================================
+
+File: DlqService.java
+Path: src/main/java/com/nimbo/ingester/service/DlqService.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.service;
+
+import com.nimbo.ingester.config.KafkaProperties;
+import com.nimbo.ingester.exception.DlqPublishException;
+
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+
+import org.springframework.stereotype.Service;
+
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutionException;
+
+@Service
+public class DlqService {
+
+    private final KafkaProducer<byte[], byte[]> kafkaProducer;
+    private final KafkaProperties kafkaProperties;
+
+    public DlqService(
+            KafkaProducer<byte[], byte[]> kafkaProducer,
+            KafkaProperties kafkaProperties
+    ) {
+        this.kafkaProducer = kafkaProducer;
+        this.kafkaProperties = kafkaProperties;
+    }
+
+
+    public void publish(
+            ConsumerRecord<byte[], byte[]> originalRecord,
+            String errorType,
+            String errorMessage
+    ) {
+
+        ProducerRecord<byte[], byte[]> dlqRecord =
+                new ProducerRecord<>(kafkaProperties.getDlqTopic(), originalRecord.key(), originalRecord.value());
+
+
+        addHeader(dlqRecord, "original-topic", originalRecord.topic());
+        addHeader(dlqRecord, "original-partition", String.valueOf(originalRecord.partition()));
+        addHeader(dlqRecord, "original-offset", String.valueOf(originalRecord.offset()));
+        addHeader(dlqRecord, "error-type", errorType);
+        addHeader(dlqRecord, "error-message", errorMessage);
+
+
+        try {
+            kafkaProducer.send(dlqRecord).get();
+
+        } catch (InterruptedException e) {
+
+            Thread.currentThread().interrupt();
+
+            throw new DlqPublishException("Interrupted while publishing record to DLQ", e);
+
+        } catch (ExecutionException e) {
+
+            throw new DlqPublishException("Failed to publish record to DLQ", e);
+        }
+    }
+
+
+    private void addHeader(
+            ProducerRecord<byte[], byte[]> dlqRecord,
+            String key,
+            String value
+    ) {
+
+        if (value == null) {
+            return;
+        }
+
+        dlqRecord.headers().add(key, value.getBytes(StandardCharsets.UTF_8));
+    }
+}
+
+========================================================================================================================
+
+File: NetflowValidationService.java
+Path: src/main/java/com/nimbo/ingester/service/NetflowValidationService.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.service;
+
+import com.nimbo.ingester.model.ValidationResult;
+import org.apache.avro.generic.GenericRecord;
+import org.springframework.stereotype.Service;
+
+@Service
+public class NetflowValidationService {
+
+    private static final String NULL_ERROR = " is null";
+    private static final String INVALID_IPV4_ERROR = " invalid IPv4: ";
+
+    public ValidationResult validate(GenericRecord genericRecord) {
+
+        StringBuilder errors = new StringBuilder();
+
+        checkIpv4(genericRecord, "IPV4_SRC_ADDR", errors);
+        checkIpv4(genericRecord, "IPV4_DST_ADDR", errors);
+
+        checkRange(
+                genericRecord,
+                "L4_SRC_PORT",
+                0,
+                65535,
+                errors
+        );
+
+        checkRange(
+                genericRecord,
+                "L4_DST_PORT",
+                0,
+                65535,
+                errors
+        );
+
+        checkNonNegative(
+                genericRecord,
+                "IN_BYTES",
+                errors
+        );
+
+        checkNonNegative(
+                genericRecord,
+                "OUT_BYTES",
+                errors
+        );
+
+        checkNonNegative(
+                genericRecord,
+                "IN_PKTS",
+                errors
+        );
+
+        checkNonNegative(
+                genericRecord,
+                "OUT_PKTS",
+                errors
+        );
+
+        checkRange(
+                genericRecord,
+                "MIN_TTL",
+                0,
+                255,
+                errors
+        );
+
+        checkRange(
+                genericRecord,
+                "MAX_TTL",
+                0,
+                255,
+                errors
+        );
+
+        checkMinMax(
+                genericRecord,
+                "MIN_TTL",
+                "MAX_TTL",
+                errors
+        );
+
+        checkNonNegative(
+                genericRecord,
+                "LONGEST_FLOW_PKT",
+                errors
+        );
+
+        checkNonNegative(
+                genericRecord,
+                "SHORTEST_FLOW_PKT",
+                errors
+        );
+
+        checkMinMax(
+                genericRecord,
+                "SHORTEST_FLOW_PKT",
+                "LONGEST_FLOW_PKT",
+                errors
+        );
+
+        checkNonNegative(
+                genericRecord,
+                "MIN_IP_PKT_LEN",
+                errors
+        );
+
+        checkNonNegative(
+                genericRecord,
+                "MAX_IP_PKT_LEN",
+                errors
+        );
+
+        checkMinMax(
+                genericRecord,
+                "MIN_IP_PKT_LEN",
+                "MAX_IP_PKT_LEN",
+                errors
+        );
+
+        if (errors.isEmpty()) {
+            return ValidationResult.ok();
+        }
+
+        return ValidationResult.invalid(
+                errors.toString()
+        );
+    }
+
+    private void checkNonNegative(
+            GenericRecord genericRecord,
+            String field,
+            StringBuilder errors
+    ) {
+
+        Object value = genericRecord.get(field);
+
+        if (value == null) {
+            addError(
+                    errors,
+                    field + NULL_ERROR
+            );
+            return;
+        }
+
+        long number =
+                ((Number) value).longValue();
+
+        if (number < 0) {
+            addError(
+                    errors,
+                    field
+                            + " is negative: "
+                            + number
+            );
+        }
+    }
+
+    private void checkRange(
+            GenericRecord genericRecord,
+            String field,
+            long min,
+            long max,
+            StringBuilder errors
+    ) {
+
+        Object value = genericRecord.get(field);
+
+        if (value == null) {
+            addError(
+                    errors,
+                    field + NULL_ERROR
+            );
+            return;
+        }
+
+        long number =
+                ((Number) value).longValue();
+
+        if (number < min || number > max) {
+            addError(
+                    errors,
+                    field
+                            + " out of range: "
+                            + number
+            );
+        }
+    }
+
+    private void checkMinMax(
+            GenericRecord genericRecord,
+            String minField,
+            String maxField,
+            StringBuilder errors
+    ) {
+
+        Object minObject =
+                genericRecord.get(minField);
+
+        Object maxObject =
+                genericRecord.get(maxField);
+
+        if (minObject == null || maxObject == null) {
+            return;
+        }
+
+        long min =
+                ((Number) minObject).longValue();
+
+        long max =
+                ((Number) maxObject).longValue();
+
+        if (min > max) {
+            addError(
+                    errors,
+                    minField
+                            + " > "
+                            + maxField
+                            + " ("
+                            + min
+                            + " > "
+                            + max
+                            + ")"
+            );
+        }
+    }
+
+    private void checkIpv4(
+            GenericRecord genericRecord,
+            String field,
+            StringBuilder errors
+    ) {
+
+        Object value = genericRecord.get(field);
+
+        if (value == null) {
+            addError(
+                    errors,
+                    field + NULL_ERROR
+            );
+            return;
+        }
+
+        String ip =
+                value.toString();
+
+        String[] parts =
+                ip.split("\\.", -1);
+
+        if (parts.length != 4) {
+            addError(
+                    errors,
+                    field
+                            + INVALID_IPV4_ERROR
+                            + ip
+            );
+            return;
+        }
+
+        try {
+            for (String part : parts) {
+
+                if (part.isEmpty()) {
+                    throw new NumberFormatException();
+                }
+
+                int number =
+                        Integer.parseInt(part);
+
+                if (number < 0 || number > 255) {
+                    addError(
+                            errors,
+                            field
+                                    + INVALID_IPV4_ERROR
+                                    + ip
+                    );
+                    return;
+                }
+            }
+
+        } catch (NumberFormatException e) {
+
+            addError(
+                    errors,
+                    field
+                            + INVALID_IPV4_ERROR
+                            + ip
+            );
+        }
+    }
+
+    private void addError(
+            StringBuilder errors,
+            String error
+    ) {
+
+        if (!errors.isEmpty()) {
+            errors.append(" | ");
+        }
+
+        errors.append(error);
+    }
+}
+
+========================================================================================================================
+
+File: BatchIngesterMetrics.java
+Path: src/main/java/com/nimbo/metrics/BatchIngesterMetrics.java
+
+========================================================================================================================
+
+package com.nimbo.metrics;
+
+import com.nimbo.storage.service.batching.BatchPolicy;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.ToDoubleFunction;
+
+@Slf4j
+@Component
+public class BatchIngesterMetrics {
+
+    private final MeterRegistry registry;
+    private final Map<Integer, InstanceState> instances = new ConcurrentHashMap<>();
+    private static final String INSTANCE_TAG = "instance";
+    private static final String REASON_TAG = "reason";
+    private static final List<String> ROLLOVER_REASONS = List.of("record_count", "size", "age");
+    private static final List<String> DLQ_REASONS = List.of("VALIDATION_ERROR", "DESERIALIZATION_ERROR");
+
+    public BatchIngesterMetrics(MeterRegistry registry) {
+        this.registry = registry;
+    }
+
+    public void registerInstance(int instanceId) {
+        instances.computeIfAbsent(instanceId, id -> {
+            InstanceState s = new InstanceState(registry, id);
+            String instance = String.valueOf(id);
+
+            for (String reason : ROLLOVER_REASONS) {
+                s.rolloverCounters.put(reason, registry.counter("ingester_rollover_total",
+                        INSTANCE_TAG, instance, REASON_TAG, reason));
+            }
+            for (String reason : DLQ_REASONS) {
+                s.dlqCounters.put(reason, registry.counter("ingester_dlq_records_total",
+                        INSTANCE_TAG, instance, REASON_TAG, reason));
+            }
+            return s;
+        });
+    }
+
+    public void bindKafkaConsumer(KafkaConsumer<?, ?> consumer) {
+        new KafkaClientMetrics(consumer).bindTo(registry);
+    }
+
+    public <T> void registerGauge(String name, int instanceId, T target, ToDoubleFunction<T> valueFn) {
+        Gauge.builder(name, target, valueFn)
+                .tags(Tags.of(INSTANCE_TAG, String.valueOf(instanceId)))
+                .register(registry);
+    }
+
+    private InstanceState state(int instanceId) {
+        InstanceState s = instances.get(instanceId);
+        if (s == null) {
+            throw new IllegalStateException("Instance " + instanceId +
+                    " not registered — call registerInstance() first");
+        }
+        return s;
+    }
+
+    public void consumerStarted(int instanceId) { state(instanceId).running.set(1); }
+    public void consumerStopped(int instanceId) { state(instanceId).running.set(0); }
+    public void recordsPolled(int instanceId, int count) { state(instanceId).pollRecords.record(count); }
+    public void recordWritten(int instanceId) { state(instanceId).recordsWritten.increment(); }
+    public void writeFailure(int instanceId) { state(instanceId).writeFailures.increment(); }
+
+    public void invalidRecord(int instanceId, String reason) {
+        InstanceState s = state(instanceId);
+        Counter c = s.dlqCounters.get(reason);
+        if (c != null) {
+            c.increment();
+        } else {
+            log.warn("Unrecognized DLQ reason '{}' for instance {} — falling back to dynamic counter lookup",
+                    reason, instanceId);
+
+            registry.counter("ingester_dlq_records_total",
+                    INSTANCE_TAG, String.valueOf(instanceId), REASON_TAG, reason).increment();
+        }
+    }
+
+    public void rollover(int instanceId, BatchPolicy.FlushReason reason, long recordCount, long sizeBytes) {
+        InstanceState s = state(instanceId);
+        String reasonKey = reason.name().toLowerCase();
+        Counter c = s.rolloverCounters.get(reasonKey);
+        if (c != null) {
+            c.increment();
+        } else {
+            log.warn("Unrecognized rollover reason '{}' for instance {} — falling back to dynamic counter lookup",
+                    reasonKey, instanceId);
+
+            registry.counter("ingester_rollover_total",
+                    INSTANCE_TAG, String.valueOf(instanceId), REASON_TAG, reasonKey).increment();
+        }
+        s.batchRecordCount.record(recordCount);
+        s.batchSizeBytes.record(sizeBytes);
+        s.lastBatchRecordCount.set(recordCount);
+        s.lastBatchSizeBytes.set(sizeBytes);
+        s.lastSuccessfulRollover.set(System.currentTimeMillis() / 1000);
+    }
+
+    public Timer.Sample startRolloverTimer() { return Timer.start(registry); }
+
+    public void stopRolloverTimer(int instanceId, Timer.Sample sample) {
+        sample.stop(state(instanceId).rolloverDuration);
+    }
+
+    private static class InstanceState {
+        final Counter recordsWritten;
+        final Counter writeFailures;
+        final Timer rolloverDuration;
+        final DistributionSummary pollRecords;
+        final DistributionSummary batchRecordCount;
+        final DistributionSummary batchSizeBytes;
+        final AtomicInteger running = new AtomicInteger(0);
+        final AtomicLong lastSuccessfulRollover = new AtomicLong(0);
+        final AtomicLong lastBatchRecordCount = new AtomicLong(0);
+        final AtomicLong lastBatchSizeBytes = new AtomicLong(0);
+        final Map<String, Counter> rolloverCounters = new ConcurrentHashMap<>();
+        final Map<String, Counter> dlqCounters = new ConcurrentHashMap<>();
+
+        InstanceState(MeterRegistry registry, int instanceId) {
+            Tags tags = Tags.of(INSTANCE_TAG, String.valueOf(instanceId));
+
+            recordsWritten = Counter.builder("ingester_records_written_total")
+                    .tags(tags).register(registry);
+
+            writeFailures = Counter.builder("ingester_write_failures_total")
+                    .tags(tags).register(registry);
+
+            rolloverDuration = Timer.builder("ingester_rollover_duration_seconds")
+                    .tags(tags).register(registry);
+
+            pollRecords = DistributionSummary.builder("ingester_poll_records")
+                    .tags(tags).register(registry);
+
+            batchRecordCount = DistributionSummary.builder("ingester_batch_record_count")
+                    .tags(tags).register(registry);
+
+            batchSizeBytes = DistributionSummary.builder("ingester_batch_size_bytes")
+                    .tags(tags).register(registry);
+
+            Gauge.builder("ingester_consumer_running", running, AtomicInteger::get)
+                    .tags(tags).register(registry);
+
+            Gauge.builder("ingester_last_successful_rollover_timestamp", lastSuccessfulRollover, AtomicLong::get)
+                    .tags(tags).register(registry);
+
+            Gauge.builder("ingester_last_batch_record_count", lastBatchRecordCount, AtomicLong::get)
+                    .tags(tags).register(registry);
+
+            Gauge.builder("ingester_last_batch_size_bytes", lastBatchSizeBytes, AtomicLong::get)
+                    .tags(tags).register(registry);
+        }
+    }
+}
+
+========================================================================================================================
+
+File: HdfsProperties.java
+Path: src/main/java/com/nimbo/storage/config/HdfsProperties.java
+
+========================================================================================================================
+
+package com.nimbo.storage.config;
+
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import java.util.Map;
+
+@Setter
+@Getter
+@ConfigurationProperties(prefix = "storage.hdfs")
+public class HdfsProperties {
+
+    private String uri;
+    private String basePath;
+    private String nameservice;
+    private Map<String, String> nodes;
+
+}
+
+========================================================================================================================
+
+File: ParquetProperties.java
+Path: src/main/java/com/nimbo/storage/config/ParquetProperties.java
+
+========================================================================================================================
+
+package com.nimbo.storage.config;
+
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@Setter
+@Getter
+@ConfigurationProperties(prefix = "storage.parquet")
+public class ParquetProperties {
+
+    private String compressionCodec;
+    private int blockSizeBytes;
+    private int pageSizeBytes;
+    private boolean enableDictionary;
+
+}
+
+========================================================================================================================
+
+File: RollingProperties.java
+Path: src/main/java/com/nimbo/storage/config/RollingProperties.java
+
+========================================================================================================================
+
+package com.nimbo.storage.config;
+
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import java.time.Duration;
+
+@Setter
+@Getter
+@ConfigurationProperties(prefix = "rolling")
+public class RollingProperties {
+
+    private int maxRecordCount;
+    private long maxSizeBytes;
+    private Duration maxAge;
+
+}
+
+========================================================================================================================
+
+File: StorageConfiguration.java
+Path: src/main/java/com/nimbo/storage/config/StorageConfiguration.java
+
+========================================================================================================================
+
+package com.nimbo.storage.config;
+
+import com.nimbo.storage.service.batching.BatchPolicy;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+
+@Configuration
+@EnableConfigurationProperties({
+        RollingProperties.class,
+        HdfsProperties.class,
+        ParquetProperties.class
+})
+public class StorageConfiguration {
+
+    @Bean
+    public BatchPolicy batchPolicy(RollingProperties properties) {
+        return new BatchPolicy(
+                properties.getMaxRecordCount(),
+                properties.getMaxSizeBytes(),
+                properties.getMaxAge()
+        );
+    }
+}
+
+========================================================================================================================
+
+File: HdfsStorageException.java
+Path: src/main/java/com/nimbo/storage/exception/HdfsStorageException.java
+
+========================================================================================================================
+
+package com.nimbo.storage.exception;
+
+public class HdfsStorageException extends StorageException {
+
+    public HdfsStorageException(String message) {
+        super(message);
+    }
+
+    public HdfsStorageException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+========================================================================================================================
+
+File: ParquetWriteException.java
+Path: src/main/java/com/nimbo/storage/exception/ParquetWriteException.java
+
+========================================================================================================================
+
+package com.nimbo.storage.exception;
+
+public class ParquetWriteException extends StorageException {
+
+    public ParquetWriteException(String message) {
+        super(message);
+    }
+
+    public ParquetWriteException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+========================================================================================================================
+
+File: StorageException.java
+Path: src/main/java/com/nimbo/storage/exception/StorageException.java
+
+========================================================================================================================
+
+package com.nimbo.storage.exception;
+
+public class StorageException extends RuntimeException {
+
+    public StorageException(String message) {
+        super(message);
+    }
+
+    public StorageException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+========================================================================================================================
+
+File: TopicPartitionKey.java
+Path: src/main/java/com/nimbo/storage/model/TopicPartitionKey.java
+
+========================================================================================================================
+
+package com.nimbo.storage.model;
+
+import java.util.Objects;
+
+public record TopicPartitionKey(
+        String topic,
+        int partition
+) {
+
+    public TopicPartitionKey {
+        Objects.requireNonNull(topic, "topic must not be null");
+
+        if (partition < 0) {
+            throw new IllegalArgumentException(
+                    "partition must not be negative"
+            );
+        }
+    }
+}
+
+========================================================================================================================
+
+File: NetFlowStorage.java
+Path: src/main/java/com/nimbo/storage/service/NetFlowStorage.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service;
+
+import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.metrics.BatchIngesterMetrics;
+import com.nimbo.storage.config.HdfsProperties;
+import com.nimbo.storage.exception.ParquetWriteException;
+import com.nimbo.storage.exception.StorageException;
+import com.nimbo.storage.model.TopicPartitionKey;
+import com.nimbo.storage.service.batching.BatchAccumulator;
+import com.nimbo.storage.service.batching.BatchPolicy;
+import com.nimbo.storage.service.hdfs.FileStorage;
+import com.nimbo.storage.service.naming.FileNameGenerator;
+import com.nimbo.storage.service.parquet.ParquetFileWriter;
+import io.micrometer.core.instrument.Timer;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.hadoop.ParquetWriter;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+@Slf4j
+public final class NetFlowStorage {
+
+    private final ParquetFileWriter parquetFileWriter;
+    private final FileStorage fileStorage;
+    private final FileNameGenerator fileNameGenerator;
+    private final HdfsProperties hdfsProperties;
+    private final Schema storageSchema;
+
+    private final BatchAccumulator batchAccumulator;
+
+    private ParquetWriter<GenericRecord> currentWriter;
+    private Path currentTempPath;
+    private Path currentFinalPath;
+    private boolean writerOpen = false;
+
+    private final BatchIngesterMetrics metrics;
+    private final int instanceId;
+
+    public NetFlowStorage(
+            BatchPolicy batchPolicy,
+            ParquetFileWriter parquetFileWriter,
+            FileStorage fileStorage,
+            FileNameGenerator fileNameGenerator,
+            HdfsProperties hdfsProperties,
+            Schema storageSchema,
+            BatchIngesterMetrics metrics,
+            int instanceId
+    ) {
+        this.parquetFileWriter = Objects.requireNonNull(parquetFileWriter);
+        this.fileStorage = Objects.requireNonNull(fileStorage);
+        this.fileNameGenerator = Objects.requireNonNull(fileNameGenerator);
+        this.hdfsProperties = Objects.requireNonNull(hdfsProperties);
+        this.storageSchema = Objects.requireNonNull(storageSchema);
+        this.batchAccumulator = new BatchAccumulator(batchPolicy);
+        this.metrics = metrics;
+        this.instanceId = instanceId;
+
+        metrics.registerGauge("ingester_open_batch_record_count", instanceId,
+                batchAccumulator, BatchAccumulator::getRecordCount);
+        metrics.registerGauge("ingester_open_batch_age_seconds", instanceId,
+                this, NetFlowStorage::currentBatchAgeSeconds);
+
+        log.info("NetFlowStorage initialized (streaming writer) with HDFS target path: {}", hdfsProperties.getBasePath());
+    }
+
+    private double currentBatchAgeSeconds() {
+        if (!writerOpen) return 0;
+        Instant firstRecordAt = batchAccumulator.getFirstRecordAt();
+        return firstRecordAt == null ? 0 : Duration.between(firstRecordAt, Instant.now()).getSeconds();
+    }
+
+    public Optional<Map<TopicPartitionKey, Long>> accept(IngestedRecord ingestedRecord) {
+        Objects.requireNonNull(ingestedRecord, "ingestedRecord must not be null");
+
+        try {
+            if (!writerOpen) {
+                openWriter(ingestedRecord);
+            }
+
+            GenericRecord enrichedRecord = enrichWithProcessingTime(ingestedRecord.record());
+            parquetFileWriter.write(currentWriter, enrichedRecord);
+            metrics.recordWritten(instanceId);
+            batchAccumulator.add(ingestedRecord);
+
+            if (batchAccumulator.shouldFlush()) {
+                Map<TopicPartitionKey, Long> offsets = commitCurrentBatch();
+                return Optional.of(offsets);
+            }
+
+            return Optional.empty();
+
+        } catch (StorageException e) {
+            handleWriteFailure();
+
+            log.error(
+                    "Failed writing record: topic={}, partition={}, offset={}",
+                    ingestedRecord.topic(),
+                    ingestedRecord.partition(),
+                    ingestedRecord.offset(),
+                    e
+            );
+
+            throw e;
+        }
+    }
+
+    public Map<TopicPartitionKey, Long> flush() {
+        if (batchAccumulator.isEmpty()) {
+            log.debug("Flush requested but accumulator is empty");
+            return Map.of();
+        }
+
+        log.info("Executing lifecycle flush for {} records", batchAccumulator.getRecordCount());
+
+        try {
+            return commitCurrentBatch();
+        } catch (StorageException e) {
+            handleWriteFailure();
+            throw e;
+        }
+    }
+
+    public Map<TopicPartitionKey, Long> flushRemaining() {
+        if (batchAccumulator.isEmpty()) {
+            return Map.of();
+        }
+
+        if (!batchAccumulator.shouldFlush()) {
+            return Map.of();
+        }
+
+        log.info(
+                "Flushed remaining records. Record count: {}, accumulated size: {} bytes",
+                batchAccumulator.getRecordCount(),
+                batchAccumulator.getAccumulatedSizeBytes()
+        );
+
+        try {
+            return commitCurrentBatch();
+        } catch (StorageException e) {
+            handleWriteFailure();
+            throw e;
+        }
+    }
+
+    public Optional<Map<TopicPartitionKey, Long>> recordSkippedOffset(String topic, int partition, long nextOffset) {
+        return batchAccumulator.recordSkippedOffset(topic, partition, nextOffset);
+    }
+
+    private void openWriter(IngestedRecord firstRecord)  {
+        int primaryPartition = firstRecord.partition();
+
+        String finalFileName = fileNameGenerator.generateFileName(primaryPartition);
+        String tempFileName = fileNameGenerator.generateTempFileName(finalFileName);
+
+        Path basePath = new Path(hdfsProperties.getBasePath());
+        currentFinalPath = new Path(basePath, finalFileName);
+        currentTempPath = new Path(basePath, tempFileName);
+
+        fileStorage.ensureDirectoryExists(currentFinalPath.getParent());
+        currentWriter = parquetFileWriter.createWriter(currentTempPath, storageSchema);
+        writerOpen = true;
+
+        log.debug("Opened streaming writer for partition {} at {}", primaryPartition, currentTempPath);
+    }
+
+    private Map<TopicPartitionKey, Long> commitCurrentBatch() {
+        if (!writerOpen) {
+            return Map.of();
+        }
+
+        long recordCount = batchAccumulator.getRecordCount();
+        long sizeBytes = batchAccumulator.getAccumulatedSizeBytes();
+        BatchPolicy.FlushReason reason = batchAccumulator.flushReason();
+
+        Timer.Sample sample = metrics.startRolloverTimer();
+        parquetFileWriter.closeWriter(currentWriter);
+        writerOpen = false;
+
+        fileStorage.commitAtomic(currentTempPath, currentFinalPath);
+
+        metrics.stopRolloverTimer(instanceId, sample);
+        metrics.rollover(instanceId, reason, recordCount, sizeBytes);
+
+        Map<TopicPartitionKey, Long> offsets = batchAccumulator.getPendingOffsets();
+
+        batchAccumulator.clear();
+
+        currentWriter = null;
+        currentTempPath = null;
+        currentFinalPath = null;
+
+        return offsets;
+    }
+
+    private void handleWriteFailure() {
+        metrics.writeFailure(instanceId);
+        if (writerOpen) {
+            try {
+                parquetFileWriter.closeWriter(currentWriter);
+            } catch (ParquetWriteException closeException) {
+                log.warn("Failed closing writer during error handling", closeException);
+            }
+            writerOpen = false;
+        }
+
+        if (currentTempPath != null) {
+            fileStorage.cleanupTempFile(currentTempPath);
+        }
+
+        batchAccumulator.clear();
+
+        currentWriter = null;
+        currentTempPath = null;
+        currentFinalPath = null;
+    }
+
+    private GenericRecord enrichWithProcessingTime(GenericRecord original) {
+        GenericRecord enriched = new GenericData.Record(storageSchema);
+
+        Instant now = Instant.now();
+        long processingTimeMicros = now.getEpochSecond() * 1_000_000 + now.getNano() / 1000;
+
+        for (Schema.Field field : storageSchema.getFields()) {
+            String fieldName = field.name();
+            if ("PROCESSING_TIME".equals(fieldName)) {
+                enriched.put("PROCESSING_TIME", processingTimeMicros);
+            } else {
+                enriched.put(fieldName, original.get(fieldName));
+            }
+        }
+        return enriched;
+    }
+}
+
+========================================================================================================================
+
+File: BatchAccumulator.java
+Path: src/main/java/com/nimbo/storage/service/batching/BatchAccumulator.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.batching;
+
+import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.storage.model.TopicPartitionKey;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+@Slf4j
+public final class BatchAccumulator {
+
+    private final BatchPolicy batchPolicy;
+
+    @Getter
+    private Instant firstRecordAt;
+    @Getter
+    private long accumulatedSizeBytes;
+    @Getter
+    private long recordCount;
+
+    // Nested map: topic -> partition -> nextOffset
+    private final Map<String, Map<Integer, Long>> pendingOffsets = new HashMap<>();
+
+    public BatchAccumulator(BatchPolicy batchPolicy) {
+        this.batchPolicy = Objects.requireNonNull(
+                batchPolicy,
+                "batchPolicy must not be null"
+        );
+    }
+
+    public void add(IngestedRecord ingestedRecord) {
+        Objects.requireNonNull(ingestedRecord, "record must not be null");
+
+        if (firstRecordAt == null) {
+            firstRecordAt = Instant.now();
+        }
+
+        recordCount++;
+        accumulatedSizeBytes += ingestedRecord.serializedSizeBytes();
+
+        pendingOffsets
+                .computeIfAbsent(ingestedRecord.topic(), t -> new HashMap<>())
+                .merge(ingestedRecord.partition(), ingestedRecord.offset() + 1, Math::max);
+    }
+
+    public boolean shouldFlush() {
+        boolean flush = batchPolicy.shouldFlush(
+                recordCount,
+                accumulatedSizeBytes,
+                firstRecordAt,
+                Instant.now()
+        );
+
+        if (flush) {
+            log.info(
+                    "Batch flush triggered: recordCount={}, accumulatedSizeBytes={}, firstRecordAt={}",
+                    recordCount,
+                    accumulatedSizeBytes,
+                    firstRecordAt
+            );
+        }
+
+        return flush;
+    }
+
+    public BatchPolicy.FlushReason flushReason() {
+        return batchPolicy.flushReason(recordCount, accumulatedSizeBytes, firstRecordAt, Instant.now());
+    }
+
+    public void clear() {
+        recordCount = 0;
+        accumulatedSizeBytes = 0L;
+        firstRecordAt = null;
+        pendingOffsets.clear();
+    }
+
+    public Optional<Map<TopicPartitionKey, Long>> recordSkippedOffset(String topic, int partition, long nextOffset) {
+
+        if (firstRecordAt == null) {
+            firstRecordAt = Instant.now();
+        }
+
+        pendingOffsets
+                .computeIfAbsent(topic, t -> new HashMap<>())
+                .merge(partition, nextOffset, Math::max);
+
+        return Optional.empty();
+    }
+
+    public Map<TopicPartitionKey, Long> getPendingOffsets() {
+        Map<TopicPartitionKey, Long> result = new HashMap<>();
+        pendingOffsets.forEach((topic, partitions) ->
+                partitions.forEach((partition, offset) ->
+                        result.put(
+                                new TopicPartitionKey(topic, partition),
+                                offset
+                        )
+                )
+        );
+        return Map.copyOf(result);
+    }
+
+    public boolean isEmpty() {
+        return recordCount == 0;
+    }
+}
+
+========================================================================================================================
+
+File: BatchPolicy.java
+Path: src/main/java/com/nimbo/storage/service/batching/BatchPolicy.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.batching;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Objects;
+
+public record BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBatchAge) {
+
+    public BatchPolicy(
+            long maxRecordCount,
+            long maxSizeBytes,
+            Duration maxBatchAge
+    ) {
+        if (maxRecordCount <= 0) {
+            throw new IllegalArgumentException("maxRecordCount must be positive");
+        }
+
+        if (maxSizeBytes <= 0) {
+            throw new IllegalArgumentException("maxSizeBytes must be positive");
+        }
+
+        this.maxBatchAge = Objects.requireNonNull(maxBatchAge, "maxBatchAge must not be null");
+
+        if (maxBatchAge.isZero() || maxBatchAge.isNegative()) {
+            throw new IllegalArgumentException("maxBatchAge must be positive");
+        }
+
+        this.maxRecordCount = maxRecordCount;
+        this.maxSizeBytes = maxSizeBytes;
+    }
+
+    public enum FlushReason { RECORD_COUNT, SIZE, AGE, NONE }
+
+    public boolean shouldFlush(
+            long recordCount,
+            long totalSizeBytes,
+            Instant firstRecordAt,
+            Instant now
+    ) {
+        Objects.requireNonNull(now, "now must not be null");
+
+        if (recordCount == 0) {
+            return false;
+        }
+
+        if (recordCount >= maxRecordCount) {
+            return true;
+        }
+
+        if (totalSizeBytes >= maxSizeBytes) {
+            return true;
+        }
+
+        if (firstRecordAt == null) {
+            return false;
+        }
+
+        return Duration.between(firstRecordAt, now)
+                .compareTo(maxBatchAge) >= 0;
+    }
+
+    public FlushReason flushReason(long recordCount, long totalSizeBytes, Instant firstRecordAt, Instant now) {
+        if (recordCount == 0) {
+            return FlushReason.NONE;
+        }
+        if (recordCount >= maxRecordCount) {
+            return FlushReason.RECORD_COUNT;
+        }
+        if (totalSizeBytes >= maxSizeBytes) {
+            return FlushReason.SIZE;
+        }
+        if (firstRecordAt != null && Duration.between(firstRecordAt, now).compareTo(maxBatchAge) >= 0) {
+            return FlushReason.AGE;
+        }
+        return FlushReason.NONE;
+    }
+}
+
+========================================================================================================================
+
+File: FileStorage.java
+Path: src/main/java/com/nimbo/storage/service/hdfs/FileStorage.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.hdfs;
+
+import org.apache.hadoop.fs.Path;
+
+public interface FileStorage {
+    void ensureDirectoryExists(Path path);
+    void commitAtomic(Path tempPath, Path finalPath);
+    void cleanupTempFile(Path tempPath);
+}
+
+========================================================================================================================
+
+File: HdfsFileStorage.java
+Path: src/main/java/com/nimbo/storage/service/hdfs/HdfsFileStorage.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.hdfs;
+
+import com.nimbo.storage.exception.HdfsStorageException;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
+import java.io.IOException;
+import java.util.Objects;
+
+@Slf4j
+public final class HdfsFileStorage implements FileStorage {
+
+    private final FileSystem fileSystem;
+
+    public HdfsFileStorage(FileSystem fileSystem) {
+        this.fileSystem = Objects.requireNonNull(fileSystem, "fileSystem must not be null");
+    }
+
+    @Override
+    public void ensureDirectoryExists(Path path) {
+        Objects.requireNonNull(path, "path must not be null");
+
+        try {
+            if (fileSystem.exists(path)) {
+                return;
+            }
+            boolean created = fileSystem.mkdirs(path);
+            if (created) {
+                log.info("Created HDFS directory: {}", path);
+                return;
+            }
+            if (!fileSystem.exists(path)) {
+                throw new HdfsStorageException(
+                        "Failed to create HDFS directory: " + path
+                );
+            }
+            log.debug("HDFS directory already created by another consumer: {}", path);
+
+        } catch (IOException e) {
+            throw new HdfsStorageException(
+                    "Failed accessing HDFS directory: " + path,
+                    e
+            );
+        }
+    }
+
+    @Override
+    public void commitAtomic(Path tempPath, Path finalPath) {
+        Objects.requireNonNull(tempPath, "tempPath must not be null");
+        Objects.requireNonNull(finalPath, "finalPath must not be null");
+
+        try {
+            if (fileSystem.exists(finalPath)) {
+                throw new HdfsStorageException(
+                        "Target Parquet file already exists: " + finalPath
+                );
+            }
+            if (!fileSystem.rename(tempPath, finalPath)) {
+                throw new HdfsStorageException(
+                        "Failed to rename temporary Parquet file: "
+                                + tempPath + " -> " + finalPath
+                );
+            }
+        } catch (IOException e) {
+            throw new HdfsStorageException(
+                    "Failed committing temporary Parquet file: "
+                            + tempPath + " -> " + finalPath, e
+            );
+        }
+    }
+
+    @Override
+    public void cleanupTempFile(Path tempPath) {
+        Objects.requireNonNull(tempPath, "tempPath must not be null");
+
+        try {
+            if (fileSystem.exists(tempPath)) {
+                boolean deleted = fileSystem.delete(tempPath, false);
+                if (!deleted) {
+                    log.warn("Failed to delete temporary HDFS file: {}", tempPath);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("Failed during temporary file cleanup: {}", tempPath, e);
+        }
+    }
+}
+
+========================================================================================================================
+
+File: HdfsFileSystemFactory.java
+Path: src/main/java/com/nimbo/storage/service/hdfs/HdfsFileSystemFactory.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.hdfs;
+
+import com.nimbo.storage.config.HdfsProperties;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.net.URI;
+import java.util.Map;
+
+@Component
+public class HdfsFileSystemFactory {
+
+
+    public FileSystem create(HdfsProperties hdfsProperties)
+            throws IOException, InterruptedException {
+        Configuration conf = new Configuration();
+        String uriStr = hdfsProperties.getUri();
+        conf.set("fs.defaultFS", uriStr);
+        conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
+        conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
+        conf.set("dfs.replication", "3");
+
+        String nameservice = hdfsProperties.getNameservice();
+        if (nameservice != null && !nameservice.isBlank()) {
+
+            conf.set("dfs.nameservices", nameservice);
+            Map<String,String> nodes = hdfsProperties.getNodes();
+            if (nodes != null && !nodes.isEmpty()) {
+
+                conf.set(
+                        "dfs.ha.namenodes." + nameservice,
+                        String.join(",", nodes.keySet())
+                );
+
+                conf.setBoolean(
+                        "dfs.client.failover.random.order",
+                        false
+                );
+
+                for (Map.Entry<String,String> entry : nodes.entrySet()) {
+
+                    conf.set(
+                            "dfs.namenode.rpc-address."
+                                    + nameservice
+                                    + "."
+                                    + entry.getKey(),
+                            entry.getValue()
+                    );
+                }
+            }
+
+            conf.set(
+                    "dfs.client.failover.proxy.provider." + nameservice,
+                    "org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider"
+            );
+        }
+
+        return FileSystem.newInstance(URI.create(uriStr), conf,"hadoop");
+    }
+}
+
+========================================================================================================================
+
+File: FileNameGenerator.java
+Path: src/main/java/com/nimbo/storage/service/naming/FileNameGenerator.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.naming;
+
+import org.springframework.stereotype.Component;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Supplier;
+
+@Component
+public final class FileNameGenerator {
+
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss-SSS'Z'").withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter HOUR_FORMATTER =
+            DateTimeFormatter.ofPattern("HH").withZone(ZoneOffset.UTC);
+
+    private final Clock clock;
+    private final Supplier<UUID> uuidSupplier;
+
+    public FileNameGenerator() {
+        this(Clock.systemUTC(), UUID::randomUUID);
+    }
+
+    FileNameGenerator(Clock clock, Supplier<UUID> uuidSupplier) {
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.uuidSupplier = Objects.requireNonNull(uuidSupplier, "uuidSupplier must not be null");
+    }
+
+    public String generateFileName(int partition) {
+        if (partition < 0) {
+            throw new IllegalArgumentException("partition must not be negative");
+        }
+        Instant openedAt = clock.instant();
+        String fileName = String.format(
+                "netflow-p%02d-%s-%s.parquet",
+                partition,
+                TIMESTAMP_FORMATTER.format(openedAt),
+                uuidSupplier.get()
+        );
+        return String.join(
+                "/",
+                DATE_FORMATTER.format(openedAt),
+                HOUR_FORMATTER.format(openedAt),
+                fileName
+        );
+    }
+
+    public String generateTempFileName(String finalFileName) {
+        Objects.requireNonNull(finalFileName, "finalFileName must not be null");
+
+        int separator = finalFileName.lastIndexOf('/');
+        String parent = separator >= 0 ? finalFileName.substring(0, separator + 1) : "";
+        String fileName = finalFileName.substring(separator + 1);
+        return parent + "." + fileName + ".tmp";
+    }
+}
+
+========================================================================================================================
+
+File: ParquetFileWriter.java
+Path: src/main/java/com/nimbo/storage/service/parquet/ParquetFileWriter.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.parquet;
+
+import com.nimbo.storage.config.ParquetProperties;
+import com.nimbo.storage.exception.ParquetWriteException;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+
+import java.io.IOException;
+import java.util.Objects;
+
+public final class ParquetFileWriter {
+
+    private final Configuration hadoopConfiguration;
+    private final ParquetProperties parquetProperties;
+
+    public ParquetFileWriter(FileSystem fileSystem, ParquetProperties parquetProperties) {
+        Objects.requireNonNull(fileSystem, "fileSystem must not be null");
+        this.parquetProperties = Objects.requireNonNull(parquetProperties, "parquetProperties must not be null");
+        this.hadoopConfiguration = fileSystem.getConf();
+    }
+
+    public ParquetWriter<GenericRecord> createWriter(Path targetPath, Schema schema)
+            throws ParquetWriteException {
+        Objects.requireNonNull(targetPath, "targetPath must not be null");
+        Objects.requireNonNull(schema, "schema must not be null");
+
+        CompressionCodecName codec = CompressionCodecName.valueOf(
+                parquetProperties.getCompressionCodec().toUpperCase()
+        );
+
+        return buildWriter(targetPath, schema, codec);
+    }
+
+    public void write(ParquetWriter<GenericRecord> writer, GenericRecord ingestedRecord)
+            throws ParquetWriteException {
+        Objects.requireNonNull(writer, "writer must not be null");
+        Objects.requireNonNull(ingestedRecord, "record must not be null");
+
+        try {
+            writer.write(ingestedRecord);
+        } catch (IOException e) {
+            throw new ParquetWriteException("Failed writing record to Parquet writer", e);
+        }
+    }
+
+    public void closeWriter(ParquetWriter<GenericRecord> writer)
+            throws ParquetWriteException {
+        Objects.requireNonNull(writer, "writer must not be null");
+
+        try {
+            writer.close();
+        } catch (IOException e) {
+            throw new ParquetWriteException("Failed closing Parquet writer", e);
+        }
+    }
+
+    private ParquetWriter<GenericRecord> buildWriter(
+            Path targetPath,
+            Schema schema,
+            CompressionCodecName codec
+    ) throws ParquetWriteException {
+        try {
+            return AvroParquetWriter
+                    .<GenericRecord>builder(targetPath)
+                    .withSchema(schema)
+                    .withConf(hadoopConfiguration)
+                    .withCompressionCodec(codec)
+                    .withRowGroupSize(parquetProperties.getBlockSizeBytes())
+                    .withPageSize(parquetProperties.getPageSizeBytes())
+                    .withDictionaryEncoding(parquetProperties.isEnableDictionary())
+                    .build();
+        } catch (IOException e) {
+            throw new ParquetWriteException("Failed creating Parquet writer for path: " + targetPath, e);
+        }
+    }
+}
+
+========================================================================================================================
+
+File: application-dev.yml
+Path: src/main/resources/application-dev.yml
+
+========================================================================================================================
+
+# Development-specific configuration
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+kafka:
+  bootstrap-servers: kafka:9092
+
+hdfs:
+  uri: hdfs://namenode:9000
+
+logging:
+  level:
+    com.nimbo.ingester: DEBUG
+
+storage:
+  hdfs:
+    uri: ${HDFS_URI:hdfs://namenode:9000}
+    user: root
+    base-path: ${HDFS_BASE_PATH:/netflow/parquetFiles}
+
+ingester:
+  kafka:
+    consumer-instances: ${CONSUMER_INSTANCES:1}
+
+========================================================================================================================
+
+File: application-prod.yml
+Path: src/main/resources/application-prod.yml
+
+========================================================================================================================
+
+# Production-specific configuration
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+server:
+  port: 18080
+
+logging:
+  level:
+    com.nimbo.ingester: INFO
+    com.nimbo.storage: INFO
+
+ingester:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
+    topic: ${KAFKA_TOPIC:netflow}
+    dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-consumer-batch-deploy}
+    consumer-instances: ${CONSUMER_INSTANCES:3}
+    enable-auto-commit: false
+    poll-timeout-ms: ${KAFKA_POLL_TIMEOUT_MS:1000}
+    max-poll-records: ${KAFKA_MAX_POLL_RECORDS:10000}
+    session-timeout-ms: ${KAFKA_SESSION_TIMEOUT_MS:30000}
+    heartbeat-interval-ms: ${KAFKA_HEARTBEAT_INTERVAL_MS:3000}
+    max-poll-interval-ms: ${KAFKA_MAX_POLL_INTERVAL_MS:300000}
+    auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+
+storage:
+  hdfs:
+    uri: ${HDFS_URI:hdfs://team1}
+    base-path: ${HDFS_BASE_PATH:/netflow/parquetFiles}
+    nameservice: team1
+    nodes:
+      team1-node3: ${HDFS_NODE3:10.10.61.53:8020}
+      team1-node1: ${HDFS_NODE1:10.10.61.51:8020}
+      team1-node2: ${HDFS_NODE2:10.10.61.52:8020}
+
+========================================================================================================================
+
+File: application.yml
+Path: src/main/resources/application.yml
+
+========================================================================================================================
+
+spring:
+  application:
+    name: nimbo
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  output:
+    ansi:
+      enabled: always
+
+logging:
+  level:
+    root: INFO
+    com.nimbo.ingester: INFO
+    org.apache.kafka: WARN
+    org.apache.hadoop: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+rolling:
+  max-record-count: ${ROLLING_MAX_RECORD_COUNT:3100000}
+  max-size-bytes: ${ROLLING_MAX_SIZE_BYTES:311673700}
+  max-age: ${ROLLING_MAX_AGE:5m}
+
+storage:
+  parquet:
+    compression-codec: ${PARQUET_COMPRESSION:SNAPPY}
+    block-size-bytes: ${PARQUET_BLOCK_SIZE:134217728}
+    page-size-bytes: ${PARQUET_PAGE_SIZE:1048576}
+    enable-dictionary: ${PARQUET_ENABLE_DICTIONARY:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+
+    metrics:
+      tags:
+        application: ${spring.application.name}
+
+      distribution:
+        percentiles-histogram:
+          http.server.requests: true
+
+ingester:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
+    topic: ${KAFKA_TOPIC:netflow}
+    dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer-scalled}
+    auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+    enable-auto-commit: false
+    poll-timeout-ms: 1000
+    max-poll-records: 5000
+    session-timeout-ms: 30000
+    heartbeat-interval-ms: 3000
+    max-poll-interval-ms: 300000
+    consumer-instances: ${CONSUMER_INSTANCES:1}
+
+========================================================================================================================
+
+File: core-site.xml
+Path: src/main/resources/core-site.xml
+
+========================================================================================================================
+
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+
+<configuration>
+
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://namenode:9000</value>
+    </property>
+
+</configuration>
+
+========================================================================================================================
+
+File: hdfs-site.xml
+Path: src/main/resources/hdfs-site.xml
+
+========================================================================================================================
+
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+
+<configuration>
+
+    <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+    </property>
+
+    <property>
+        <name>dfs.namenode.rpc-address</name>
+        <value>namenode:9000</value>
+    </property>
+
+    <property>
+        <name>dfs.namenode.http-address</name>
+        <value>namenode:9870</value>
+    </property>
+
+    <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:///tmp/hadoop-root/dfs/name</value>
+    </property>
+
+    <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>file:///tmp/hadoop-root/dfs/data</value>
+    </property>
+
+</configuration>
+
+========================================================================================================================
+
+File: logback-spring.xml
+Path: src/main/resources/logback-spring.xml
+
+========================================================================================================================
+
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Console appender for development -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Log levels -->
+    <logger name="com.nimbo.ingester" level="DEBUG"/>
+    <logger name="org.apache.kafka" level="WARN"/>
+    <logger name="org.apache.hadoop" level="WARN"/>
+    <logger name="org.apache.parquet" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
+
+========================================================================================================================
+
+File: ConsumerManagerTest.java
+Path: src/test/java/com/nimbo/ingester/consumer/ConsumerManagerTest.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.consumer;
+
+import com.nimbo.ingester.config.KafkaProperties;
+import com.nimbo.ingester.deserializer.AvroDeserializer;
+import com.nimbo.ingester.service.DlqService;
+import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.metrics.BatchIngesterMetrics;
+import com.nimbo.storage.config.HdfsProperties;
+import com.nimbo.storage.config.ParquetProperties;
+import com.nimbo.storage.service.batching.BatchPolicy;
+import com.nimbo.storage.service.hdfs.HdfsFileSystemFactory;
+import com.nimbo.storage.service.naming.FileNameGenerator;
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.io.IOException;
+import java.time.Duration;
+
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("ConsumerManager Unit Tests")
+class ConsumerManagerTest {
+
+    @Mock
+    private KafkaProperties kafkaProperties;
+
+    @Mock
+    private AvroDeserializer avroDeserializer;
+
+    @Mock
+    private NetflowValidationService validationService;
+
+    @Mock
+    private DlqService dlqService;
+
+    @Mock
+    private BatchPolicy batchPolicy;
+
+    @Mock
+    private ParquetProperties parquetProperties;
+
+    @Mock
+    private FileNameGenerator fileNameGenerator;
+
+    @Mock
+    private HdfsProperties hdfsProperties;
+
+    @Mock
+    private KafkaConsumerFactory kafkaConsumerFactory;
+
+    @Mock
+    private KafkaOffsetCommitter kafkaOffsetCommitter;
+
+    @Mock
+    private HdfsFileSystemFactory hdfsFileSystemFactory;
+
+    @Mock
+    private KafkaConsumer<byte[], byte[]> kafkaConsumer;
+
+    @Mock
+    private FileSystem fileSystem;
+
+    @Mock
+    private Schema storageSchema;
+
+    @Mock
+    private BatchIngesterMetrics metrics;
+
+    private ConsumerManager consumerManager;
+
+    @BeforeEach
+    void setUp() throws IOException, InterruptedException {
+        lenient().when(kafkaProperties.getTopic()).thenReturn("test-topic");
+        lenient().when(kafkaProperties.getConsumerInstances()).thenReturn(3);
+        lenient().when(kafkaProperties.getBootstrapServers()).thenReturn("localhost:9092");
+        lenient().when(kafkaProperties.getConsumerGroup()).thenReturn("test-group");
+        lenient().when(kafkaProperties.getMaxPollRecords()).thenReturn(500);
+        lenient().when(kafkaProperties.getSessionTimeoutMs()).thenReturn(30000);
+        lenient().when(kafkaProperties.getHeartbeatIntervalMs()).thenReturn(3000);
+        lenient().when(kafkaProperties.getMaxPollIntervalMs()).thenReturn(300000);
+        lenient().when(kafkaProperties.getAdditionalConfigs()).thenReturn(null);
+        lenient().when(kafkaProperties.getPollTimeoutMs()).thenReturn(1000);
+        lenient().when(kafkaProperties.isEnableAutoCommit()).thenReturn(false);
+        lenient().when(kafkaProperties.getAutoOffsetReset()).thenReturn("earliest");
+
+        lenient().when(hdfsProperties.getUri()).thenReturn("hdfs://test");
+        lenient().when(hdfsProperties.getNameservice()).thenReturn(null);
+        lenient().when(hdfsProperties.getNodes()).thenReturn(null);
+        lenient().when(hdfsProperties.getBasePath()).thenReturn("/test/path");
+
+        lenient().when(hdfsFileSystemFactory.create(any(HdfsProperties.class))).thenReturn(fileSystem);
+
+        lenient().when(kafkaConsumerFactory.createConsumer(anyInt())).thenReturn(kafkaConsumer);
+        lenient().when(kafkaConsumer.poll(any(Duration.class))).thenReturn(ConsumerRecords.empty());
+
+        consumerManager = new ConsumerManager(
+                kafkaProperties,
+                avroDeserializer,
+                validationService,
+                dlqService,
+                batchPolicy,
+                parquetProperties,
+                fileNameGenerator,
+                hdfsProperties,
+                kafkaConsumerFactory,
+                hdfsFileSystemFactory,
+                kafkaOffsetCommitter,
+                storageSchema,
+                metrics
+        );
+    }
+
+    @Test
+    @DisplayName("Should start multiple consumer instances")
+    void shouldStartMultipleConsumerInstances() {
+        assertThatCode(() -> consumerManager.start()).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("Should shutdown all consumer instances gracefully")
+    void shouldShutdownAllConsumerInstancesGracefully() {
+        consumerManager.start();
+        assertThatCode(() -> consumerManager.shutdown()).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("Should respect consumer instance count configuration")
+    void shouldRespectConsumerInstanceCountConfiguration() {
+        when(kafkaProperties.getConsumerInstances()).thenReturn(5);
+        consumerManager = new ConsumerManager(
+                kafkaProperties,
+                avroDeserializer,
+                validationService,
+                dlqService,
+                batchPolicy,
+                parquetProperties,
+                fileNameGenerator,
+                hdfsProperties,
+                kafkaConsumerFactory,
+                hdfsFileSystemFactory,
+                kafkaOffsetCommitter,
+                storageSchema,
+                metrics
+        );
+
+        assertThatCode(() -> consumerManager.start()).doesNotThrowAnyException();
+        assertThatCode(() -> consumerManager.shutdown()).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("Should handle single consumer instance")
+    void shouldHandleSingleConsumerInstance() {
+        when(kafkaProperties.getConsumerInstances()).thenReturn(1);
+        consumerManager = new ConsumerManager(
+                kafkaProperties,
+                avroDeserializer,
+                validationService,
+                dlqService,
+                batchPolicy,
+                parquetProperties,
+                fileNameGenerator,
+                hdfsProperties,
+                kafkaConsumerFactory,
+                hdfsFileSystemFactory,
+                kafkaOffsetCommitter,
+                storageSchema,
+                metrics
+        );
+
+        assertThatCode(() -> consumerManager.start()).doesNotThrowAnyException();
+        assertThatCode(() -> consumerManager.shutdown()).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("Should handle shutdown when no consumers started")
+    void shouldHandleShutdownWhenNoConsumersStarted() {
+        assertThatCode(() -> consumerManager.shutdown()).doesNotThrowAnyException();
+    }
+}
+
+========================================================================================================================
+
+File: NetflowConsumerTest.java
+Path: src/test/java/com/nimbo/ingester/consumer/NetflowConsumerTest.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.consumer;
+
+import com.nimbo.ingester.config.KafkaProperties;
+import com.nimbo.ingester.deserializer.AvroDeserializer;
+import com.nimbo.ingester.service.DataProcessingService;
+import com.nimbo.ingester.service.DlqService;
+import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.metrics.BatchIngesterMetrics;
+import com.nimbo.storage.exception.StorageException;
+import com.nimbo.storage.model.TopicPartitionKey;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("NetflowConsumer Unit Tests")
+class NetflowConsumerTest {
+
+    @Mock
+    private KafkaProperties kafkaProperties;
+
+    @Mock
+    private AvroDeserializer avroDeserializer;
+
+    @Mock
+    private DataProcessingService dataProcessingService;
+
+    @Mock
+    private NetflowValidationService validationService;
+
+    @Mock
+    private DlqService dlqService;
+
+    @Mock
+    private KafkaConsumer<byte[], byte[]> kafkaConsumer;
+
+    @Mock
+    private KafkaOffsetCommitter kafkaOffsetCommitter;
+
+    private NetflowConsumer netflowConsumer;
+
+    @Mock
+    private BatchIngesterMetrics metrics;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(kafkaProperties.getTopic()).thenReturn("test-topic");
+        lenient().when(kafkaProperties.getPollTimeoutMs()).thenReturn(100);
+        lenient().when(kafkaProperties.isEnableAutoCommit()).thenReturn(false);
+        lenient().when(kafkaProperties.getBootstrapServers()).thenReturn("localhost:9092");
+        lenient().when(kafkaProperties.getConsumerGroup()).thenReturn("test-group");
+        lenient().when(kafkaProperties.getMaxPollRecords()).thenReturn(500);
+        lenient().when(kafkaProperties.getSessionTimeoutMs()).thenReturn(30000);
+        lenient().when(kafkaProperties.getHeartbeatIntervalMs()).thenReturn(3000);
+        lenient().when(kafkaProperties.getMaxPollIntervalMs()).thenReturn(300000);
+        lenient().when(kafkaProperties.getAdditionalConfigs()).thenReturn(null);
+        lenient().when(kafkaConsumer.poll(any(Duration.class))).thenReturn(ConsumerRecords.empty());
+
+        netflowConsumer = new NetflowConsumer(
+                kafkaConsumer,
+                kafkaProperties,
+                avroDeserializer,
+                dataProcessingService,
+                validationService,
+                dlqService,
+                kafkaOffsetCommitter,
+                1,
+                metrics
+        );
+    }
+
+    @Test
+    @DisplayName("Should create consumer with unique instance ID")
+    void shouldCreateConsumerWithUniqueInstanceId() {
+        NetflowConsumer consumer1 = new NetflowConsumer(
+                kafkaConsumer,
+                kafkaProperties,
+                avroDeserializer,
+                dataProcessingService,
+                validationService,
+                dlqService,
+                kafkaOffsetCommitter,
+                1,
+                metrics
+        );
+
+        NetflowConsumer consumer2 = new NetflowConsumer(
+                kafkaConsumer,
+                kafkaProperties,
+                avroDeserializer,
+                dataProcessingService,
+                validationService,
+                dlqService,
+                kafkaOffsetCommitter,
+                2,
+                metrics
+        );
+
+        assertThat(consumer1).isNotNull();
+        assertThat(consumer2).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Should start consumer instance successfully")
+    void shouldStartConsumerInstanceSuccessfully() {
+        assertThatCode(() -> netflowConsumer.start()).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("Should shutdown gracefully and close consumer")
+    void shouldShutdownGracefullyAndCloseConsumer() {
+        netflowConsumer.start();
+        assertThatCode(() -> netflowConsumer.shutdown()).doesNotThrowAnyException();
+        verify(kafkaConsumer, atLeastOnce()).close();
+    }
+
+    @Test
+    @DisplayName("Should flush remaining records on shutdown")
+    void shouldFlushRemainingRecordsOnShutdown() {
+        Map<TopicPartitionKey, Long> flushOffsets = createFlushOffsets();
+        when(dataProcessingService.flush()).thenReturn(flushOffsets);
+
+        netflowConsumer.start();
+        netflowConsumer.shutdown();
+
+        verify(dataProcessingService, atLeastOnce()).flush();
+        verify(kafkaOffsetCommitter, atLeastOnce()).commit(eq(kafkaConsumer), anyMap());
+    }
+
+    @Test
+    @DisplayName("Should handle flush failure during shutdown gracefully")
+    void shouldHandleFlushFailureDuringShutdown() {
+        doThrow(new StorageException("Flush failed"))
+                .when(dataProcessingService).flush();
+
+        netflowConsumer.start();
+        assertThatCode(() -> netflowConsumer.shutdown()).doesNotThrowAnyException();
+
+        verify(dataProcessingService, atLeastOnce()).flush();
+        verify(kafkaOffsetCommitter, never()).commit(any(), anyMap());
+    }
+
+    @Test
+    @DisplayName("Should handle deserialization failure gracefully")
+    void shouldHandleDeserializationFailureGracefully() {
+        assertThatCode(() -> netflowConsumer.start()).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("Should handle interruption during shutdown")
+    void shouldHandleInterruptionDuringShutdown() {
+        netflowConsumer.start();
+
+        AtomicReference<Thread> consumerThread = new AtomicReference<>();
+        for (Thread t : Thread.getAllStackTraces().keySet()) {
+            if (t.getName().contains("consumer-instance-1")) {
+                consumerThread.set(t);
+                break;
+            }
+        }
+
+        if (consumerThread.get() != null) {
+            consumerThread.get().interrupt();
+        }
+
+        assertThatCode(() -> netflowConsumer.shutdown()).doesNotThrowAnyException();
+    }
+
+    private Map<TopicPartitionKey, Long> createFlushOffsets() {
+        TopicPartitionKey key = new TopicPartitionKey("test-topic", 0);
+        return Map.of(key, 43L);
+    }
+}
+
+========================================================================================================================
+
+File: AvroDeserializerTest.java
+Path: src/test/java/com/nimbo/ingester/deserializer/AvroDeserializerTest.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.deserializer;
+
+import com.nimbo.ingester.exception.DeserializationException;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.Encoder;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+@DisplayName("AvroDeserializer Tests")
+class AvroDeserializerTest {
+
+    private static final String SCHEMA_JSON = """
+            {
+                "type": "record",
+                "name": "TestRecord",
+                "fields": [
+                    {"name": "id", "type": "string"},
+                    {"name": "value", "type": "long"}
+                ]
+            }
+            """;
+
+    private Schema schema;
+    private AvroDeserializer deserializer;
+
+    @BeforeEach
+    void setUp() {
+        schema = new Schema.Parser().parse(SCHEMA_JSON);
+        deserializer = new AvroDeserializer(schema);
+    }
+
+    @Test
+    @DisplayName("Should deserialize valid Avro data successfully")
+    void shouldDeserializeValidAvroData() throws IOException {
+        GenericRecord expected = new GenericData.Record(schema);
+        expected.put("id", "test-123");
+        expected.put("value", 42L);
+
+        byte[] data = serializeRecord(expected);
+
+        GenericRecord actual = deserializer.deserialize(data);
+
+        assertThat(actual).isNotNull();
+        assertThat(actual.get("id").toString()).isEqualTo("test-123");
+        assertThat(actual.get("value")).isEqualTo(42L);
+    }
+
+    @Test
+    @DisplayName("Should throw DeserializationException when data is null")
+    void shouldThrowExceptionWhenDataIsNull() {
+        assertThatThrownBy(() -> deserializer.deserialize(null))
+                .isInstanceOf(DeserializationException.class);
+    }
+
+    @Test
+    @DisplayName("Should return correct schema")
+    void shouldReturnCorrectSchema() {
+        assertThat(deserializer.getSchema()).isSameAs(schema);
+        assertThat(deserializer.getSchema().getFullName()).isEqualTo("TestRecord");
+    }
+
+    private byte[] serializeRecord(GenericRecord record) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Encoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+        DatumWriter<GenericRecord> writer = new GenericDatumWriter<>(schema);
+        writer.write(record, encoder);
+        encoder.flush();
+        return out.toByteArray();
+    }
+}
+
+========================================================================================================================
+
+File: DataProcessingServiceTest.java
+Path: src/test/java/com/nimbo/ingester/service/DataProcessingServiceTest.java
+
+========================================================================================================================
+
+package com.nimbo.ingester.service;
+
+import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.storage.exception.StorageException;
+import com.nimbo.storage.model.TopicPartitionKey;
+import com.nimbo.storage.service.NetFlowStorage;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Map;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("DataProcessingService Tests")
+class DataProcessingServiceTest {
+
+    private static final String SCHEMA_JSON = """
+            {
+                "type": "record",
+                "name": "NetFlowV2Record",
+                "namespace": "org.nimbo.netflow.avro",
+                "fields": [
+                    {"name": "IPV4_SRC_ADDR", "type": "string"}
+                ]
+            }
+            """;
+
+    @Mock
+    private NetFlowStorage netFlowStorage;
+
+    private DataProcessingService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new DataProcessingService(netFlowStorage);
+    }
+
+    @Test
+    @DisplayName("Should process record successfully when storage accepts it")
+    void shouldProcessRecordSuccessfully() {
+        IngestedRecord record = createTestRecord();
+        when(netFlowStorage.accept(any(IngestedRecord.class)))
+                .thenReturn(Optional.empty());
+
+        service.processRecord(record);
+
+        ArgumentCaptor<IngestedRecord> captor = ArgumentCaptor.forClass(IngestedRecord.class);
+        verify(netFlowStorage).accept(captor.capture());
+        assertThat(captor.getValue()).isSameAs(record);
+    }
+
+    @Test
+    @DisplayName("Should handle storage returning offsets")
+    void shouldHandleStorageReturningOffsets() {
+        IngestedRecord record = createTestRecord();
+        when(netFlowStorage.accept(any(IngestedRecord.class)))
+                .thenReturn(Optional.of(Map.of()));
+
+        service.processRecord(record);
+
+        verify(netFlowStorage).accept(any(IngestedRecord.class));
+    }
+
+    @Test
+    @DisplayName("Should propagate exception when storage fails")
+    void shouldPropagateExceptionWhenStorageFails() {
+        IngestedRecord record = createTestRecord();
+        when(netFlowStorage.accept(any(IngestedRecord.class)))
+                .thenThrow(new StorageException("Storage failed"));
+
+        assertThatThrownBy(() -> service.processRecord(record))
+                .isInstanceOf(StorageException.class)
+                .hasMessage("Storage failed");
+    }
+
+    @Test
+    @DisplayName("Should call storage with correct record")
+    void shouldCallStorageWithCorrectRecord() {
+        IngestedRecord record = createTestRecord();
+        when(netFlowStorage.accept(any(IngestedRecord.class)))
+                .thenReturn(Optional.empty());
+
+        service.processRecord(record);
+
+        verify(netFlowStorage).accept(record);
+    }
+
+    @Test
+    @DisplayName("Should flush storage and return offsets")
+    void shouldFlushStorageAndReturnOffsets() {
+        Map<TopicPartitionKey, Long> expectedOffsets = Map.of(
+                new TopicPartitionKey("test-topic", 0), 43L
+        );
+        when(netFlowStorage.flush()).thenReturn(expectedOffsets);
+
+        Map<TopicPartitionKey, Long> result = service.flush();
+
+        assertThat(result).isEqualTo(expectedOffsets);
+        verify(netFlowStorage).flush();
+    }
+
+    @Test
+    @DisplayName("Should propagate exception when flush fails")
+    void shouldPropagateExceptionWhenFlushFails() {
+        when(netFlowStorage.flush())
+                .thenThrow(new StorageException("Flush failed"));
+
+        assertThatThrownBy(() -> service.flush())
+                .isInstanceOf(StorageException.class)
+                .hasMessage("Flush failed");
+
+        verify(netFlowStorage).flush();
+    }
+
+    @Test
+    @DisplayName("Should return empty map when storage flush returns empty")
+    void shouldReturnEmptyMapWhenStorageFlushReturnsEmpty() {
+        when(netFlowStorage.flush()).thenReturn(Map.of());
+
+        Map<TopicPartitionKey, Long> result = service.flush();
+
+        assertThat(result).isEmpty();
+        verify(netFlowStorage).flush();
+    }
+
+    private IngestedRecord createTestRecord() {
+        Schema schema = new Schema.Parser().parse(SCHEMA_JSON);
+        GenericRecord record = new GenericData.Record(schema);
+        record.put("IPV4_SRC_ADDR", "192.168.1.1");
+        return new IngestedRecord(record, "test-topic", 0, 42L, 1024);
+    }
+}
+
+========================================================================================================================
+
+File: NetflowHDFSWriterPipelineIT.java
+Path: src/test/java/com/nimbo/integration/NetflowHDFSWriterPipelineIT.java
+
+========================================================================================================================
+
+package com.nimbo.integration;
+
+import com.nimbo.ingester.config.KafkaProperties;
+import com.nimbo.ingester.consumer.KafkaOffsetCommitter;
+import com.nimbo.ingester.consumer.NetflowConsumer;
+import com.nimbo.ingester.deserializer.AvroDeserializer;
+import com.nimbo.ingester.service.DataProcessingService;
+import com.nimbo.ingester.service.DlqService;
+import com.nimbo.ingester.service.NetflowValidationService;
+import com.nimbo.storage.config.HdfsProperties;
+import com.nimbo.storage.config.ParquetProperties;
+import com.nimbo.storage.service.NetFlowStorage;
+import com.nimbo.storage.service.batching.BatchPolicy;
+import com.nimbo.storage.service.hdfs.HdfsFileStorage;
+import com.nimbo.storage.service.naming.FileNameGenerator;
+import com.nimbo.storage.service.parquet.ParquetFileWriter;
+import com.nimbo.metrics.BatchIngesterMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.junit.jupiter.api.*;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.utility.MountableFile;
+import static org.awaitility.Awaitility.await;
+import static java.time.Duration.ofSeconds;
+
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.URI;
+import java.time.Duration;
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@Testcontainers
+class NetflowHDFSWriterPipelineIT {
+
+    @Container
+    private static final KafkaContainer KAFKA_CONTAINER =
+            new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+
+    @Container
+    private static final GenericContainer<?> HDFS_CONTAINER =
+            new GenericContainer<>(DockerImageName.parse("apache/hadoop:3.3.6"))
+                    .withCopyFileToContainer(
+                            MountableFile.forClasspathResource("hadoop/core-site.xml"),
+                            "/opt/hadoop/etc/hadoop/core-site.xml")
+                    .withCopyFileToContainer(
+                            MountableFile.forClasspathResource("hadoop/hdfs-site.xml"),
+                            "/opt/hadoop/etc/hadoop/hdfs-site.xml")
+                    .withExposedPorts(8020, 9870, 9866)
+                    .withCopyFileToContainer(
+                            MountableFile.forClasspathResource("hadoop/start-hdfs.sh"),
+                            "/opt/hadoop/start-hdfs.sh")
+                    .withCommand("bash", "/opt/hadoop/start-hdfs.sh")
+                    .waitingFor(Wait.forLogMessage(".*HDFS_READY.*", 1)
+                            .withStartupTimeout(Duration.ofMinutes(2)));
+
+    private String topic;
+    private String dlqTopic;
+    private static final int BATCH_SIZE = 5;
+
+    private Schema sourceSchema;
+    private Schema storageSchema;
+    private Configuration hadoopConfiguration;
+    private FileSystem fileSystem;
+
+    private KafkaProperties kafkaProperties;
+    private KafkaProducer<byte[], byte[]> testProducer;
+    private KafkaConsumer<byte[], byte[]> pipelineKafkaConsumer;
+    private KafkaConsumer<byte[], byte[]> dlqReaderConsumer;
+    private DlqService dlqService;
+
+    private NetflowConsumer netflowConsumer;
+    private BatchIngesterMetrics metrics;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        sourceSchema = loadNetflowV2Schema();
+        storageSchema = withProcessingTime(sourceSchema);
+
+        hadoopConfiguration = createHadoopConfiguration();
+        fileSystem = FileSystem.get(
+                URI.create(hadoopConfiguration.get("fs.defaultFS")), hadoopConfiguration, "hadoop");
+        assertTrue(fileSystem.exists(new Path("/")), "HDFS root should be accessible");
+
+        topic = "netflow-" + UUID.randomUUID();
+        dlqTopic = "netflow-dlq-" + UUID.randomUUID();
+        kafkaProperties = buildKafkaProperties();
+        createTopics();
+
+        testProducer = createProducer();
+        dlqService = new DlqService(createProducer(), kafkaProperties);
+        dlqReaderConsumer = createRawConsumer("dlq-reader-" + UUID.randomUUID());
+        dlqReaderConsumer.subscribe(Collections.singletonList(dlqTopic));
+
+        metrics = new BatchIngesterMetrics(new SimpleMeterRegistry());
+        metrics.registerInstance(1);
+
+        NetFlowStorage netFlowStorage = createNetFlowStorage(fileSystem);
+        DataProcessingService dataProcessingService = new DataProcessingService(netFlowStorage);
+        NetflowValidationService validationService = new NetflowValidationService();
+        AvroDeserializer avroDeserializer = new AvroDeserializer(sourceSchema);
+
+        pipelineKafkaConsumer = createConsumer("netflow-consumer-" + UUID.randomUUID());
+
+        netflowConsumer = new NetflowConsumer(
+                pipelineKafkaConsumer,
+                kafkaProperties,
+                avroDeserializer,
+                dataProcessingService,
+                validationService,
+                dlqService,
+                new KafkaOffsetCommitter(),
+                1,
+                metrics
+        );
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (netflowConsumer != null) {
+            netflowConsumer.shutdown();
+        }
+        closeQuietly(testProducer);
+        closeQuietly(dlqReaderConsumer);
+        closeQuietly(fileSystem);
+    }
+
+    @Test
+    @DisplayName("Should consume real Kafka records, validate, and persist as Parquet in HDFS")
+    void shouldConsumeValidateAndPersistThroughFullPipeline() throws Exception {
+
+        netflowConsumer.start();
+
+        List<GenericRecord> sentRecords = new ArrayList<>();
+        for (int i = 1; i <= BATCH_SIZE; i++) {
+            GenericRecord record = validRecord("192.168.1." + i, "10.0.0.1", 1000L * i);
+            sentRecords.add(record);
+            publish(topic, record);
+        }
+        testProducer.flush();
+
+        Path storageDirectory = new Path("/netflow/parquet");
+
+        await().atMost(ofSeconds(30))
+                .pollInterval(ofSeconds(1))
+                .until(() -> {
+                    List<FileStatus> files = finalizedParquetFiles(storageDirectory);
+                    return files.size() == 1 && files.get(0).getLen() > 0;
+                });
+
+        List<FileStatus> files = finalizedParquetFiles(storageDirectory);
+        assertEquals(1, files.size(), "Exactly one finalized Parquet file should be created");
+
+        Path parquetFile = files.get(0).getPath();
+        assertTrue(parquetFile.getName().endsWith(".parquet"));
+        assertFalse(parquetFile.getName().startsWith("."), "Temp file must not remain");
+        assertTrue(files.get(0).getLen() > 0);
+
+        try (ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(
+                HadoopInputFile.fromPath(parquetFile, hadoopConfiguration)).withDataModel(GenericData.get()).build()) {
+
+            int count = 0;
+            GenericRecord actual;
+            while ((actual = reader.read()) != null) {
+                GenericRecord expected = sentRecords.get(count);
+                assertEquals(expected.get("IPV4_SRC_ADDR").toString(), actual.get("IPV4_SRC_ADDR").toString());
+                assertEquals(expected.get("IPV4_DST_ADDR").toString(), actual.get("IPV4_DST_ADDR").toString());
+                assertEquals(expected.get("IN_BYTES"), actual.get("IN_BYTES"));
+                assertNotNull(actual.get("PROCESSING_TIME"), "PROCESSING_TIME should be stamped by storage layer");
+                count++;
+            }
+            assertEquals(sentRecords.size(), count, "All produced Kafka records must land in Parquet");
+        }
+    }
+
+    @Test
+    @DisplayName("Should route a record that fails validation to the DLQ topic instead of HDFS")
+    void shouldRouteInvalidRecordToDlq() throws Exception {
+
+        netflowConsumer.start();
+
+        GenericRecord invalid = validRecord("999.999.999.999", "10.0.0.1", 500L); // bad IPv4
+        publish(topic, invalid);
+        testProducer.flush();
+
+        ConsumerRecord<byte[], byte[]> dlqRecord = pollForOne(dlqReaderConsumer, Duration.ofSeconds(20));
+
+        assertNotNull(dlqRecord, "Invalid record should have been published to the DLQ topic");
+        assertEquals("VALIDATION_ERROR", headerValue(dlqRecord, "error-type"));
+        assertEquals(topic, headerValue(dlqRecord, "original-topic"));
+        assertNotNull(headerValue(dlqRecord, "error-message"));
+
+        // and it must not have reached HDFS
+        Path storageDirectory = new Path("/netflow/parquet");
+        boolean exists = fileSystem.exists(storageDirectory);
+        assertFalse(exists && fileSystem.listStatus(storageDirectory).length > 0,
+                "Invalid record must not be persisted to HDFS");
+    }
+
+
+    private KafkaProperties buildKafkaProperties() {
+        KafkaProperties properties = new KafkaProperties();
+        properties.setBootstrapServers(KAFKA_CONTAINER.getBootstrapServers());
+        properties.setTopic(topic);
+        properties.setDlqTopic(dlqTopic);
+        properties.setConsumerGroup("netflow-consumer-it-" + UUID.randomUUID());
+        properties.setEnableAutoCommit(false);
+        properties.setAutoOffsetReset("earliest");
+        properties.setPollTimeoutMs(500);
+        properties.setMaxPollRecords(500);
+        properties.setSessionTimeoutMs(10_000);
+        properties.setHeartbeatIntervalMs(3_000);
+        properties.setMaxPollIntervalMs(60_000);
+        properties.setConsumerInstances(1);
+        return properties;
+    }
+
+    private void createTopics() throws Exception {
+        Properties adminProps = new Properties();
+        adminProps.put(org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
+                KAFKA_CONTAINER.getBootstrapServers());
+        try (AdminClient admin = AdminClient.create(adminProps)) {
+            admin.createTopics(List.of(
+                    new NewTopic(topic, 1, (short) 1),
+                    new NewTopic(dlqTopic, 1, (short) 1)
+            )).all().get();
+        }
+    }
+
+    private KafkaProducer<byte[], byte[]> createProducer() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA_CONTAINER.getBootstrapServers());
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        return new KafkaProducer<>(props);
+    }
+
+    private KafkaConsumer<byte[], byte[]> createConsumer(String groupId) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA_CONTAINER.getBootstrapServers());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, kafkaProperties.getAutoOffsetReset());
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, kafkaProperties.isEnableAutoCommit());
+        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, kafkaProperties.getSessionTimeoutMs());
+        props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, kafkaProperties.getHeartbeatIntervalMs());
+        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, kafkaProperties.getMaxPollIntervalMs());
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, kafkaProperties.getMaxPollRecords());
+        return new KafkaConsumer<>(props);
+    }
+
+    private KafkaConsumer<byte[], byte[]> createRawConsumer(String groupId) {
+        return createConsumer(groupId);
+    }
+
+    private Configuration createHadoopConfiguration() {
+        String hdfsUri = "hdfs://" + HDFS_CONTAINER.getHost() + ":" + HDFS_CONTAINER.getMappedPort(8020);
+        Configuration conf = new Configuration();
+        conf.set("fs.defaultFS", hdfsUri);
+        conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
+        conf.set("dfs.replication", "1");
+        return conf;
+    }
+
+    private NetFlowStorage createNetFlowStorage(FileSystem fs) {
+        BatchPolicy batchPolicy = new BatchPolicy(BATCH_SIZE, 1024 * 1024, Duration.ofMinutes(2));
+
+        ParquetProperties parquetProperties = new ParquetProperties();
+        parquetProperties.setCompressionCodec("SNAPPY");
+        parquetProperties.setBlockSizeBytes(128 * 1024 * 1024);
+        parquetProperties.setPageSizeBytes(1024 * 1024);
+        parquetProperties.setEnableDictionary(true);
+
+        ParquetFileWriter parquetFileWriter = new ParquetFileWriter(fs, parquetProperties);
+        FileNameGenerator fileNameGenerator = new FileNameGenerator();
+        HdfsFileStorage hdfsFileStorage = new HdfsFileStorage(fs);
+
+        HdfsProperties hdfsProperties = new HdfsProperties();
+        hdfsProperties.setBasePath("/netflow/parquet");
+
+        return new NetFlowStorage(
+                batchPolicy,
+                parquetFileWriter,
+                hdfsFileStorage,
+                fileNameGenerator,
+                hdfsProperties,
+                storageSchema,
+                metrics,
+                1
+        );
+    }
+
+    private Schema loadNetflowV2Schema() throws IOException {
+        try (var in = getClass().getClassLoader().getResourceAsStream("avro/NetFlowV2Record.avsc")) {
+            assertNotNull(in, "netflow_v2.avsc must be on the test classpath");
+            return new Schema.Parser().parse(in);
+        }
+    }
+
+    private Schema withProcessingTime(Schema source) {
+        List<Schema.Field> fields = new ArrayList<>();
+        for (Schema.Field field : source.getFields()) {
+            fields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal(), field.order()));
+        }
+        fields.add(new Schema.Field(
+                "PROCESSING_TIME",
+                Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)),
+                "Processing time",
+                (Object) null
+        ));
+        return Schema.createRecord(source.getName(), source.getDoc(), source.getNamespace(), source.isError(), fields);
+    }
+
+
+    private GenericRecord validRecord(String srcIp, String dstIp, long inBytes) {
+        GenericData.Record record = new GenericData.Record(sourceSchema);
+        record.put("IPV4_SRC_ADDR", srcIp);
+        record.put("IPV4_DST_ADDR", dstIp);
+        record.put("L4_SRC_PORT", 443);
+        record.put("L4_DST_PORT", 51000);
+        record.put("PROTOCOL", 6);
+        record.put("L7_PROTO", 91.0);
+        record.put("IN_BYTES", inBytes);
+        record.put("OUT_BYTES", inBytes / 2);
+        record.put("IN_PKTS", 10L);
+        record.put("OUT_PKTS", 8L);
+        record.put("FLOW_DURATION_MILLISECONDS", 1500L);
+        record.put("TCP_FLAGS", 24);
+        record.put("CLIENT_TCP_FLAGS", 2);
+        record.put("SERVER_TCP_FLAGS", 18);
+        record.put("DURATION_IN", 700L);
+        record.put("DURATION_OUT", 800L);
+        record.put("MIN_TTL", 60);
+        record.put("MAX_TTL", 64);
+        record.put("LONGEST_FLOW_PKT", 1500);
+        record.put("SHORTEST_FLOW_PKT", 64);
+        record.put("MIN_IP_PKT_LEN", 64);
+        record.put("MAX_IP_PKT_LEN", 1500);
+        record.put("SRC_TO_DST_SECOND_BYTES", 12000L);
+        record.put("DST_TO_SRC_SECOND_BYTES", 6000L);
+        record.put("RETRANSMITTED_IN_BYTES", 0L);
+        record.put("RETRANSMITTED_IN_PKTS", 0L);
+        record.put("RETRANSMITTED_OUT_BYTES", 0L);
+        record.put("RETRANSMITTED_OUT_PKTS", 0L);
+        record.put("SRC_TO_DST_AVG_THROUGHPUT", 96000L);
+        record.put("DST_TO_SRC_AVG_THROUGHPUT", 48000L);
+        record.put("NUM_PKTS_UP_TO_128_BYTES", 2L);
+        record.put("NUM_PKTS_128_TO_256_BYTES", 2L);
+        record.put("NUM_PKTS_256_TO_512_BYTES", 2L);
+        record.put("NUM_PKTS_512_TO_1024_BYTES", 2L);
+        record.put("NUM_PKTS_1024_TO_1514_BYTES", 2L);
+        record.put("TCP_WIN_MAX_IN", 65535);
+        record.put("TCP_WIN_MAX_OUT", 65535);
+        record.put("ICMP_TYPE", 0);
+        record.put("ICMP_IPV4_TYPE", 0);
+        record.put("DNS_QUERY_ID", 0);
+        record.put("DNS_QUERY_TYPE", 0);
+        record.put("DNS_TTL_ANSWER", 0L);
+        record.put("FTP_COMMAND_RET_CODE", 0);
+        return record;
+    }
+
+    private byte[] toBinaryAvro(GenericRecord record) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+        new GenericDatumWriter<GenericRecord>(sourceSchema).write(record, encoder);
+        encoder.flush();
+        return out.toByteArray();
+    }
+
+    private void publish(String topic, GenericRecord record) throws IOException {
+        testProducer.send(new ProducerRecord<>(topic, null, toBinaryAvro(record)));
+    }
+
+
+    private void awaitCondition(java.util.function.BooleanSupplier condition, Duration timeout, String failMessage)
+            throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeout.toMillis();
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            Thread.sleep(200);
+        }
+        fail(failMessage);
+    }
+
+    private ConsumerRecord<byte[], byte[]> pollForOne(KafkaConsumer<byte[], byte[]> consumer, Duration timeout) {
+        return await()
+                .atMost(timeout)
+                .pollInterval(Duration.ofMillis(300))
+                .until(() -> {
+                    ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
+                    return records.isEmpty() ? null : records.iterator().next();
+                }, Objects::nonNull);
+    }
+
+    private List<FileStatus> finalizedParquetFiles(Path storageDirectory) throws IOException {
+        if (!fileSystem.exists(storageDirectory)) {
+            return List.of();
+        }
+
+        List<FileStatus> files = new ArrayList<>();
+        RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(storageDirectory, true);
+        while (iterator.hasNext()) {
+            LocatedFileStatus file = iterator.next();
+            String fileName = file.getPath().getName();
+            if (!fileName.startsWith(".") && fileName.endsWith(".parquet")) {
+                files.add(file);
+            }
+        }
+        return files;
+    }
+
+    private String headerValue(ConsumerRecord<byte[], byte[]> record, String key) {
+        var header = record.headers().lastHeader(key);
+        return header == null ? null : new String(header.value(), java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private void closeQuietly(AutoCloseable closeable) {
+        if (closeable == null) return;
+        try {
+            closeable.close();
+        } catch (Exception ignored) {
+        }
+    }
+}
+
+========================================================================================================================
+
+File: NetFlowStorageTest.java
+Path: src/test/java/com/nimbo/storage/service/NetFlowStorageTest.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service;
+
+import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.storage.config.HdfsProperties;
+import com.nimbo.storage.config.ParquetProperties;
+import com.nimbo.storage.model.TopicPartitionKey;
+import com.nimbo.storage.service.batching.BatchPolicy;
+import com.nimbo.storage.service.hdfs.FileStorage;
+import com.nimbo.storage.service.hdfs.HdfsFileStorage;
+import com.nimbo.storage.service.naming.FileNameGenerator;
+import com.nimbo.storage.service.parquet.ParquetFileWriter;
+import com.nimbo.metrics.BatchIngesterMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.time.Duration;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class NetFlowStorageTest {
+
+    @TempDir
+    java.nio.file.Path tempDirectory;
+
+    private FileSystem fileSystem;
+
+    private BatchPolicy batchPolicy;
+    private ParquetProperties parquetProperties;
+    private ParquetFileWriter parquetFileWriter;
+    private FileStorage fileStorage;
+    private FileNameGenerator fileNameGenerator;
+    private HdfsProperties hdfsProperties;
+
+    private Schema sourceSchema;
+    private Schema storageSchema;
+
+    private NetFlowStorage storage;
+
+    private BatchIngesterMetrics metrics;
+    private SimpleMeterRegistry meterRegistry;
+
+
+    @BeforeEach
+    void setUp() throws IOException {
+
+        Configuration configuration = new Configuration();
+        configuration.set("fs.defaultFS", "file:///");
+
+        fileSystem = FileSystem.newInstance(URI.create("file:///"), configuration);
+        parquetProperties = new ParquetProperties();
+        parquetProperties.setCompressionCodec("SNAPPY");
+        parquetProperties.setBlockSizeBytes(1024 * 1024);
+        parquetProperties.setPageSizeBytes(1024 * 1024);
+        parquetProperties.setEnableDictionary(true);
+        parquetFileWriter = new ParquetFileWriter(fileSystem, parquetProperties);
+        fileStorage = new HdfsFileStorage(fileSystem);
+        fileNameGenerator = new FileNameGenerator();
+        hdfsProperties = new HdfsProperties();
+        hdfsProperties.setBasePath(tempDirectory.resolve("parquet").toUri().toString());
+        batchPolicy = new BatchPolicy(100, 1_000_000, Duration.ofMinutes(5));
+
+        sourceSchema =
+                new Schema.Parser().parse(
+                        """
+                        {
+                          "type": "record",
+                          "name": "TestRecord",
+                          "fields": [
+                            {
+                              "name": "value",
+                              "type": "string"
+                            }
+                          ]
+                        }
+                        """
+                );
+
+        storageSchema = buildStorageSchema(sourceSchema);
+
+        meterRegistry = new SimpleMeterRegistry();
+        metrics = new BatchIngesterMetrics(meterRegistry);
+        metrics.registerInstance(1);
+
+        storage = new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator,
+                hdfsProperties, storageSchema, metrics, 1);
+    }
+
+    @AfterEach
+    void tearDown() throws IOException {
+        fileSystem.close();
+    }
+
+    private IngestedRecord createRecord(int partition, long offset) {
+
+        GenericRecord testRecord = new GenericData.Record(sourceSchema);
+        testRecord.put("value", "test-value");
+
+        return new IngestedRecord(testRecord, "test-topic", partition, offset, 100);
+    }
+
+    private Schema buildStorageSchema(Schema sourceSchema) {
+
+        Schema.Field processingTimeField =
+                new Schema.Field(
+                        "PROCESSING_TIME",
+                        Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG)),
+                        "Processing time",
+                        (Object) null
+                );
+
+        java.util.List<Schema.Field> fields = new java.util.ArrayList<>();
+
+        for (Schema.Field field : sourceSchema.getFields()) {
+
+            fields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
+        }
+
+        fields.add(processingTimeField);
+
+        return Schema.createRecord(sourceSchema.getName(), sourceSchema.getDoc(), sourceSchema.getNamespace(),
+                sourceSchema.isError(), fields);
+    }
+
+
+    @Test
+    @DisplayName("Should accept record and not flush when threshold not reached")
+    void shouldAcceptRecordWithoutFlushingUntilThresholdReached() throws Exception {
+
+        IngestedRecord testRecord = createRecord(0, 100L);
+        Optional<Map<TopicPartitionKey, Long>> result = storage.accept(testRecord);
+
+        assertTrue(result.isEmpty());
+
+    }
+
+    @Test
+    @DisplayName("Should flush and commit when flush is called directly")
+    void shouldFlushAndReturnPendingOffsets() throws Exception {
+
+        IngestedRecord realRecord = createRecord(0, 100L);
+
+        storage.accept(realRecord);
+
+        Map<TopicPartitionKey, Long> result = storage.flush();
+
+        assertEquals(Map.of(new TopicPartitionKey("test-topic", 0), 101L), result);
+        try (var paths = Files.walk(tempDirectory.resolve("parquet"))) {
+            assertTrue(paths.anyMatch(path -> path.toString().endsWith(".parquet")));
+        }
+
+    }
+
+    @Test
+    @DisplayName("Should return empty map when accumulator is empty")
+    void shouldReturnEmptyMapWhenNothingWasAccepted() {
+        Map<TopicPartitionKey, Long> result = storage.flush();
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void shouldNotCreateFilesWhenFlushingEmptyStorage() throws Exception {
+
+        Map<TopicPartitionKey, Long> result = storage.flush();
+
+        assertTrue(result.isEmpty());
+        assertFalse(Files.exists(tempDirectory.resolve("parquet")));
+    }
+
+    @Test
+    @DisplayName("Should reject null record")
+    void shouldRejectNullRecord() {
+        assertThrows(NullPointerException.class, () -> storage.accept(null));
+    }
+
+    @Test
+    @DisplayName("Constructor should reject null dependencies")
+    void shouldRejectNullDependencies() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(null, parquetFileWriter, fileStorage, fileNameGenerator,
+                        hdfsProperties, storageSchema, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, null, fileStorage, fileNameGenerator,
+                        hdfsProperties, storageSchema, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, null, fileNameGenerator,
+                        hdfsProperties, storageSchema, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, null,
+                        hdfsProperties, storageSchema, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator,
+                        null, storageSchema, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator,
+                        hdfsProperties, null, metrics, 1));
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new NetFlowStorage(batchPolicy, parquetFileWriter, fileStorage, fileNameGenerator,
+                        hdfsProperties, storageSchema, null, 1));
+    }
+}
+
+========================================================================================================================
+
+File: BatchAccumulatorTest.java
+Path: src/test/java/com/nimbo/storage/service/batching/BatchAccumulatorTest.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.batching;
+
+import com.nimbo.ingester.model.IngestedRecord;
+import com.nimbo.storage.model.TopicPartitionKey;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+
+
+class BatchAccumulatorTest {
+
+    private static final Schema TEST_SCHEMA = Schema.createRecord("TestRecord", null, null, false);
+
+    static {
+        TEST_SCHEMA.setFields(List.of());
+    }
+
+    private static final BatchPolicy DEFAULT_POLICY = new BatchPolicy(100, 1_000, Duration.ofMinutes(1));
+
+    private IngestedRecord createRecord(String topic, int partition, long offset, int sizeBytes) {
+        GenericRecord avroRecord = new GenericData.Record(TEST_SCHEMA);
+
+        return new IngestedRecord(avroRecord, topic, partition, offset, sizeBytes);
+    }
+
+    private IngestedRecord createRecord(int sizeBytes) {
+        return createRecord("netflow", 0, 100L, sizeBytes);
+    }
+
+    @Test
+    void shouldStartEmpty() {
+
+        BatchAccumulator accumulator =  new BatchAccumulator(DEFAULT_POLICY);
+
+        assertTrue(accumulator.isEmpty());
+        assertEquals(0, accumulator.getRecordCount());
+        assertEquals(0, accumulator.getAccumulatedSizeBytes());
+        assertNull(accumulator.getFirstRecordAt());
+    }
+
+    @Test
+    void shouldAddRecord() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        accumulator.add(createRecord(100));
+
+        assertFalse(accumulator.isEmpty());
+        assertEquals(1, accumulator.getRecordCount());
+        assertEquals(100, accumulator.getAccumulatedSizeBytes());
+        assertNotNull(accumulator.getFirstRecordAt());
+    }
+
+    @Test
+    void shouldAccumulateRecordSizes() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        accumulator.add(createRecord(100));
+        accumulator.add(createRecord(250));
+        accumulator.add(createRecord(50));
+
+        assertEquals(3, accumulator.getRecordCount());
+        assertEquals(400, accumulator.getAccumulatedSizeBytes());
+    }
+
+    @Test
+    void shouldKeepFirstRecordTimestamp() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+        accumulator.add(createRecord(100));
+        Instant firstTimestamp = accumulator.getFirstRecordAt();
+        accumulator.add(createRecord(100));
+
+        assertEquals(firstTimestamp, accumulator.getFirstRecordAt());
+    }
+
+    @Test
+    void shouldNotFlushEmptyAccumulator() {
+        BatchPolicy policy = new BatchPolicy(1, 1, Duration.ofNanos(1));
+        BatchAccumulator accumulator = new BatchAccumulator(policy);
+        assertFalse(accumulator.shouldFlush());
+    }
+
+    @Test
+    void shouldFlushWhenRecordCountReached() {
+        BatchPolicy policy = new BatchPolicy(2, 1000, Duration.ofMinutes(1));
+        BatchAccumulator accumulator = new BatchAccumulator(policy);
+        accumulator.add(createRecord(100));
+
+        assertFalse(accumulator.shouldFlush());
+
+        accumulator.add(createRecord(100));
+
+        assertTrue(accumulator.shouldFlush());
+    }
+
+    @Test
+    void shouldFlushWhenSizeReached() {
+        BatchPolicy policy = new BatchPolicy(100, 500, Duration.ofMinutes(1));
+
+        BatchAccumulator accumulator = new BatchAccumulator(policy);
+
+        accumulator.add(createRecord(300));
+        assertFalse(accumulator.shouldFlush());
+
+        accumulator.add(createRecord(200));
+
+        assertTrue(accumulator.shouldFlush());
+    }
+
+    @Test
+    void shouldClearAccumulator() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        accumulator.add(createRecord("netflow", 0, 10L, 100));
+        accumulator.add(createRecord("netflow", 1, 20L, 200));
+
+        accumulator.clear();
+
+        assertTrue(accumulator.isEmpty());
+        assertEquals(0, accumulator.getRecordCount());
+        assertEquals(0, accumulator.getAccumulatedSizeBytes());
+        assertNull(accumulator.getFirstRecordAt());
+        assertTrue(accumulator.getPendingOffsets().isEmpty());
+    }
+
+    @Test
+    void clearingEmptyAccumulatorShouldBeSafe() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        assertDoesNotThrow(accumulator::clear);
+        assertTrue(accumulator.isEmpty());
+    }
+
+    @Test
+    void shouldRejectNullPolicy() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new BatchAccumulator(null)
+        );
+    }
+
+    @Test
+    void shouldRejectNullRecord() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        assertThrows(
+                NullPointerException.class,
+                () -> accumulator.add(null)
+        );
+    }
+
+    @Test
+    void shouldTrackNextOffsetForPartition() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+        accumulator.add(createRecord("netflow", 0, 10L, 100));
+
+        Map<TopicPartitionKey, Long> offsets = accumulator.getPendingOffsets();
+
+        assertEquals(1, offsets.size());
+        assertEquals(11L, offsets.get(new TopicPartitionKey("netflow", 0)));
+    }
+
+    @Test
+    void shouldTrackHighestOffsetForSamePartition() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        accumulator.add(createRecord("netflow", 0, 15L, 100));
+        accumulator.add(createRecord("netflow", 0, 10L, 100));
+        accumulator.add(createRecord("netflow", 0, 12L, 100));
+
+        Map<TopicPartitionKey, Long> offsets = accumulator.getPendingOffsets();
+
+        assertEquals(1, offsets.size());
+        assertEquals(16L, offsets.get(new TopicPartitionKey("netflow", 0)));
+    }
+
+    @Test
+    void shouldTrackOffsetsForMultiplePartitions() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        accumulator.add(createRecord("netflow", 0, 10L, 100));
+        accumulator.add(createRecord("netflow", 1, 20L, 100));
+        accumulator.add(createRecord("netflow", 2, 30L, 100));
+
+        Map<TopicPartitionKey, Long> offsets = accumulator.getPendingOffsets();
+
+        assertEquals(3, offsets.size());
+        assertEquals(11L, offsets.get(new TopicPartitionKey("netflow", 0)));
+        assertEquals(21L, offsets.get(new TopicPartitionKey("netflow", 1)));
+        assertEquals(31L, offsets.get(new TopicPartitionKey("netflow", 2)));
+    }
+
+    @Test
+    void shouldTrackOffsetsForDifferentTopics() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        accumulator.add(createRecord("topic-a", 0, 10L, 100));
+        accumulator.add(createRecord("topic-b", 0, 20L, 100));
+
+        Map<TopicPartitionKey, Long> offsets = accumulator.getPendingOffsets();
+
+        assertEquals(2, offsets.size());
+        assertEquals(11L, offsets.get(new TopicPartitionKey("topic-a", 0)));
+        assertEquals(21L, offsets.get(new TopicPartitionKey("topic-b", 0)));
+    }
+
+    @Test
+    void shouldRecordSkippedOffsetWithoutAddingRecord() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        accumulator.recordSkippedOffset("netflow", 0, 11L);
+
+        assertEquals(Map.of(new TopicPartitionKey("netflow", 0), 11L), accumulator.getPendingOffsets());
+        assertEquals(0, accumulator.getRecordCount());
+        assertEquals(0, accumulator.getAccumulatedSizeBytes());
+    }
+
+    @Test
+    void shouldKeepHighestOffsetBetweenSkippedAndValidRecords() {
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        accumulator.recordSkippedOffset("netflow", 0, 20L);
+        accumulator.add(createRecord("netflow", 0, 10L, 100));
+        assertEquals(20L, accumulator.getPendingOffsets().get(new TopicPartitionKey("netflow", 0)));
+    }
+
+    @Test
+    void shouldReturnUnmodifiablePendingOffsetsMap() {
+
+        BatchAccumulator accumulator = new BatchAccumulator(DEFAULT_POLICY);
+
+        accumulator.add(createRecord("netflow", 0, 10L, 100));
+        Map<TopicPartitionKey, Long> offsets = accumulator.getPendingOffsets();
+
+        assertThrows(UnsupportedOperationException.class, () -> offsets.clear());
+    }
+}
+
+========================================================================================================================
+
+File: BatchPolicyTest.java
+Path: src/test/java/com/nimbo/storage/service/batching/BatchPolicyTest.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.batching;
+
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.time.Instant;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class BatchPolicyTest {
+
+    private static final Instant BASE_TIME = Instant.parse("2026-08-11T10:00:00Z");
+
+    private final BatchPolicy policy = new BatchPolicy(100, 1_000, Duration.ofMinutes(2));
+
+    @Test
+    void shouldNotFlushEmptyBatch() {
+        boolean result = policy.shouldFlush(0, 0, null, BASE_TIME);
+        assertFalse(result);
+    }
+
+    @Test
+    void shouldFlushWhenRecordCountReachesLimit() {
+        boolean result = policy.shouldFlush(100, 500, BASE_TIME, BASE_TIME);
+        assertTrue(result);
+    }
+
+    @Test
+    void shouldNotFlushWhenRecordCountIsBelowLimit() {
+        boolean result = policy.shouldFlush(99, 500, BASE_TIME, BASE_TIME);
+        assertFalse(result);
+    }
+
+    @Test
+    void shouldFlushWhenSizeReachesLimit() {
+        boolean result = policy.shouldFlush(50, 1_000, BASE_TIME, BASE_TIME);
+        assertTrue(result);
+    }
+
+    @Test
+    void shouldNotFlushWhenSizeIsBelowLimit() {
+        boolean result = policy.shouldFlush(50, 999, BASE_TIME, BASE_TIME);
+        assertFalse(result);
+    }
+
+    @Test
+    void shouldFlushWhenBatchAgeReachesLimit() {
+        Instant now = BASE_TIME.plus(Duration.ofMinutes(2));
+        boolean result = policy.shouldFlush(50, 500, BASE_TIME, now);
+
+        assertTrue(result);
+    }
+
+    @Test
+    void shouldNotFlushWhenBatchAgeIsBelowLimit() {
+        Instant now = BASE_TIME.plus(Duration.ofMinutes(2)).minusMillis(1);
+        boolean result = policy.shouldFlush(50, 500, BASE_TIME, now);
+
+        assertFalse(result);
+    }
+
+    @Test
+    void shouldNotFlushWhenFirstRecordTimeIsNull() {
+        boolean result = policy.shouldFlush(50, 500, null, BASE_TIME);
+
+        assertFalse(result);
+    }
+
+    @Test
+    void shouldRejectNullNow() {
+        assertThrows(NullPointerException.class, () -> policy.shouldFlush(50, 500, BASE_TIME, null));
+    }
+
+    @Test
+    void shouldRejectZeroMaxRecordCount() {
+        assertThrows(IllegalArgumentException.class, () -> new BatchPolicy(0, 1_000, Duration.ofMinutes(2)));
+    }
+
+    @Test
+    void shouldRejectNegativeMaxRecordCount() {
+        assertThrows(IllegalArgumentException.class, () -> new BatchPolicy(-1, 1_000, Duration.ofMinutes(2)));
+    }
+
+    @Test
+    void shouldRejectZeroMaxSize() {
+        assertThrows(IllegalArgumentException.class, () -> new BatchPolicy(100, 0, Duration.ofMinutes(2)));
+    }
+
+    @Test
+    void shouldRejectNegativeMaxSize() {
+        assertThrows(IllegalArgumentException.class, () -> new BatchPolicy(100, -1, Duration.ofMinutes(2)));
+    }
+
+    @Test
+    void shouldRejectNullBatchAge() {
+        assertThrows(NullPointerException.class, () -> new BatchPolicy(100, 1_000, null));
+    }
+
+    @Test
+    void shouldRejectZeroBatchAge() {
+        assertThrows(IllegalArgumentException.class, () -> new BatchPolicy(100, 1_000, Duration.ZERO));
+    }
+
+    @Test
+    void shouldRejectNegativeBatchAge() {
+        assertThrows(IllegalArgumentException.class, () -> new BatchPolicy(100, 1_000, Duration.ofSeconds(-1)));
+    }
+}
+
+========================================================================================================================
+
+File: HdfsFileStorageTest.java
+Path: src/test/java/com/nimbo/storage/service/hdfs/HdfsFileStorageTest.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.hdfs;
+
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+
+import java.net.URI;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+
+class HdfsFileStorageTest {
+
+    @TempDir
+    java.nio.file.Path temp;
+
+    private FileSystem fileSystem() throws Exception {
+
+        Configuration conf = new Configuration();
+        conf.set("fs.defaultFS", "file:///");
+
+        return FileSystem.newInstance(URI.create("file:///"), conf);
+    }
+
+    @Test
+    void shouldCreateDirectory() throws Exception {
+
+        FileSystem fs = fileSystem();
+        HdfsFileStorage storage = new HdfsFileStorage(fs);
+        Path path = new Path(temp.resolve("data").toString());
+        storage.ensureDirectoryExists(path);
+
+        assertTrue(fs.exists(path));
+    }
+
+    @Test
+    void shouldCommitAtomicFile() throws Exception {
+
+        FileSystem fs = fileSystem();
+        HdfsFileStorage storage = new HdfsFileStorage(fs);
+        Path tempFile = new Path(temp.resolve("a.tmp").toString());
+        Path finalFile = new Path(temp.resolve("a.parquet").toString());
+        fs.createNewFile(tempFile);
+        storage.commitAtomic(tempFile, finalFile);
+
+        assertTrue(fs.exists(finalFile));
+        assertFalse(fs.exists(tempFile));
+    }
+
+    @Test
+    void shouldCleanupTemporaryFile() throws Exception {
+
+        FileSystem fs = fileSystem();
+        HdfsFileStorage storage = new HdfsFileStorage(fs);
+        Path tempFile = new Path(temp.resolve("delete.tmp").toString());
+        fs.createNewFile(tempFile);
+        storage.cleanupTempFile(tempFile);
+
+        assertFalse(fs.exists(tempFile));
+    }
+
+    @Test
+    void shouldRejectNullPath() throws Exception {
+
+        HdfsFileStorage storage = new HdfsFileStorage(fileSystem());
+
+        assertThrows(NullPointerException.class, () -> storage.ensureDirectoryExists(null));
+    }
+}
+
+========================================================================================================================
+
+File: FileNameGeneratorTest.java
+Path: src/test/java/com/nimbo/storage/service/naming/FileNameGeneratorTest.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.naming;
+
+import org.junit.jupiter.api.Test;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class FileNameGeneratorTest {
+
+    @Test
+    void givenAFixedWriterOpeningTime_whenFileNameIsGenerated_thenDirectoryAndNameUseTheSameUtcHour() {
+        // Given: a writer opening just before a UTC hour boundary
+        UUID fileId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        FileNameGenerator generator = new FileNameGenerator(
+                Clock.fixed(Instant.parse("2026-09-07T13:59:59.987Z"), ZoneOffset.UTC),
+                () -> fileId
+        );
+
+        // When: the partitioned relative file name is generated
+        String fileName = generator.generateFileName(3);
+
+        // Then: date, hour, filename timestamp, partition, and identity are consistent
+        assertThat(fileName).isEqualTo(
+                "2026-09-07/13/netflow-p03-2026-09-07T13-59-59-987Z-50000000-0000-0000-0000-000000000001.parquet"
+        );
+    }
+
+    @Test
+    void givenAPartitionedFinalName_whenTempNameIsGenerated_thenBothRemainInTheSameDirectory() {
+        // Given: a committed filename inside an hourly partition
+        FileNameGenerator generator = new FileNameGenerator();
+        String finalName = "2026-09-07/14/netflow-p01-2026-09-07T14-00-00-000Z-file.parquet";
+
+        // When: its hidden temporary name is derived
+        String temporaryName = generator.generateTempFileName(finalName);
+
+        // Then: only the basename changes and the hourly directory is preserved
+        assertThat(temporaryName).isEqualTo(
+                "2026-09-07/14/.netflow-p01-2026-09-07T14-00-00-000Z-file.parquet.tmp"
+        );
+    }
+
+    @Test
+    void givenAnInvalidKafkaPartition_whenFileNameIsGenerated_thenItIsRejected() {
+        // Given: a generator and a negative Kafka partition
+        FileNameGenerator generator = new FileNameGenerator();
+
+        // When: a filename is requested for the invalid partition
+        Throwable failure = org.assertj.core.api.Assertions.catchThrowable(() -> generator.generateFileName(-1));
+
+        // Then: no undiscoverable filename can be produced
+        assertThat(failure).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("partition");
+    }
+}
+
+========================================================================================================================
+
+File: ParquetFileWriterTest.java
+Path: src/test/java/com/nimbo/storage/service/parquet/ParquetFileWriterTest.java
+
+========================================================================================================================
+
+package com.nimbo.storage.service.parquet;
+
+import com.nimbo.storage.config.ParquetProperties;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.net.URI;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class ParquetFileWriterTest {
+
+    @TempDir
+    java.nio.file.Path tempDir;
+
+    private ParquetProperties createProperties() {
+
+        ParquetProperties properties = new ParquetProperties();
+        properties.setCompressionCodec("SNAPPY");
+        properties.setBlockSizeBytes(1024 * 1024);
+        properties.setPageSizeBytes(1024 * 1024);
+        properties.setEnableDictionary(true);
+
+        return properties;
+    }
+
+    private Schema createSchema() {
+
+        return new Schema.Parser()
+                .parse("""
+                        {
+                          "type":"record",
+                          "name":"Test",
+                          "fields":[
+                            {
+                              "name":"value",
+                              "type":"string"
+                            }
+                          ]
+                        }
+                        """
+                );
+    }
+
+    private FileSystem createFileSystem() throws Exception {
+
+        Configuration conf = new Configuration();
+        conf.set("fs.defaultFS", "file:///");
+        return FileSystem.newInstance(URI.create("file:///"), conf);
+    }
+
+    @Test
+    void shouldCreateWriteAndCloseParquetWriter() throws Exception {
+
+        FileSystem fs = createFileSystem();
+        ParquetFileWriter writerService = new ParquetFileWriter(fs, createProperties());
+        Path path = new Path(tempDir.resolve("test.parquet").toString());
+        Schema schema = createSchema();
+        ParquetWriter<GenericRecord> writer = writerService.createWriter(path, schema);
+        GenericRecord testRecord = new GenericData.Record(schema);
+        testRecord.put("value", "hello");
+        writerService.write(writer, testRecord);
+        writerService.closeWriter(writer);
+
+
+        assertTrue(fs.exists(path));
+    }
+
+    @Test
+    void shouldRejectNullWriterDependencies() throws Exception {
+
+        FileSystem fs = createFileSystem();
+        ParquetProperties properties = createProperties();
+
+
+        assertThrows(NullPointerException.class, () -> new ParquetFileWriter(null, properties));
+        assertThrows(NullPointerException.class, () -> new ParquetFileWriter(fs, null));
+    }
+
+    @Test
+    void shouldRejectNullCreateWriterArguments() throws Exception {
+
+        FileSystem fs = createFileSystem();
+        ParquetProperties properties = createProperties();
+        ParquetFileWriter writerService = new ParquetFileWriter(fs, properties);
+        Path validPath = new Path("/tmp/test.parquet");
+        Schema validSchema = createSchema();
+
+
+        assertThrows(NullPointerException.class, () -> writerService.createWriter(null, validSchema));
+        assertThrows(NullPointerException.class, () -> writerService.createWriter(validPath, null));
+    }
+
+    @Test
+    void shouldRejectNullWriteArguments() throws Exception {
+
+        FileSystem fs = createFileSystem();
+        ParquetFileWriter writerService = new ParquetFileWriter(fs, createProperties());
+        assertThrows(NullPointerException.class, () -> writerService.write(null, null));
+    }
+}
+
+========================================================================================================================
+
+File: application-test.yml
+Path: src/test/resources/application-test.yml
+
+========================================================================================================================
+
+spring:
+  profiles:
+    active: test
+
+logging:
+  level:
+    com.nimbo.ingester: DEBUG
+    org.apache.kafka: WARN
+    org.apache.hadoop: WARN
+
+ingester:
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic: test-netflow
+    consumer-group: test-consumer-group
+    enable-auto-commit: false
+    poll-timeout-ms: 100
+    max-poll-records: 10
+    session-timeout-ms: 10000
+    heartbeat-interval-ms: 3000
+    max-poll-interval-ms: 60000
+
+    consumer-instances: 1
+    writer-threads-per-instance: 1
+    writer-queue-capacity: 10
+    batch-max-records: 10
+    batch-max-size-bytes: 1048576
+    batch-max-age-minutes: 1
+
+storage:
+  hdfs:
+    uri: hdfs://localhost:9000
+    user: test
+    base-path: /data/test/
+  parquet:
+    compression-codec: SNAPPY
+    block-size-bytes: 134217728
+    page-size-bytes: 1048576
+    enable-dictionary: true
+
+rolling:
+  max-record-count: 10
+  max-size-bytes: 1048576
+  max-age: 1m
+
+========================================================================================================================
+
+File: core-site.xml
+Path: src/test/resources/hadoop/core-site.xml
+
+========================================================================================================================
+
+<?xml version="1.0"?>
+<configuration>
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://localhost:8020</value>
+    </property>
+</configuration>
+
+========================================================================================================================
+
+File: hdfs-site.xml
+Path: src/test/resources/hadoop/hdfs-site.xml
+
+========================================================================================================================
+
+<?xml version="1.0"?>
+<configuration>
+
+    <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:///tmp/hadoop-test/dfs/name</value>
+    </property>
+
+    <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>file:///tmp/hadoop-test/dfs/data</value>
+    </property>
+
+    <property>
+        <name>dfs.namenode.rpc-address</name>
+        <value>0.0.0.0:8020</value>
+    </property>
+
+    <property>
+        <name>dfs.namenode.http-address</name>
+        <value>0.0.0.0:9870</value>
+    </property>
+
+    <property>
+        <name>dfs.datanode.address</name>
+        <value>0.0.0.0:9866</value>
+    </property>
+
+    <property>
+        <name>dfs.datanode.http.address</name>
+        <value>0.0.0.0:9864</value>
+    </property>
+
+    <property>
+        <name>dfs.datanode.ipc.address</name>
+        <value>0.0.0.0:9867</value>
+    </property>
+
+    <property>
+        <name>dfs.datanode.hostname</name>
+        <value>localhost</value>
+    </property>
+
+    <property>
+        <name>dfs.client.use.datanode.hostname</name>
+        <value>true</value>
+    </property>
+
+    <property>
+        <name>dfs.namenode.datanode.registration.ip-hostname-check</name>
+        <value>false</value>
+    </property>
+
+    <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+    </property>
+
+    <property>
+        <name>dfs.permissions.enabled</name>
+        <value>false</value>
+    </property>
+
+</configuration>

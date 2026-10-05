@@ -7,7 +7,7 @@ This report describes the Kubernetes deployment architecture defined by the Nimb
 The following Helm charts are included:
 
 - `parquet-writer`
-- `batch-processor`
+- `cube-maker`
 - `realtime`
 - `rest-api`
 - `prometheus`
@@ -27,7 +27,7 @@ flowchart LR
 
     subgraph Kubernetes["Kubernetes Cluster"]
         BI["Parquet Writer<br/>Deployment"]
-        BP["Batch Processor<br/>Spark Driver Deployment"]
+        BP["Cube Maker<br/>Spark Driver Deployment"]
         RT["Realtime<br/>Deployment"]
         API["REST API<br/>2 Replicas"]
 
@@ -35,7 +35,7 @@ flowchart LR
         GRAF["Grafana"]
 
         BISVC["parquet-writer<br/>ClusterIP :18080"]
-        BPSVC["batch-processor<br/>ClusterIP :18081"]
+        BPSVC["cube-maker<br/>ClusterIP :18081"]
         RTSVC["realtime<br/>ClusterIP :18082"]
         APISVC["rest-api<br/>NodePort 30083"]
         PROMSVC["prometheus<br/>ClusterIP :9090"]
@@ -80,7 +80,7 @@ flowchart LR
 
 The two processing paths are:
 
-1. Batch path: Kafka → Parquet Writer → HDFS → Batch Processor/Spark → PostgreSQL → REST API.
+1. Batch path: Kafka → Parquet Writer → HDFS → Cube Maker/Spark → PostgreSQL → REST API.
 2. Realtime path: Kafka → Realtime → StarRocks → REST API.
 
 Prometheus collects application and infrastructure metrics. Grafana reads Prometheus and presents dashboards and alerts.
@@ -136,13 +136,13 @@ The application charts do not control these processes. Their availability, repli
 | Workload | Replicas | Service | Port | Update strategy | Primary responsibility |
 |---|---:|---|---:|---|---|
 | Parquet Writer | 1 | ClusterIP | 18080 | RollingUpdate | Kafka-to-HDFS Parquet ingestion |
-| Batch Processor | 1 | ClusterIP | 18081 | Recreate | HDFS/Spark aggregation and PostgreSQL writes |
+| Cube Maker | 1 | ClusterIP | 18081 | Recreate | HDFS/Spark aggregation and PostgreSQL writes |
 | Realtime | 1 | ClusterIP | 18082 | RollingUpdate | Kafka-to-StarRocks realtime ingestion |
 | REST API | 2 | NodePort | 18083 / 30083 | RollingUpdate | PostgreSQL and StarRocks query API |
 | Prometheus | 1 | ClusterIP | 9090 | Recreate | Metrics collection and retention |
 | Grafana | 1 | NodePort | 3000 / 30300 | RollingUpdate | Dashboards and alerting |
 
-`Recreate` is appropriate for the Batch Processor because concurrent scheduler instances could produce overlapping work. REST API uses two replicas because it is stateless and horizontally scalable.
+`Recreate` is appropriate for the Cube Maker because concurrent scheduler instances could produce overlapping work. REST API uses two replicas because it is stateless and horizontally scalable.
 
 ---
 
@@ -209,7 +209,7 @@ The pod receives up to 40 seconds for termination. Spring graceful shutdown and 
 
 ---
 
-## 6. Batch Processor deployment
+## 6. Cube Maker deployment
 
 ### Kubernetes objects
 
@@ -220,12 +220,12 @@ The pod receives up to 40 seconds for termination. Spring graceful shutdown and 
 
 ### Spark architecture
 
-The Batch Processor pod acts as the Spark driver. It connects to the external Spark standalone master, which allocates executors on the external Spark workers.
+The Cube Maker pod acts as the Spark driver. It connects to the external Spark standalone master, which allocates executors on the external Spark workers.
 
 ```mermaid
 sequenceDiagram
     participant Scheduler as Spring Scheduler
-    participant Driver as Batch Processor Pod
+    participant Driver as Cube Maker Pod
     participant Master as Spark Master
     participant Workers as Spark Workers
     participant HDFS
@@ -464,7 +464,7 @@ Secret changes must trigger or be followed by a pod rollout because environment 
 | Service | DNS name | Purpose |
 |---|---|---|
 | `parquet-writer` | `parquet-writer:<port>` | Health and metrics |
-| `batch-processor` | `batch-processor:<port>` | Health, metrics, and Spark UI if exposed |
+| `cube-maker` | `cube-maker:<port>` | Health, metrics, and Spark UI if exposed |
 | `realtime` | `realtime:<port>` | Health and metrics |
 | `prometheus` | `prometheus:9090` | Grafana datasource |
 
@@ -495,7 +495,7 @@ The Spring applications use startup, readiness, and liveness probes.
 - Liveness probes restart genuinely unhealthy processes.
 - Termination grace periods provide time for graceful shutdown.
 
-Batch Processor has a longer startup allowance because Spark initialization and remote cluster registration can take longer than normal HTTP application startup.
+Cube Maker has a longer startup allowance because Spark initialization and remote cluster registration can take longer than normal HTTP application startup.
 
 REST API readiness should represent its ability to serve queries, while liveness should represent only whether the application process can recover without a restart.
 
@@ -517,7 +517,7 @@ Prometheus is deployed as one pod with:
 Prometheus collects:
 
 - Parquet Writer Actuator metrics
-- Batch Processor Actuator metrics
+- Cube Maker Actuator metrics
 - Realtime Actuator metrics
 - REST API Actuator metrics
 - Node exporter metrics from all four nodes
@@ -592,7 +592,7 @@ Prometheus is the metrics authority. Grafana does not scrape workloads directly.
 | Consumer | Storage | Kubernetes ownership |
 |---|---|---|
 | Parquet Writer | External HDFS | Not provisioned by charts |
-| Batch Processor | External HDFS and PostgreSQL | Not provisioned by charts |
+| Cube Maker | External HDFS and PostgreSQL | Not provisioned by charts |
 | Realtime | External StarRocks | Not provisioned by charts |
 | REST API | No application state | Stateless |
 | Prometheus | 20 GiB `disk1` PVC | Provisioned by Prometheus chart |

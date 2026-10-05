@@ -14,7 +14,7 @@ auth:
 
 appDatabase:
   databaseName: "nimbo_db"
-  existingSecretName: "batch-processor-secret"
+  existingSecretName: "cube-maker-secret"
   usernameKey: "DB_USERNAME"
   passwordKey: "DB_PASSWORD"
 

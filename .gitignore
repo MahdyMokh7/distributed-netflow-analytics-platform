@@ -43,9 +43,9 @@ application-local.yml
 /scripts/code-extracter.py
 terminal.log
 
-/batch-processor/docs/
-/batch-processor/code-extracter.py
-/batch-processor/src/test/resources/sample-data/parquet/
+/cube-maker/docs/
+/cube-maker/code-extracter.py
+/cube-maker/src/test/resources/sample-data/parquet/
 
 /parquet-writer/docs/
 /parquet-writer/code-extracter.py

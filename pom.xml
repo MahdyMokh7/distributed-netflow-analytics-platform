@@ -24,7 +24,7 @@
     <modules>
         <module>common</module>
         <module>parquet-writer</module>
-        <module>batch-processor</module>
+        <module>cube-maker</module>
         <module>starrocks-writer</module>
         <module>starrocks-backfill</module>
         <module>rest-api</module>

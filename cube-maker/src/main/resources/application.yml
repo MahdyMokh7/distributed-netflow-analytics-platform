@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: cube-maker
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:prod}
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    locations: classpath:db/migration
+
+logging:
+  level:
+    com.nimbo.cubemaker: INFO
+    org.apache.spark: WARN
+    org.apache.hadoop: WARN
+    org.apache.parquet: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        cube.maker.run.duration: true
+        cube.maker.stage.duration: true
+      slo:
+        cube.maker.run.duration: 30s,1m,2m,5m,10m,20m,30m
+        cube.maker.stage.duration: 1s,5s,15s,30s,1m,2m,5m,10m,20m
+
+test:
+  property: "hello-world"

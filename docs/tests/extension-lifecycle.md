@@ -220,7 +220,7 @@ Manages a **shared SparkSession** for the entire test suite.
 ```java
 SparkSession.builder()
     .master("local[2]")                           // 2 threads for parallelism
-    .appName("batch-processor-test-suite")        // Identifiable in UI
+    .appName("cube-maker-test-suite")        // Identifiable in UI
     .config("spark.ui.enabled", "false")          // No UI for tests
     .config("spark.sql.shuffle.partitions", "2")  // Small for tests
     .config("spark.sql.session.timeZone", "UTC")  // Deterministic
@@ -263,23 +263,23 @@ public FileSystem testFileSystem() throws IOException {
 
 ---
 
-## 📝 Test 1: `BatchProcessorIT`
+## 📝 Test 1: `CubeMakerIT`
 
 ### What It Tests
 
-**End-to-end integration test** for the entire batch processor pipeline.
+**End-to-end integration test** for the entire cube maker pipeline.
 
 ### Test Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                    BatchProcessorIT FLOW                                       │
+│                    CubeMakerIT FLOW                                       │
 │                                                                                 │
 │  setUp()                                                                       │
 │  ├── Create temp directory (parquetRoot)                                      │
 │  ├── Delete existing files                                                    │
 │  ├── Clear failed batch state                                                 │
-│  └── TRUNCATE all tables (batch_processor_state, traffic_aggregates, ...)    │
+│  └── TRUNCATE all tables (cube_maker_state, traffic_aggregates, ...)    │
 │                                                                                 │
 │  Test 1: givenPartitionedParquetFiles_whenBatchRuns_thenAllCubesAndFileState   │
 │  ├── GIVEN: Generate 5 deterministic Parquet files                            │
@@ -290,7 +290,7 @@ public FileSystem testFileSystem() throws IOException {
 │  │   ├── Verify protocol_usage_aggregates row count matches expected          │
 │  │   ├── Verify ip_bandwidth_aggregates row count matches expected            │
 │  │   ├── Verify specific IP values are correct                                │
-│  │   └── Verify batch_processor_state has 5 files                            │
+│  │   └── Verify cube_maker_state has 5 files                            │
 │                                                                                 │
 │  Test 2: givenProcessedAndNewFiles_whenBatchRunsAgain_thenOnlyNewFiles        │
 │  ├── GIVEN: 3 files, run batch, then add 2 more files                        │
@@ -308,7 +308,7 @@ public FileSystem testFileSystem() throws IOException {
 │  ├── GIVEN: Empty directory                                                   │
 │  ├── WHEN: Run batch                                                          │
 │  ├── THEN:                                                                    │
-│  │   ├── No files processed (batch_processor_state empty)                    │
+│  │   ├── No files processed (cube_maker_state empty)                    │
 │  │   └── No traffic aggregates written                                        │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -403,7 +403,7 @@ A helper class that:
 │  │   ├── 3 rows in database                                                   │
 │  │   ├── SUM(in_bytes) = 600                                                 │
 │  │   ├── SUM(record_count) = 6                                               │
-│  │   └── Metrics: batch.processor.output.rows = 3.0                          │
+│  │   └── Metrics: cube.maker.output.rows = 3.0                          │
 │                                                                                 │
 │  Test 2: givenTheSameConnectionBatchTwice_whenWritten                         │
 │  ├── GIVEN: Same batch ID                                                    │
@@ -452,11 +452,11 @@ A helper class that:
 │                                                                                 │
 │  JVM starts                                                                    │
 │  │                                                                             │
-│  ├── BatchProcessorIT.beforeAll()                                             │
+│  ├── CubeMakerIT.beforeAll()                                             │
 │  │   ├── PostgresContainerExtension: creates container (started)             │
 │  │   └── SparkSessionExtension: creates Spark session                        │
 │  │                                                                             │
-│  ├── BatchProcessorIT tests run                                              │
+│  ├── CubeMakerIT tests run                                              │
 │  │                                                                             │
 │  ├── ConnectionProcessorIT.beforeAll()                                       │
 │  │   ├── PostgresContainerExtension: reuses existing container ✅            │
@@ -513,7 +513,7 @@ A helper class that:
 ```java
 SparkSession.builder()
     .master("local[2]")
-    .appName("batch-processor-test-suite")
+    .appName("cube-maker-test-suite")
     .getOrCreate();
 ```
 
@@ -529,7 +529,7 @@ SparkSession.builder()
 ```java
 SparkSession.builder()
     .master("local[*]")
-    .appName("batch-processor-test-suite")
+    .appName("cube-maker-test-suite")
     .getOrCreate();
 ```
 
@@ -642,7 +642,7 @@ local[2]:
 // In SparkSessionExtension.java
 SparkSession.builder()
     .master("local[2]")                              // ← 2 threads exactly
-    .appName("batch-processor-test-suite")           // Identifiable in logs
+    .appName("cube-maker-test-suite")           // Identifiable in logs
     .config("spark.ui.enabled", "false")             // No UI
     .config("spark.sql.shuffle.partitions", "2")     // 2 partitions for shuffle
     .config("spark.sql.session.timeZone", "UTC")     // UTC timezone
