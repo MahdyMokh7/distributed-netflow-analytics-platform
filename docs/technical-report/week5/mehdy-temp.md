@@ -27,7 +27,7 @@
 ### 9. add Grafana dashboard
 
 
-### 10. add extension to rest-api, batch-processor, batch-ingester
+### 10. add extension to rest-api, batch-processor, parquet-writer
 
 
 ### 11. update helm charts for kubernetes batch-processor deployment

@@ -6,9 +6,9 @@ version: 0.1.0
 appVersion: "1.0"
 
 dependencies:
-  - name: batch-ingester
+  - name: parquet-writer
     version: "0.1.0"
-    repository: "file://../batch-ingester"
+    repository: "file://../parquet-writer"
 
   - name: batch-processor
     version: "0.1.0"

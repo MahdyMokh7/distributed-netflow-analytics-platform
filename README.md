@@ -82,7 +82,7 @@ Nimbo's dual-path architecture serves both use cases without compromising on dat
 
 | Module | Description | Status |
 |--------|-------------|--------|
-| **batch-ingester** | Kafka → HDFS Parquet consumer with zero data loss | ✅ Complete |
+| **parquet-writer** | Kafka → HDFS Parquet consumer with zero data loss | ✅ Complete |
 | **batch-processor** | Spark aggregations → PostgreSQL (Cube Maker) | ✅ Complete |
 | **realtime** | Kafka → StarRocks low-latency writer | ✅ Complete |
 | **rest-api** | Unified REST API for both batch and real-time queries | ✅ Complete |
@@ -120,9 +120,9 @@ The platform supports four key network analytics queries:
 
 | Role | Name | Responsibility |
 |------|------|----------------|
-| **Batch Path Lead** | **Mehdy Mokhtari** | Batch Ingester (Consumer), Batch Processor (Spark + PostgreSQL), REST API (Batch Queries) |
+| **Batch Path Lead** | **Mehdy Mokhtari** | Parquet Writer (Consumer), Batch Processor (Spark + PostgreSQL), REST API (Batch Queries) |
 | **Realtime Path Lead** | Sobhan Arshadi | Realtime Module (StarRocks Writer), REST API (Realtime Queries), DLQ Handling |
-| **Infrastructure Lead** | Amin Jangi | Batch Ingester (Storage Layer), CI/CD Pipeline, DevOps, Containerization |
+| **Infrastructure Lead** | Amin Jangi | Parquet Writer (Storage Layer), CI/CD Pipeline, DevOps, Containerization |
 
 ---
 
@@ -130,7 +130,7 @@ The platform supports four key network analytics queries:
 
 ```
 nimbo/
-├── batch-ingester/          # Kafka → HDFS consumer
+├── parquet-writer/          # Kafka → HDFS consumer
 │   ├── consumer/            # Multi-instance Kafka consumer
 │   ├── deserializer/        # Avro deserialization
 │   ├── storage/             # HDFS + Parquet writing

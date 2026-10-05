@@ -46,7 +46,7 @@ Week 3 focused on completing the **batch-processor** module (Cube Maker) by impl
 
 | Module | Purpose | Status |
 |--------|---------|--------|
-| `batch-ingester` | Kafka → HDFS Parquet | ✅ Complete |
+| `parquet-writer` | Kafka → HDFS Parquet | ✅ Complete |
 | `batch-processor` | Spark → PostgreSQL | ✅ Complete |
 | `realtime` | Kafka → StarRocks | ⚠️ Not covered |
 
@@ -119,14 +119,14 @@ public Schema storageSchema(Schema avroSchema) {
 
 #### 3.3 Processing Time Implementation
 
-**Decision:** Add `PROCESSING_TIME` as a per-record column in the Parquet file at ingestion time (batch-ingester), not at processing time (batch-processor).
+**Decision:** Add `PROCESSING_TIME` as a per-record column in the Parquet file at ingestion time (parquet-writer), not at processing time (batch-processor).
 
 **Why This Matters:**
 
 | Location | Issue |
 |----------|-------|
 | **In Spark processor** | `current_timestamp()` changes based on when you process, not when data arrived |
-| **In batch-ingester** | Captures actual ingestion time, consistent across reprocessing |
+| **In parquet-writer** | Captures actual ingestion time, consistent across reprocessing |
 
 **Implementation Details:**
 
@@ -359,7 +359,7 @@ The `TestDataGenerator` was updated to include `PROCESSING_TIME` column, ensurin
 | `BatchConfig.java` | Added `maxFilesPerBatch` field |
 | `pom.xml` | Added JDBI dependencies |
 
-#### 8.3 Modified Files (batch-ingester)
+#### 8.3 Modified Files (parquet-writer)
 
 | File | Changes |
 |------|---------|

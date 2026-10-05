@@ -1,6 +1,6 @@
 dependencies:
-- name: batch-ingester
-  repository: file://../batch-ingester
+- name: parquet-writer
+  repository: file://../parquet-writer
   version: 0.1.0
 - name: batch-processor
   repository: file://../batch-processor
@@ -14,5 +14,5 @@ dependencies:
 - name: analytics-query
   repository: file://../analytics-query
   version: 0.1.0
-digest: sha256:e5766d72fa5c63cecc3db392468fa584c81c7d53126f3b222ac471f5e1789e8a
-generated: "2026-10-05T15:21:04.691029542+03:30"
+digest: sha256:4701e3f6cc09d0203707188a6cc7f5730a78913016ebdd2eafbaa82c4e33a722
+generated: "2026-10-05T18:48:21.628274678+03:30"

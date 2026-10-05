@@ -1,0 +1,45 @@
+replicaCount: 1
+
+image:
+  repository: zoraq.inside.sahab.ir:9462/nimbo-nimbyte-parquet-writer
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+containerPort: 18080
+springProfile: prod
+healthPath: /actuator/health
+
+schemaRegistry:
+  url: http://schema-registry:8081
+  subject: multi-version-netflow-value
+
+terminationGracePeriodSeconds: 40
+
+service:
+  type: ClusterIP
+  port: 18080
+
+probes:
+  startup:
+    path: /actuator/health/liveness
+    timeoutSeconds: 3
+    failureThreshold: 30
+    periodSeconds: 5
+  readiness:
+    path: /actuator/health/readiness
+    timeoutSeconds: 3
+    failureThreshold: 3
+    periodSeconds: 5
+  liveness:
+    path: /actuator/health/liveness
+    timeoutSeconds: 3
+    failureThreshold: 3
+    periodSeconds: 10
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi

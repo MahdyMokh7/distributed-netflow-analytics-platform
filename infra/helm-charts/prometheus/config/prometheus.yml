@@ -62,7 +62,7 @@ scrape_configs:
           node: node4
           instance: node4
 
-  - job_name: batch-ingester
+  - job_name: parquet-writer
     metrics_path: /actuator/prometheus
     kubernetes_sd_configs:
       - role: endpoints
@@ -71,7 +71,7 @@ scrape_configs:
             - '{{ .Release.Namespace }}'
     relabel_configs:
       - source_labels: [__meta_kubernetes_service_name]
-        regex: batch-ingester
+        regex: parquet-writer
         action: keep
       - source_labels: [__meta_kubernetes_endpoint_port_name]
         regex: http

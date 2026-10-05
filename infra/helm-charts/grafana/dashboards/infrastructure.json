@@ -769,7 +769,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum(\n  rate(\n    kafka_server_brokertopicmetrics_count{\n      job=\"kafka-brokers\",\n      name=\"MessagesInPerSec\",\n      topic=\"netflow\"\n    }[5m]\n  )\n)",
+                        "expr": "sum(\n  rate(\n    kafka_server_brokertopicmetrics_count{\n      job=\"kafka-brokers\",\n      name=\"MessagesInPerSec\",\n      topic=\"multi-version-netflow\"\n    }[5m]\n  )\n)",
                         "instant": false,
                         "interval": "",
                         "legendFormat": "Netflow",

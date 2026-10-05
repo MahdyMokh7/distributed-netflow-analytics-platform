@@ -53,13 +53,13 @@ public Schema storageSchema(Schema avroSchema) {
 ## 3. Processing Time Placement
 
 ### Decision
-Add `PROCESSING_TIME` in `batch-ingester` (when writing Parquet), not in Spark processor.
+Add `PROCESSING_TIME` in `parquet-writer` (when writing Parquet), not in Spark processor.
 
 ### Why
 | Location | Issue |
 |----------|-------|
 | **In Spark processor** | `current_timestamp()` changes based on when you process, not when data arrived |
-| **In batch-ingester** | Captures actual ingestion time, consistent across reprocessing |
+| **In parquet-writer** | Captures actual ingestion time, consistent across reprocessing |
 
 ### Implementation
 ```java

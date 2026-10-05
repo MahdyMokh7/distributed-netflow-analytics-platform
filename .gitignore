@@ -47,8 +47,8 @@ terminal.log
 /batch-processor/code-extracter.py
 /batch-processor/src/test/resources/sample-data/parquet/
 
-/batch-ingester/docs/
-/batch-ingester/code-extracter.py
+/parquet-writer/docs/
+/parquet-writer/code-extracter.py
 
 /rest-api/docs/
 /rest-api/code-extracter.py

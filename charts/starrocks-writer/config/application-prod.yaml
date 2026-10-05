@@ -22,7 +22,7 @@ server:
 starrockswriter:
   kafka:
     bootstrap-servers: 10.10.61.51:9092
-    topic: netflow
+    topic: multi-version-netflow
     consumer-group: netflow-starrocks-writer
     client-id: starrocks-writer
     auto-offset-reset: earliest

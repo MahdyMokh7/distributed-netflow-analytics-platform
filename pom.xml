@@ -23,7 +23,7 @@
 
     <modules>
         <module>common</module>
-        <module>batch-ingester</module>
+        <module>parquet-writer</module>
         <module>batch-processor</module>
         <module>starrocks-writer</module>
         <module>starrocks-backfill</module>

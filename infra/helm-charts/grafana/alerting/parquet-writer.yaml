@@ -1,0 +1,132 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: Parquet Writer
+    folder: Nimbyte
+    interval: 1m
+
+    rules:
+      - uid: cfxtfb1qs7m68a
+        title: Parquet Writer Down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: 1 - max(up{job="parquet-writer"}) or vector(1)
+              instant: true
+              intervalMs: 1000
+              legendFormat: __auto
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: Alerting
+        execErrState: Error
+        for: 5m
+        annotations:
+          description: Parquet Writer has no scrape target or its metrics endpoint has been unreachable for 5 minutes.
+          summary: Parquet Writer metrics endpoint is unavailable
+        labels:
+          module: parquet-writer
+          service: parquet-writer
+          severity: critical
+        isPaused: false
+      - uid: afxtfrdoobw8we
+        title: Parquet Writer Kafka Lag High
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |-
+                max by (partition) (
+                  kafka_consumer_fetch_manager_records_lag{
+                    job="parquet-writer",
+                    topic="multi-version-netflow"
+                  }
+                )
+              instant: true
+              intervalMs: 1000
+              legendFormat: P{{partition}}
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1.5e+07
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          description: |-
+            Kafka consumer lag exceeded threshold.
+            
+            Topic:
+            {{ $labels.topic }}
+            
+            Partition:
+            {{ $labels.partition }}
+          summary: Parquet Writer Kafka lag is high on partition {{ $labels.partition }}
+        labels:
+          module: parquet-writer
+          service: kafka-consumer
+          severity: warning
+          topic: multi-version-netflow
+        isPaused: false

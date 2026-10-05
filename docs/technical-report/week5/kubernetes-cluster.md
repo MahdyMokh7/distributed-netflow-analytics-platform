@@ -6,7 +6,7 @@ This report describes the Kubernetes deployment architecture defined by the Nimb
 
 The following Helm charts are included:
 
-- `batch-ingester`
+- `parquet-writer`
 - `batch-processor`
 - `realtime`
 - `rest-api`
@@ -26,7 +26,7 @@ flowchart LR
     Kafka[(Kafka Cluster)]
 
     subgraph Kubernetes["Kubernetes Cluster"]
-        BI["Batch Ingester<br/>Deployment"]
+        BI["Parquet Writer<br/>Deployment"]
         BP["Batch Processor<br/>Spark Driver Deployment"]
         RT["Realtime<br/>Deployment"]
         API["REST API<br/>2 Replicas"]
@@ -34,7 +34,7 @@ flowchart LR
         PROM["Prometheus"]
         GRAF["Grafana"]
 
-        BISVC["batch-ingester<br/>ClusterIP :18080"]
+        BISVC["parquet-writer<br/>ClusterIP :18080"]
         BPSVC["batch-processor<br/>ClusterIP :18081"]
         RTSVC["realtime<br/>ClusterIP :18082"]
         APISVC["rest-api<br/>NodePort 30083"]
@@ -80,7 +80,7 @@ flowchart LR
 
 The two processing paths are:
 
-1. Batch path: Kafka → Batch Ingester → HDFS → Batch Processor/Spark → PostgreSQL → REST API.
+1. Batch path: Kafka → Parquet Writer → HDFS → Batch Processor/Spark → PostgreSQL → REST API.
 2. Realtime path: Kafka → Realtime → StarRocks → REST API.
 
 Prometheus collects application and infrastructure metrics. Grafana reads Prometheus and presents dashboards and alerts.
@@ -135,7 +135,7 @@ The application charts do not control these processes. Their availability, repli
 
 | Workload | Replicas | Service | Port | Update strategy | Primary responsibility |
 |---|---:|---|---:|---|---|
-| Batch Ingester | 1 | ClusterIP | 18080 | RollingUpdate | Kafka-to-HDFS Parquet ingestion |
+| Parquet Writer | 1 | ClusterIP | 18080 | RollingUpdate | Kafka-to-HDFS Parquet ingestion |
 | Batch Processor | 1 | ClusterIP | 18081 | Recreate | HDFS/Spark aggregation and PostgreSQL writes |
 | Realtime | 1 | ClusterIP | 18082 | RollingUpdate | Kafka-to-StarRocks realtime ingestion |
 | REST API | 2 | NodePort | 18083 / 30083 | RollingUpdate | PostgreSQL and StarRocks query API |
@@ -146,7 +146,7 @@ The application charts do not control these processes. Their availability, repli
 
 ---
 
-## 5. Batch Ingester deployment
+## 5. Parquet Writer deployment
 
 ### Kubernetes objects
 
@@ -167,7 +167,7 @@ The configuration is mounted read-only at `/config`.
 
 ### Kafka integration
 
-The ingester consumes the `netflow` topic and publishes rejected records to `netflow-dlq`.
+The ingester consumes the `multi-version-netflow` topic and publishes rejected records to `netflow-dlq`.
 
 Important Kafka behavior includes:
 
@@ -269,7 +269,7 @@ The executor application JAR must be available through the container image or an
 
 ### HDFS discovery
 
-The processor reads the same logical HDFS filesystem and Parquet base path used by the Batch Ingester. Hour directories reduce discovery cost before individual filenames are ordered.
+The processor reads the same logical HDFS filesystem and Parquet base path used by the Parquet Writer. Hour directories reduce discovery cost before individual filenames are ordered.
 
 ### PostgreSQL writing
 
@@ -463,7 +463,7 @@ Secret changes must trigger or be followed by a pod rollout because environment 
 
 | Service | DNS name | Purpose |
 |---|---|---|
-| `batch-ingester` | `batch-ingester:<port>` | Health and metrics |
+| `parquet-writer` | `parquet-writer:<port>` | Health and metrics |
 | `batch-processor` | `batch-processor:<port>` | Health, metrics, and Spark UI if exposed |
 | `realtime` | `realtime:<port>` | Health and metrics |
 | `prometheus` | `prometheus:9090` | Grafana datasource |
@@ -516,7 +516,7 @@ Prometheus is deployed as one pod with:
 
 Prometheus collects:
 
-- Batch Ingester Actuator metrics
+- Parquet Writer Actuator metrics
 - Batch Processor Actuator metrics
 - Realtime Actuator metrics
 - REST API Actuator metrics
@@ -591,7 +591,7 @@ Prometheus is the metrics authority. Grafana does not scrape workloads directly.
 
 | Consumer | Storage | Kubernetes ownership |
 |---|---|---|
-| Batch Ingester | External HDFS | Not provisioned by charts |
+| Parquet Writer | External HDFS | Not provisioned by charts |
 | Batch Processor | External HDFS and PostgreSQL | Not provisioned by charts |
 | Realtime | External StarRocks | Not provisioned by charts |
 | REST API | No application state | Stateless |

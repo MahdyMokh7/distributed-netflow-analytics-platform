@@ -366,7 +366,7 @@ Spark and PostgreSQL application versions were not re-derived from container ima
 
 | Nimbo component | Expected data path | Dedicated Kubernetes controller/pod found | Matching persistent host Java process found | Observed execution model at snapshot |
 |---|---|:---:|:---:|---|
-| `batch-ingester` | Kafka → HDFS/Parquet | No | No | Not observed as a persistent Kubernetes or direct host process |
+| `parquet-writer` | Kafka → HDFS/Parquet | No | No | Not observed as a persistent Kubernetes or direct host process |
 | `batch-processor` | HDFS/Parquet → Spark → PostgreSQL | No dedicated app pod | No | Submitted Spark applications; four completed jobs were visible from 2026-09-05 |
 | `realtime` | Kafka → StarRocks | No | No | Not observed as a persistent Kubernetes or direct host process |
 | `rest-api` | PostgreSQL/StarRocks query API | No | No | Not observed as a persistent Kubernetes or direct host process |

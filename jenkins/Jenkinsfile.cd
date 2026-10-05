@@ -33,12 +33,12 @@ static def modulePathPrefixes(String name) {
 }
 
 static def moduleNames() {
-    return ['batch-ingester', 'batch-processor', 'starrocks-writer', 'rest-api', 'analytics-query']
+    return ['parquet-writer', 'batch-processor', 'starrocks-writer', 'rest-api', 'analytics-query']
 }
 
 def userSelectedModules() {
     def moduleMap = [
-            'batch-ingester'  : params.DEPLOY_BATCH_INGESTER,
+            'parquet-writer'  : params.DEPLOY_PARQUET_WRITER,
             'batch-processor' : params.DEPLOY_BATCH_PROCESSOR,
             'starrocks-writer': params.DEPLOY_STARROCKS_WRITER,
             'rest-api'        : params.DEPLOY_REST_API,
@@ -118,7 +118,7 @@ pipeline {
         booleanParam(name: 'RUN_SONAR', defaultValue: false, description: 'Run Sonar analysis and quality gate before build')
         booleanParam(name: 'FORCE_ALL', defaultValue: false, description: 'Build+deploy all checked modules even if unchanged since last successful deploy')
 
-        booleanParam(name: 'DEPLOY_BATCH_INGESTER', defaultValue: true, description: 'Include batch-ingester in this run')
+        booleanParam(name: 'DEPLOY_PARQUET_WRITER', defaultValue: true, description: 'Include parquet-writer in this run')
         booleanParam(name: 'DEPLOY_BATCH_PROCESSOR', defaultValue: true, description: 'Include batch-processor in this run')
         booleanParam(name: 'DEPLOY_STARROCKS_WRITER', defaultValue: true, description: 'Include starrocks-writer in this run')
         booleanParam(name: 'DEPLOY_REST_API', defaultValue: true, description: 'Include rest-api in this run')

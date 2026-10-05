@@ -66,7 +66,7 @@ sudo -u kafka /opt/kafka/bin/kafka-broker-api-versions.sh \
 
 # Recreate your topics (they're gone — this was a full wipe):
 sudo -u kafka /opt/kafka/bin/kafka-topics.sh --create \
-  --topic netflow --bootstrap-server 10.10.61.51:9092 \
+  --topic multi-version-netflow --bootstrap-server 10.10.61.51:9092 \
   --partitions 6 --replication-factor 3
 sudo -u kafka /opt/kafka/bin/kafka-topics.sh --create \
   --topic netflow-dlq --bootstrap-server 10.10.61.51:9092 \

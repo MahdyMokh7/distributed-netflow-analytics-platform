@@ -50,7 +50,7 @@ Organize Parquet files in HDFS by hour-based folders to speed up file discovery.
 - Modify `FileNameGenerator` to create path like: `/netflow/parquet/YYYY-MM-DD/HH/filename.parquet`
 - Update `FileDiscoveryService` to list only relevant hour folders
 - Keep backward compatibility for existing files
-- Update batch-ingester to write to partitioned paths
+- Update parquet-writer to write to partitioned paths
 
 **Implementation**:
 ```java
