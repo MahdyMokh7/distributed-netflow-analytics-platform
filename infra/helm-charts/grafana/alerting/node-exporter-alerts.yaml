@@ -2,14 +2,14 @@ apiVersion: 1
 
 groups:
   - orgId: 1
-    name: Overview — Node Exporters
+    name: Nodes Status
     folder: Nimbyte
     interval: 1m
 
     rules:
 
       - uid: efxtbuesbtvk0c
-        title: Node Disk Usage High
+        title: Node Filesystem Space Warning
         condition: C
 
         data:
@@ -25,19 +25,19 @@ groups:
                   1 -
                   node_filesystem_avail_bytes{
                     job="node-exporters",
-                    mountpoint="/",
+                    mountpoint=~"/|/mnt/disk1",
                     fstype!~"tmpfs|overlay"
                   }
                   /
                   node_filesystem_size_bytes{
                     job="node-exporters",
-                    mountpoint="/",
+                    mountpoint=~"/|/mnt/disk1",
                     fstype!~"tmpfs|overlay"
                   }
                 )
               instant: true
               intervalMs: 1000
-              legendFormat: '{{node}}'
+              legendFormat: '{{node}} {{mountpoint}}'
               maxDataPoints: 43200
               range: false
               refId: A
@@ -49,7 +49,7 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 95
+                      - 80
                     type: gt
                   operator:
                     type: and
@@ -71,17 +71,100 @@ groups:
 
         noDataState: NoData
         execErrState: Error
-        for: 5m
+        for: 10m
 
         annotations:
           description: |-
-            Root filesystem usage is above 95%.
-            Node: {{ $labels.node }}
-          summary: Disk usage above 95% on {{ $labels.node }}
+            Filesystem {{ $labels.mountpoint }} on {{ $labels.node }} has remained above 80% used for 10 minutes.
+            Current usage: {{ printf "%.1f" $values.A.Value }}%.
+            Usage is based on space available to services, excluding filesystem-reserved blocks from usable headroom.
+          summary: Disk space warning on {{ $labels.node }} ({{ $labels.mountpoint }})
 
         labels:
           service: node-exporter
           severity: warning
+
+        isPaused: false
+
+        notification_settings:
+          receiver: empty
+
+
+      - uid: nimbyte-filesystem-critical
+        title: Node Filesystem Space Critical
+        condition: C
+
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |-
+                100 * (
+                  1 -
+                  node_filesystem_avail_bytes{
+                    job="node-exporters",
+                    mountpoint=~"/|/mnt/disk1",
+                    fstype!~"tmpfs|overlay"
+                  }
+                  /
+                  node_filesystem_size_bytes{
+                    job="node-exporters",
+                    mountpoint=~"/|/mnt/disk1",
+                    fstype!~"tmpfs|overlay"
+                  }
+                )
+              instant: true
+              intervalMs: 1000
+              legendFormat: '{{node}} {{mountpoint}}'
+              maxDataPoints: 43200
+              range: false
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 90
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 10m
+
+        annotations:
+          description: |-
+            Filesystem {{ $labels.mountpoint }} on {{ $labels.node }} has remained above 90% used for 10 minutes.
+            Current usage: {{ printf "%.1f" $values.A.Value }}%.
+            Immediate cleanup or capacity expansion is required.
+          summary: Disk space critical on {{ $labels.node }} ({{ $labels.mountpoint }})
+
+        labels:
+          service: node-exporter
+          severity: critical
 
         isPaused: false
 
