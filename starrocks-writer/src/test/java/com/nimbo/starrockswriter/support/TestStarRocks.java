@@ -34,7 +34,8 @@ public final class TestStarRocks {
             .waitingFor(Wait.forHttp("/api/health")
                     .forPort(FE_HTTP_PORT)
                     .forStatusCode(200)
-                    .withStartupTimeout(Duration.ofMinutes(4)));
+                    .withStartupTimeout(Duration.ofMinutes(4)))
+            .withReuse(true);
 
     GenericContainer<?> container() {
         return container;

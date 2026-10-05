@@ -29,15 +29,6 @@ public class BackfillConfigTest {
     }
 
     @Test
-    void rejectsAnIntervalCrossingUtcMidnight() {
-        Map<String, String> environment = validEnvironment();
-        environment.put("BACKFILL_TO", "2026-09-27T01:00:00Z");
-
-        assertThatThrownBy(() -> BackfillConfig.fromEnvironment(environment, CLOCK))
-                .isInstanceOf(BackfillException.class).hasMessageContaining("one UTC day");
-    }
-
-    @Test
     void rejectsAnIntervalThatIsStillOpen() {
         Map<String, String> environment = validEnvironment();
         environment.put("BACKFILL_FROM", "2026-09-28T11:00:00Z");

@@ -17,12 +17,26 @@ public final class BackfillPlanner {
     private static final DateTimeFormatter RUN_ID_TIME =
             DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS", Locale.ROOT).withZone(ZoneOffset.UTC);
 
-    public DailyBackfillPlan createPlan(BackfillConfig config) {
-        LocalDate day = config.from().atZone(ZoneOffset.UTC).toLocalDate();
-        String runId = runId(config.from(), config.to());
+    public List<DailyBackfillPlan> createPlans(BackfillConfig config) {
+        List<DailyBackfillPlan> plans = new ArrayList<>();
+        Instant from = config.from();
 
-        return new DailyBackfillPlan(runId, config.mode(), day, config.from(), config.to(), "tmp_" + runId,
-                hourlyPaths(config.hdfsBasePath(), config.from(), config.to()));
+        while (from.isBefore(config.to())) {
+            Instant nextMidnight = from.atZone(ZoneOffset.UTC).toLocalDate().plusDays(1)
+                    .atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant to = config.to().isBefore(nextMidnight) ? config.to() : nextMidnight;
+            plans.add(createDailyPlan(config, from, to));
+            from = to;
+        }
+        return plans;
+    }
+
+    private DailyBackfillPlan createDailyPlan(BackfillConfig config, Instant from, Instant to) {
+        LocalDate day = from.atZone(ZoneOffset.UTC).toLocalDate();
+        String runId = runId(from, to);
+
+        return new DailyBackfillPlan(runId, config.mode(), day, from, to, "tmp_" + runId,
+                hourlyPaths(config.hdfsBasePath(), from, to));
     }
 
     private List<String> hourlyPaths(String basePath, Instant from, Instant to) {

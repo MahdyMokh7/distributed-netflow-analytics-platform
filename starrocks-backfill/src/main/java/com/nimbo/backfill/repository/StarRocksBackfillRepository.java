@@ -1,10 +1,7 @@
 package com.nimbo.backfill.repository;
 
-import java.math.BigDecimal;
 import java.sql.Connection;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -14,41 +11,43 @@ import com.nimbo.backfill.exception.BackfillException;
 import com.nimbo.backfill.model.BackfillMetrics;
 import com.nimbo.backfill.model.BackfillProjection;
 import com.nimbo.backfill.model.DailyBackfillPlan;
+import com.nimbo.backfill.model.HdfsPathColumnMapping;
 import com.nimbo.backfill.model.HdfsSchema;
 import com.nimbo.backfill.model.SchemaColumn;
-import com.nimbo.backfill.service.BackfillSchemaMapper;
+import com.nimbo.backfill.service.BackfillProjectionBuilder;
 import com.nimbo.backfill.sql.NetflowBackfillSql;
 
 public final class StarRocksBackfillRepository implements BackfillRepository {
 
-    private final Connection connection;
+    private final StarRocksJdbcClient jdbcClient;
     private final BackfillConfig config;
 
     public StarRocksBackfillRepository(Connection connection, BackfillConfig config) {
-        this.connection = connection;
+        this.jdbcClient = new StarRocksJdbcClient(connection);
         this.config = config;
     }
 
     public void initializeSession() throws SQLException {
-        execute("SET time_zone = 'UTC'");
-        execute("SET query_timeout = 3600");
-        execute("SET insert_timeout = 3600");
+        jdbcClient.execute("SET time_zone = 'UTC'");
+        jdbcClient.execute("SET query_timeout = 3600");
+        jdbcClient.execute("SET insert_timeout = 3600");
     }
 
     @Override
-    public boolean temporaryPartitionExists(DailyBackfillPlan plan) throws SQLException {
-        return hasRow(NetflowBackfillSql.temporaryPartitionExists(config, plan));
+    public boolean stagingPartitionExists(DailyBackfillPlan plan) throws SQLException {
+        return jdbcClient.hasRow(NetflowBackfillSql.stagingPartitionExists(config, plan));
     }
 
     @Override
-    public BackfillProjection prepareProjection(DailyBackfillPlan plan) throws SQLException {
-        List<SchemaColumn> tableColumns = readSchema(NetflowBackfillSql.describeTable(config));
+    public BackfillProjection buildBackfillProjection(DailyBackfillPlan plan) throws SQLException {
+        List<SchemaColumn> starRocksColumns = jdbcClient.readSchema(NetflowBackfillSql.describeTable(config));
         List<HdfsSchema> hdfsSchemas = new ArrayList<>();
         List<String> skippedPaths = new ArrayList<>();
 
         for (String path : plan.hdfsPaths()) {
             try {
-                hdfsSchemas.add(new HdfsSchema(path, readSchema(NetflowBackfillSql.describeHdfs(config, path))));
+                hdfsSchemas.add(
+                        new HdfsSchema(path, jdbcClient.readSchema(NetflowBackfillSql.describeHdfs(config, path))));
             } catch (SQLException exception) {
                 if (noFilesFound(exception)) {
                     skippedPaths.add(path);
@@ -59,88 +58,73 @@ public final class StarRocksBackfillRepository implements BackfillRepository {
             }
         }
 
-        return new BackfillSchemaMapper().map(NetflowBackfillSql.qualifiedTable(config), tableColumns, hdfsSchemas,
-                skippedPaths);
+        return new BackfillProjectionBuilder().build(NetflowBackfillSql.starRocksTable(config), starRocksColumns,
+                hdfsSchemas, skippedPaths);
     }
 
     @Override
-    public BackfillMetrics readHdfsIntervalMetrics(DailyBackfillPlan plan, BackfillProjection projection)
+    public BackfillMetrics readSourceIntervalMetrics(DailyBackfillPlan plan, BackfillProjection projection)
             throws SQLException {
         BackfillMetrics total = BackfillMetrics.empty();
-        for (BackfillProjection.HdfsPathProjection pathProjection : projection.pathProjections()) {
+        for (HdfsPathColumnMapping hdfsColumnMapping : projection.hdfsColumnMappings()) {
             try {
-                total = total.combine(
-                        queryMetrics(NetflowBackfillSql.sourceMetrics(config, plan, pathProjection.path())));
+                total = total.combine(jdbcClient.queryMetrics(
+                        NetflowBackfillSql.sourceIntervalMetrics(config, plan, hdfsColumnMapping.path())));
             } catch (SQLException exception) {
-                throw new BackfillException(
-                        "Cannot read HDFS path " + pathProjection.path() + ": " + exception.getMessage(), exception);
+                throw new BackfillException("Cannot read HDFS path " + hdfsColumnMapping.path() + ": "
+                        + exception.getMessage(), exception);
             }
         }
         return total;
     }
 
     @Override
-    public void validateHdfsProjection(DailyBackfillPlan plan, BackfillProjection projection) throws SQLException {
-        for (BackfillProjection.HdfsPathProjection pathProjection : projection.pathProjections()) {
+    public void validateSourceProjections(DailyBackfillPlan plan, BackfillProjection projection) throws SQLException {
+        for (HdfsPathColumnMapping hdfsColumnMapping : projection.hdfsColumnMappings()) {
             try {
-                execute(NetflowBackfillSql.validateHdfsProjection(config, plan, pathProjection));
+                jdbcClient.execute(NetflowBackfillSql.validateSourceProjection(config, plan, hdfsColumnMapping));
             } catch (SQLException exception) {
                 throw new BackfillException(
-                        "Dynamic projection for " + pathProjection.path() + " is invalid: " + exception.getMessage(),
-                        exception);
+                        "Dynamic projection for " + hdfsColumnMapping.path() + " is invalid: "
+                                + exception.getMessage(), exception);
             }
         }
     }
 
     @Override
-    public BackfillMetrics readFormalIntervalMetrics(DailyBackfillPlan plan) throws SQLException {
-        return queryMetrics(NetflowBackfillSql.formalIntervalMetrics(config, plan));
+    public BackfillMetrics readTargetIntervalMetrics(DailyBackfillPlan plan) throws SQLException {
+        return jdbcClient.queryMetrics(NetflowBackfillSql.targetIntervalMetrics(config, plan));
     }
 
     @Override
-    public BackfillMetrics readTemporaryIntervalMetrics(DailyBackfillPlan plan) throws SQLException {
-        return queryMetrics(NetflowBackfillSql.temporaryIntervalMetrics(config, plan));
+    public BackfillMetrics readStagingIntervalMetrics(DailyBackfillPlan plan) throws SQLException {
+        return jdbcClient.queryMetrics(NetflowBackfillSql.stagingIntervalMetrics(config, plan));
     }
 
     @Override
-    public void dropTemporaryPartition(DailyBackfillPlan plan) throws SQLException {
-        execute(NetflowBackfillSql.dropTemporaryPartition(config, plan));
+    public void dropStagingPartition(DailyBackfillPlan plan) throws SQLException {
+        jdbcClient.execute(NetflowBackfillSql.dropStagingPartition(config, plan));
     }
 
     @Override
-    public void createTemporaryPartition(DailyBackfillPlan plan) throws SQLException {
-        execute(NetflowBackfillSql.createTemporaryPartition(config, plan));
+    public void createStagingPartition(DailyBackfillPlan plan) throws SQLException {
+        jdbcClient.execute(NetflowBackfillSql.createStagingPartition(config, plan));
     }
 
     @Override
-    public void loadHdfs(DailyBackfillPlan plan, BackfillProjection projection) throws SQLException {
-        execute(NetflowBackfillSql.loadHdfs(config, plan, projection));
+    public void loadSourceIntoStaging(DailyBackfillPlan plan, BackfillProjection projection) throws SQLException {
+        jdbcClient.execute(NetflowBackfillSql.loadSourceIntoStaging(config, plan, projection));
     }
 
     @Override
-    public void deleteFormalInterval(DailyBackfillPlan plan) throws SQLException {
-        execute(NetflowBackfillSql.deleteFormalInterval(config, plan));
+    public void deleteTargetInterval(DailyBackfillPlan plan) throws SQLException {
+        jdbcClient.execute(NetflowBackfillSql.deleteTargetInterval(config, plan));
     }
 
     @Override
-    public void copyTemporaryIntervalIntoFormal(DailyBackfillPlan plan, BackfillProjection projection)
+    public void publishStagedInterval(DailyBackfillPlan plan, BackfillProjection projection)
             throws SQLException {
-        execute(NetflowBackfillSql.copyTemporaryIntervalIntoFormal(config, plan, projection));
-    }
-
-    private List<SchemaColumn> readSchema(String sql) throws SQLException {
-        List<SchemaColumn> columns = new ArrayList<>();
-        try (Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery(sql)) {
-            while (result.next()) {
-                columns.add(new SchemaColumn(result.getString("Field"), result.getString("Type"),
-                        "YES".equalsIgnoreCase(result.getString("Null"))));
-            }
-        }
-        if (columns.isEmpty()) {
-            throw new SQLException("Schema query returned no columns");
-        }
-        return columns;
+        jdbcClient.execute(NetflowBackfillSql.publishStagedInterval(config, plan, projection));
     }
 
     private boolean noFilesFound(SQLException exception) {
@@ -156,37 +140,4 @@ public final class StarRocksBackfillRepository implements BackfillRepository {
         return false;
     }
 
-    private BackfillMetrics queryMetrics(String sql) throws SQLException {
-        try (Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery(sql)) {
-            if (!result.next()) {
-                throw new SQLException("Metrics query returned no row");
-            }
-            return new BackfillMetrics(result.getLong("row_count"), decimal(result, "in_bytes"),
-                    decimal(result, "out_bytes"), decimal(result, "in_packets"), decimal(result, "out_packets"),
-                    nullableLong(result, "minimum_timestamp"), nullableLong(result, "maximum_timestamp"));
-        }
-    }
-
-    private BigDecimal decimal(ResultSet result, String column) throws SQLException {
-        BigDecimal value = result.getBigDecimal(column);
-        return value == null ? BigDecimal.ZERO : value;
-    }
-
-    private Long nullableLong(ResultSet result, String column) throws SQLException {
-        long value = result.getLong(column);
-        return result.wasNull() ? null : value;
-    }
-
-    private boolean hasRow(String sql) throws SQLException {
-        try (Statement statement = connection.createStatement(); ResultSet result = statement.executeQuery(sql)) {
-            return result.next();
-        }
-    }
-
-    private void execute(String sql) throws SQLException {
-        try (Statement statement = connection.createStatement()) {
-            statement.execute(sql);
-        }
-    }
 }

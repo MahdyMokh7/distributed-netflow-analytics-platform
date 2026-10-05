@@ -5,7 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 public record DailyBackfillPlan(String runId, BackfillMode mode, LocalDate day, Instant from, Instant to,
-        String temporaryPartition, List<String> hdfsPaths) {
+        String stagingPartitionName, List<String> hdfsPaths) {
 
     public DailyBackfillPlan {
         hdfsPaths = List.copyOf(hdfsPaths);

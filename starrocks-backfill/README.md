@@ -62,7 +62,7 @@ must still be older than `BACKFILL_MINIMUM_AGE_MINUTES`, and the complete interv
 configured StarRocks retention window. Run during the agreed quiet period with no concurrent load into
 the target table while the delete and insert are executing.
 
-One run must stay inside one UTC day. Split a range that crosses midnight into separate runs.
+A range that crosses UTC midnight is split into one daily execution per touched day.
 
 ## Environment
 

@@ -16,8 +16,8 @@ import com.nimbo.backfill.exception.BackfillException;
 import com.nimbo.backfill.model.BackfillMetrics;
 import com.nimbo.backfill.model.BackfillMode;
 import com.nimbo.backfill.model.BackfillProjection;
-import com.nimbo.backfill.model.BackfillProjection.HdfsPathProjection;
 import com.nimbo.backfill.model.DailyBackfillPlan;
+import com.nimbo.backfill.model.HdfsPathColumnMapping;
 import com.nimbo.backfill.repository.BackfillRepository;
 
 class BackfillServiceTest {
@@ -25,7 +25,7 @@ class BackfillServiceTest {
     @Test
     void planModeValidatesButDoesNotMutateStarRocks() throws Exception {
         FakeRepository repository = new FakeRepository();
-        repository.temporaryPartitionExists = true;
+        repository.stagingPartitionExists = true;
 
         new BackfillService(repository).run(plan(BackfillMode.PLAN));
 
@@ -36,7 +36,7 @@ class BackfillServiceTest {
     @Test
     void matchingIntervalMetricsSkipTheBackfill() throws Exception {
         FakeRepository repository = new FakeRepository();
-        repository.starRocksIntervalMetrics = repository.hdfsIntervalMetrics;
+        repository.currentTargetIntervalMetrics = repository.sourceIntervalMetrics;
 
         new BackfillService(repository).run(plan(BackfillMode.EXECUTE));
 
@@ -46,8 +46,8 @@ class BackfillServiceTest {
     @Test
     void matchingExecuteDropsAStaleTemporaryPartition() throws Exception {
         FakeRepository repository = new FakeRepository();
-        repository.starRocksIntervalMetrics = repository.hdfsIntervalMetrics;
-        repository.temporaryPartitionExists = true;
+        repository.currentTargetIntervalMetrics = repository.sourceIntervalMetrics;
+        repository.stagingPartitionExists = true;
 
         new BackfillService(repository).run(plan(BackfillMode.EXECUTE));
 
@@ -64,29 +64,29 @@ class BackfillServiceTest {
         assertThat(repository.createCalls).isEqualTo(1);
         assertThat(repository.loadCalls).isEqualTo(1);
         assertThat(repository.deleteCalls).isEqualTo(1);
-        assertThat(repository.copyCalls).isEqualTo(1);
+        assertThat(repository.publishCalls).isEqualTo(1);
         assertThat(repository.dropCalls).isEqualTo(1);
-        assertThat(repository.events).containsSubsequence("load-stage", "measure-stage", "delete", "insert-stage");
+        assertThat(repository.events).containsSubsequence("load-stage", "read-stage", "delete", "insert-stage");
     }
 
     @Test
-    void temporaryMetricMismatchDoesNotPublishAndCleansUp() {
+    void stagingMetricMismatchDoesNotPublishAndCleansUp() {
         FakeRepository repository = new FakeRepository();
-        repository.stagedIntervalMetrics = metrics(4, 10);
+        repository.stagingIntervalMetrics = metrics(4, 10);
 
         assertThatThrownBy(() -> new BackfillService(repository).run(plan(BackfillMode.EXECUTE)))
                 .isInstanceOf(BackfillException.class)
                 .hasMessageContaining("metrics differ");
 
         assertThat(repository.deleteCalls).isZero();
-        assertThat(repository.copyCalls).isZero();
+        assertThat(repository.publishCalls).isZero();
         assertThat(repository.dropCalls).isEqualTo(1);
     }
 
     @Test
     void insertFailureAfterDeleteAlsoCleansUpTheTemporaryPartition() {
         FakeRepository repository = new FakeRepository();
-        repository.copyFailure = new SQLException("insert failed");
+        repository.publishFailure = new SQLException("insert failed");
 
         assertThatThrownBy(() -> new BackfillService(repository).run(plan(BackfillMode.EXECUTE)))
                 .isInstanceOf(SQLException.class).hasMessageContaining("insert failed");
@@ -98,7 +98,7 @@ class BackfillServiceTest {
     @Test
     void failsWhenPublishedIntervalDoesNotMatchHdfs() {
         FakeRepository repository = new FakeRepository();
-        repository.publishedStarRocksMetrics = metrics(6, 10);
+        repository.publishedTargetMetrics = metrics(6, 10);
 
         assertThatThrownBy(() -> new BackfillService(repository).run(plan(BackfillMode.EXECUTE)))
                 .isInstanceOf(BackfillException.class)
@@ -110,7 +110,7 @@ class BackfillServiceTest {
     @Test
     void refusesToMutateWhenHdfsHasNoRows() {
         FakeRepository repository = new FakeRepository();
-        repository.hdfsIntervalMetrics = BackfillMetrics.empty();
+        repository.sourceIntervalMetrics = BackfillMetrics.empty();
 
         assertThatThrownBy(() -> new BackfillService(repository).run(plan(BackfillMode.EXECUTE)))
                 .isInstanceOf(BackfillException.class)
@@ -134,95 +134,91 @@ class BackfillServiceTest {
 
     private static final class FakeRepository implements BackfillRepository {
 
-        private BackfillMetrics hdfsIntervalMetrics = metrics(5, 10);
-        private BackfillMetrics starRocksIntervalMetrics = BackfillMetrics.empty();
-        private BackfillMetrics publishedStarRocksMetrics = hdfsIntervalMetrics;
-        private BackfillMetrics stagedIntervalMetrics = hdfsIntervalMetrics;
-        private boolean mutated;
-        private boolean temporaryPartitionExists;
-        private SQLException copyFailure;
+        private BackfillMetrics sourceIntervalMetrics = metrics(5, 10);
+        private BackfillMetrics currentTargetIntervalMetrics = BackfillMetrics.empty();
+        private BackfillMetrics publishedTargetMetrics = sourceIntervalMetrics;
+        private BackfillMetrics stagingIntervalMetrics = sourceIntervalMetrics;
+        private boolean stagingPartitionExists;
+        private SQLException publishFailure;
         private final BackfillProjection projection = new BackfillProjection(List.of("kafka_timestamp"),
-                List.of(new HdfsPathProjection("hdfs://team1/netflow/parquetFiles/2026-09-26/10/*.parquet",
+                List.of(new HdfsPathColumnMapping("hdfs://team1/netflow/parquetFiles/2026-09-26/10/*.parquet",
                         List.of("CAST(PROCESS_TIME / 1000 AS BIGINT)"), "mapping")),
                 List.of());
 
         private int validateCalls;
         private int createCalls;
-        private int copyCalls;
+        private int publishCalls;
         private int loadCalls;
         private int deleteCalls;
         private int dropCalls;
         private final List<String> events = new ArrayList<>();
 
         int mutations() {
-            return createCalls + copyCalls + loadCalls + deleteCalls + dropCalls;
+            return createCalls + publishCalls + loadCalls + deleteCalls + dropCalls;
         }
 
         @Override
-        public boolean temporaryPartitionExists(DailyBackfillPlan plan) {
-            return temporaryPartitionExists;
+        public boolean stagingPartitionExists(DailyBackfillPlan plan) {
+            return stagingPartitionExists;
         }
 
         @Override
-        public BackfillProjection prepareProjection(DailyBackfillPlan plan) {
+        public BackfillProjection buildBackfillProjection(DailyBackfillPlan plan) {
             return projection;
         }
 
         @Override
-        public BackfillMetrics readHdfsIntervalMetrics(DailyBackfillPlan plan, BackfillProjection projection) {
-            return hdfsIntervalMetrics;
+        public BackfillMetrics readSourceIntervalMetrics(DailyBackfillPlan plan, BackfillProjection projection) {
+            return sourceIntervalMetrics;
         }
 
         @Override
-        public void validateHdfsProjection(DailyBackfillPlan plan, BackfillProjection projection) {
+        public void validateSourceProjections(DailyBackfillPlan plan, BackfillProjection projection) {
             validateCalls++;
         }
 
         @Override
-        public BackfillMetrics readFormalIntervalMetrics(DailyBackfillPlan plan) {
-            if (mutated) {
-                return publishedStarRocksMetrics;
-            }
-            return starRocksIntervalMetrics;
+        public BackfillMetrics readTargetIntervalMetrics(DailyBackfillPlan plan) {
+            return currentTargetIntervalMetrics;
         }
 
         @Override
-        public BackfillMetrics readTemporaryIntervalMetrics(DailyBackfillPlan plan) {
-            events.add("measure-stage");
-            return stagedIntervalMetrics;
+        public BackfillMetrics readStagingIntervalMetrics(DailyBackfillPlan plan) {
+            events.add("read-stage");
+            return stagingIntervalMetrics;
         }
 
         @Override
-        public void dropTemporaryPartition(DailyBackfillPlan plan) {
+        public void dropStagingPartition(DailyBackfillPlan plan) {
             dropCalls++;
         }
 
         @Override
-        public void createTemporaryPartition(DailyBackfillPlan plan) {
+        public void createStagingPartition(DailyBackfillPlan plan) {
             createCalls++;
         }
 
         @Override
-        public void loadHdfs(DailyBackfillPlan plan, BackfillProjection projection) {
+        public void loadSourceIntoStaging(DailyBackfillPlan plan, BackfillProjection projection) {
             loadCalls++;
             events.add("load-stage");
         }
 
         @Override
-        public void deleteFormalInterval(DailyBackfillPlan plan) {
+        public void deleteTargetInterval(DailyBackfillPlan plan) {
             deleteCalls++;
             events.add("delete");
         }
 
         @Override
-        public void copyTemporaryIntervalIntoFormal(DailyBackfillPlan plan, BackfillProjection projection)
+        public void publishStagedInterval(DailyBackfillPlan plan, BackfillProjection projection)
                 throws SQLException {
-            copyCalls++;
+            publishCalls++;
             events.add("insert-stage");
-            if (copyFailure != null) {
-                throw copyFailure;
+            if (publishFailure != null) {
+                throw publishFailure;
             }
-            mutated = true;
+            currentTargetIntervalMetrics = publishedTargetMetrics;
         }
 
     }

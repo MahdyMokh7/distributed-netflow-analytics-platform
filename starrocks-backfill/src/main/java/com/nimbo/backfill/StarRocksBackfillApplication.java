@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -34,14 +35,17 @@ public final class StarRocksBackfillApplication {
 
         try {
             BackfillConfig config = BackfillConfig.fromEnvironment(environment, clock);
-            DailyBackfillPlan plan = new BackfillPlanner().createPlan(config);
+            List<DailyBackfillPlan> plans = new BackfillPlanner().createPlans(config);
 
             try (Connection connection =
                     DriverManager.getConnection(config.jdbcUrl(), config.username(), config.password())) {
 
                 StarRocksBackfillRepository repository = new StarRocksBackfillRepository(connection, config);
                 repository.initializeSession();
-                new BackfillService(repository).run(plan);
+                BackfillService service = new BackfillService(repository);
+                for (DailyBackfillPlan plan : plans) {
+                    service.run(plan);
+                }
             }
 
             return 0;

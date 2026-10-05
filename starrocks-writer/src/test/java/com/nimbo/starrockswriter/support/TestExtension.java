@@ -85,7 +85,7 @@ public final class TestExtension implements BeforeAllCallback, ParameterResolver
         @Override
         public synchronized void close() {
             stop(kafka.container());
-            stop(starRocks.container());
+            // The starrocks-backfill integration suite is the final owner and stops this reusable container.
             started = false;
         }
 
