@@ -6,6 +6,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,22 +18,10 @@ class SchemaMappingTest {
                   "type":"record",
                   "name":"TestRecord",
                   "fields":[
-                    {
-                      "name":"SRC_IP",
-                      "type":"string"
-                    },
-                    {
-                      "name":"PACKETS",
-                      "type":"long"
-                    },
-                    {
-                      "name":"RATIO",
-                      "type":"double"
-                    },
-                    {
-                      "name":"COUNT",
-                      "type":"int"
-                    }
+                    {"name":"SRC_IP","type":"string"},
+                    {"name":"PACKETS","type":"long"},
+                    {"name":"RATIO","type":"double"},
+                    {"name":"COUNT","type":"int"}
                   ]
                 }
                 """);
@@ -40,37 +29,75 @@ class SchemaMappingTest {
 
     @Test
     void shouldGenerateStarRocksColumns() {
-        SchemaMapping mapping = new SchemaMapping(schema());
+        SchemaMapping mapping = new SchemaMapping();
 
-        assertThat(mapping.starRocksColumns())
-                .isEqualTo("kafka_topic,kafka_partition,kafka_offset,kafka_timestamp,src_ip,packets,ratio,count");
+        assertThat(mapping.starRocksColumns(List.of("src_ip", "packets", "ratio", "count")))
+                .isEqualTo("kafka_topic,kafka_partition,kafka_offset,PROCESS_TIME,src_ip,packets,ratio,count");
     }
 
     @Test
-    void shouldExtractAndNormalizeValues() {
-        SchemaMapping mapping = new SchemaMapping(schema());
+    void shouldExtractAndNormalizeValuesByColumnName() {
+        SchemaMapping mapping = new SchemaMapping();
         GenericRecord record = new GenericData.Record(schema());
 
         record.put("SRC_IP", "10.0.0.1");
-        record.put("PACKETS", 100);
-        record.put("RATIO", 1);
+        record.put("PACKETS", 100L);
+        record.put("RATIO", 1.0d);
         record.put("COUNT", 5);
 
-        List<Object> values = mapping.extractValues(record);
+        Map<String, Object> values = mapping.extractValues(record);
 
-        assertThat(values).containsExactly("10.0.0.1", 100L, 1.0d, 5);
+        assertThat(values).containsEntry("src_ip", "10.0.0.1")
+                .containsEntry("packets", 100L)
+                .containsEntry("ratio", 1.0d)
+                .containsEntry("count", 5);
     }
 
     @Test
-    void shouldKeepNullValues() {
-        SchemaMapping mapping = new SchemaMapping(schema());
-        GenericRecord record = new GenericData.Record(schema());
+    void shouldRequestSafeIntToBigintWidening() {
+        Schema longSchema = Schema.create(Schema.Type.LONG);
+        assertThat(new SchemaMapping().typeEvolution("INT", longSchema))
+                .isEqualTo(SchemaMapping.TypeEvolution.WIDEN);
+    }
 
-        record.put("SRC_IP", null);
-        record.put("PACKETS", null);
-        record.put("RATIO", null);
-        record.put("COUNT", null);
+    @Test
+    void shouldTreatStarRocksIntDisplayWidthAsInt() {
+        Schema intSchema = Schema.create(Schema.Type.INT);
+        assertThat(new SchemaMapping().typeEvolution("int(11)", intSchema))
+                .isEqualTo(SchemaMapping.TypeEvolution.COMPATIBLE);
+    }
 
-        assertThat(mapping.extractValues(record)).containsExactly(null, null, null, null);
+    @Test
+    void shouldWidenStarRocksIntDisplayWidthToBigint() {
+        Schema longSchema = Schema.create(Schema.Type.LONG);
+        assertThat(new SchemaMapping().typeEvolution("int(11)", longSchema))
+                .isEqualTo(SchemaMapping.TypeEvolution.WIDEN);
+    }
+
+    @Test
+    void shouldTreatStarRocksBigintDisplayWidthAsBigint() {
+        Schema longSchema = Schema.create(Schema.Type.LONG);
+        assertThat(new SchemaMapping().typeEvolution("bigint(20)", longSchema))
+                .isEqualTo(SchemaMapping.TypeEvolution.COMPATIBLE);
+    }
+
+    @Test
+    void shouldAcceptExistingBigintForIntWriterSchema() {
+        Schema intSchema = Schema.create(Schema.Type.INT);
+        assertThat(new SchemaMapping().typeEvolution("BIGINT", intSchema))
+                .isEqualTo(SchemaMapping.TypeEvolution.COMPATIBLE);
+    }
+
+    @Test
+    void shouldRejectUnsafeTypeChange() {
+        Schema longSchema = Schema.create(Schema.Type.LONG);
+        assertThat(new SchemaMapping().typeEvolution("DOUBLE", longSchema))
+                .isEqualTo(SchemaMapping.TypeEvolution.INCOMPATIBLE);
+    }
+
+    @Test
+    void shouldMapNullableUnionToStarRocksType() {
+        Schema nullableLong = new Schema.Parser().parse("[\"null\",\"long\"]");
+        assertThat(new SchemaMapping().starRocksType(nullableLong)).isEqualTo("BIGINT");
     }
 }

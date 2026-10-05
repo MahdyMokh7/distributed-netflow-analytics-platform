@@ -6,6 +6,7 @@ import com.nimbo.starrockswriter.mapper.CsvFormatter;
 import com.nimbo.starrockswriter.mapper.SchemaMapping;
 import com.nimbo.starrockswriter.model.StarRocksRow;
 import com.nimbo.starrockswriter.model.StreamLoadResult;
+import com.nimbo.starrockswriter.schema.StarRocksSchemaEvolutionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -31,16 +32,17 @@ public class StarRocksStreamLoadClient {
     private final ObjectMapper objectMapper;
     private final BackendSelector backendSelector;
     private final SchemaMapping schemaMapping;
+    private final StarRocksSchemaEvolutionManager schemaEvolutionManager;
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
-    private HttpRequest buildRequest(URI uri, String csvBody, String label) {
+    private HttpRequest buildRequest(URI uri, String csvBody, String label, String columns) {
         HttpRequest.Builder builder = HttpRequest.newBuilder().uri(uri).timeout(Duration.ofSeconds(60))
                 .header("Authorization", buildAuthorizationHeader())
                 .header("format", "CSV")
                 .header("column_separator", ",")
                 .header("enclose", "\"")
-                .header("columns", schemaMapping.starRocksColumns())
+                .header("columns", columns)
                 .header("strict_mode", "true")
                 .header("max_filter_ratio", "0")
                 .header("Content-Type", "text/csv")
@@ -68,8 +70,14 @@ public class StarRocksStreamLoadClient {
             return CompletableFuture.failedFuture(new IllegalArgumentException("Stream Load batch cannot be empty"));
         }
 
+        // Take one immutable column snapshot for both the CSV body and the Stream Load header.
+        // If another schema version is discovered concurrently, this batch remains internally consistent.
+        List<String> netFlowColumns = schemaEvolutionManager.currentNetFlowColumns();
+        String columns = schemaMapping.starRocksColumns(netFlowColumns);
+        String csvBody = csvFormatter.format(rows, netFlowColumns);
+
         URI uri = URI.create(buildStreamLoadUrl());
-        HttpRequest request = buildRequest(uri, csvFormatter.format(rows), label);
+        HttpRequest request = buildRequest(uri, csvBody, label, columns);
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
                 .thenApply(response -> {
             if (response.statusCode() < 200 || response.statusCode() >= 300) {

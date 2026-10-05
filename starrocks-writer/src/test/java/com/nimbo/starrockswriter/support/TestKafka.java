@@ -18,13 +18,14 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.awaitility.Awaitility.await;
 
 public final class TestKafka {
 
     private static final String IMAGE = "apache/kafka-native:3.8.0";
-    private static final String TOPIC = "netflow-integration-test";
+    private static final String TOPIC = "multi-version-netflow-integration-test";
     private static final String CONSUMER_GROUP = "starrockswriter-integration-test";
     private static final int PARTITIONS = 2;
 
@@ -46,7 +47,7 @@ public final class TestKafka {
         return CONSUMER_GROUP;
     }
 
-    public long produce(byte[] payload, long timestamp, int partition) throws Exception {
+    public long produce(byte[] payload, long timestamp, int partition) {
         Properties properties = new Properties();
         properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
@@ -56,6 +57,11 @@ public final class TestKafka {
             return producer.send(new ProducerRecord<>(TOPIC, partition, timestamp, null, payload))
                     .get(30, TimeUnit.SECONDS)
                     .offset();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while producing an integration-test Kafka record", exception);
+        } catch (ExecutionException | TimeoutException exception) {
+            throw new IllegalStateException("Could not produce an integration-test Kafka record", exception);
         }
     }
 
@@ -105,12 +111,16 @@ public final class TestKafka {
             admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 1)))
                     .all()
                     .get(30, TimeUnit.SECONDS);
-        } catch (Exception exception) {
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while resetting the integration-test Kafka state", exception);
+        } catch (ExecutionException | TimeoutException exception) {
             throw new IllegalStateException("Could not reset the integration-test Kafka state", exception);
         }
     }
 
-    private void deleteConsumerGroup(AdminClient admin) throws Exception {
+    private void deleteConsumerGroup(AdminClient admin)
+            throws InterruptedException, ExecutionException, TimeoutException {
         try {
             admin.deleteConsumerGroups(List.of(CONSUMER_GROUP)).all().get(30, TimeUnit.SECONDS);
         } catch (ExecutionException exception) {

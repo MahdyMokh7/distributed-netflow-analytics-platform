@@ -37,7 +37,7 @@ public class InFlightLoadManager {
         return pendingLoads.size() >= properties.getMaxInFlightRequests();
     }
 
-    public void drain(KafkaConsumer<byte[], byte[]> consumer) {
+    public void drain(KafkaConsumer<?, ?> consumer) {
         while (!pendingLoads.isEmpty()) {
             PendingLoad pendingLoad = pendingLoads.peekFirst();
 

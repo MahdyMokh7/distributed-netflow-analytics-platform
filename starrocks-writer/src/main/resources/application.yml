@@ -29,17 +29,24 @@ server:
 starrockswriter:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092}
-    topic: ${KAFKA_TOPIC:netflow}
-    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-starrocks-writer}
+    topic: ${KAFKA_TOPIC:multi-version-netflow}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:multi-version-netflow-starrocks-writer}
     client-id: ${KAFKA_CLIENT_ID:starrocks-writer}
     auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
-    max-poll-records: ${KAFKA_MAX_POLL_RECORDS:2000}
+    max-poll-records: ${KAFKA_MAX_POLL_RECORDS:3000}
     poll-timeout-ms: ${KAFKA_POLL_TIMEOUT_MS:1000}
     consumer-count: ${KAFKA_CONSUMER_COUNT:3}
     max-partition-fetch-bytes: ${KAFKA_MAX_PARTITION_FETCH_BYTES:4194304}
+    dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
+    dlq-publish-timeout-ms: ${KAFKA_DLQ_PUBLISH_TIMEOUT_MS:10000}
     session-timeout-ms: ${KAFKA_SESSION_TIMEOUT_MS:30000}
     heartbeat-interval-ms: ${KAFKA_HEARTBEAT_INTERVAL_MS:3000}
     max-poll-interval-ms: ${KAFKA_MAX_POLL_INTERVAL_MS:900000}
+
+  schema-registry:
+    url: ${SCHEMA_REGISTRY_URL:http://10.10.61.77:8081}
+    connect-timeout-ms: ${SCHEMA_REGISTRY_CONNECT_TIMEOUT_MS:3000}
+    request-timeout-ms: ${SCHEMA_REGISTRY_REQUEST_TIMEOUT_MS:5000}
 
   starrocks:
     stream-load-backends:
@@ -55,8 +62,10 @@ starrockswriter:
     merge-commit-async: ${STARROCKS_MERGE_COMMIT_ASYNC:false}
     merge-commit-interval-ms: ${STARROCKS_MERGE_COMMIT_INTERVAL_MS:1000}
     merge-commit-parallel: ${STARROCKS_MERGE_COMMIT_PARALLEL:3}
-    max-in-flight-requests: ${STARROCKS_MAX_IN_FLIGHT_REQUESTS:20}
+    max-in-flight-requests: ${STARROCKS_MAX_IN_FLIGHT_REQUESTS:8}
     retry-backoff-ms: ${STARROCKS_RETRY_BACKOFF_MS:1000}
-    max-batch-size-rows: ${STARROCKS_MAX_BATCH_SIZE_ROWS:8000}
+    max-batch-size-rows: ${STARROCKS_MAX_BATCH_SIZE_ROWS:50000}
     max-batch-time-ms: ${STARROCKS_MAX_BATCH_TIME_MS:1000}
+    schema-evolution-timeout-ms: ${STARROCKS_SCHEMA_EVOLUTION_TIMEOUT_MS:120000}
+    schema-evolution-poll-ms: ${STARROCKS_SCHEMA_EVOLUTION_POLL_MS:1000}
 

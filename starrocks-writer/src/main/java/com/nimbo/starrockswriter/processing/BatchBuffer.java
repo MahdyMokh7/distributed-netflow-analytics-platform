@@ -43,21 +43,21 @@ public class BatchBuffer {
     }
 
     private boolean reachedTime() {
-        if (rows.isEmpty()) return false;
+        if (isEmpty()) return false;
         return System.currentTimeMillis() - lastFlushTime >= properties.getMaxBatchTimeMs();
     }
 
     public boolean isEmpty() {
-        return rows.isEmpty();
+        return rows.isEmpty() && offsets.isEmpty();
     }
 
     public int rowCount() { return rows.size(); }
 
     public long ageSeconds() {
-        return rows.isEmpty() ? 0 : (System.currentTimeMillis() - lastFlushTime) / 1000;
+        return isEmpty() ? 0 : (System.currentTimeMillis() - lastFlushTime) / 1000;
     }
 
-    public enum FlushReason { SIZE, TIME, SHUTDOWN }
+    public enum FlushReason { SIZE, TIME, SHUTDOWN, DESERIALIZATION_ERROR }
 
     public BatchSnapshot snapshot() {
         return new BatchSnapshot(List.copyOf(rows), Map.copyOf(offsets));

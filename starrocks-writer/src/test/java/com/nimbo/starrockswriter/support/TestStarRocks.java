@@ -73,7 +73,7 @@ public final class TestStarRocks {
         return DriverManager.getConnection(jdbcUrl(), "root", "");
     }
 
-    public void withDatabase(SqlConsumer action) throws Exception {
+    public void withDatabase(SqlConsumer action) throws SQLException {
         try (Connection connection = connection()) {
             action.accept(connection);
         }
@@ -156,6 +156,6 @@ public final class TestStarRocks {
 
     @FunctionalInterface
     public interface SqlConsumer {
-        void accept(Connection connection) throws Exception;
+        void accept(Connection connection) throws SQLException;
     }
 }

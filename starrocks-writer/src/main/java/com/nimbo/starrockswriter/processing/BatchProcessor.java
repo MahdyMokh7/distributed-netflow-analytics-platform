@@ -2,13 +2,13 @@ package com.nimbo.starrockswriter.processing;
 
 import com.nimbo.common.validation.NetflowValidationService;
 import com.nimbo.common.validation.ValidationResult;
-import com.nimbo.starrockswriter.avro.AvroDeserializer;
 import com.nimbo.starrockswriter.streamload.StreamLoadRetryHandler;
 import com.nimbo.starrockswriter.streamload.StreamLoadLabelGenerator;
 import com.nimbo.starrockswriter.mapper.StarRocksRecordMapper;
 import com.nimbo.starrockswriter.model.PendingLoad;
 import com.nimbo.starrockswriter.model.StarRocksRow;
 import com.nimbo.starrockswriter.model.StreamLoadResult;
+import com.nimbo.starrockswriter.schema.StarRocksSchemaEvolutionManager;
 import com.nimbo.starrockswriter.metrics.StarRocksWriterMetrics;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -27,9 +27,9 @@ import java.util.concurrent.CompletableFuture;
 public class BatchProcessor {
 
     private final int workerNumber;
-    private final AvroDeserializer avroDeserializer;
     private final NetflowValidationService validationService;
     private final StarRocksRecordMapper mapper;
+    private final StarRocksSchemaEvolutionManager schemaEvolutionManager;
     private final BatchBuffer batchBuffer;
     private final InFlightLoadManager inFlightLoadManager;
     private final StreamLoadRetryHandler retryHandler;
@@ -39,19 +39,26 @@ public class BatchProcessor {
     @Getter
     private boolean kafkaPaused;
 
-    public void processRecords(ConsumerRecords<byte[], byte[]> records) {
+    public void processRecords(ConsumerRecords<byte[], GenericRecord> records) {
 
-        for (ConsumerRecord<byte[], byte[]> consumerRecord : records) {
+        for (ConsumerRecord<byte[], GenericRecord> consumerRecord : records) {
             try {
                 processRecord(consumerRecord);
-            } catch (Exception e) {
-                if (!(e instanceof AccountedProcessingException)) {
+            } catch (NonSkippableProcessingException exception) {
+                log.error(
+                        "Non-skippable processing failure; offset will not be advanced: topic={}, partition={}, offset={}",
+                        consumerRecord.topic(), consumerRecord.partition(),
+                        consumerRecord.offset(), exception
+                );
+                throw exception;
+            } catch (RuntimeException exception) {
+                if (!(exception instanceof AccountedProcessingException)) {
                     metrics.recordProcessed(workerNumber, "processing_error");
                 }
                 log.error(
-                        "Failed processing record topic={}, partition={}, offset={}",
+                        "Skipping record after record-local processing failure: topic={}, partition={}, offset={}",
                         consumerRecord.topic(), consumerRecord.partition(),
-                        consumerRecord.offset(), e
+                        consumerRecord.offset(), exception
                 );
                 batchBuffer.addOffset(new TopicPartition(consumerRecord.topic(), consumerRecord.partition()),
                         new OffsetAndMetadata(consumerRecord.offset() + 1));
@@ -59,13 +66,19 @@ public class BatchProcessor {
         }
     }
 
-    private void processRecord(ConsumerRecord<byte[], byte[]> consumerRecord) {
-        GenericRecord avroRecord;
-        try {
-            avroRecord = avroDeserializer.deserialize(consumerRecord.value());
-        } catch (RuntimeException exception) {
+    private void processRecord(ConsumerRecord<byte[], GenericRecord> consumerRecord) {
+        GenericRecord avroRecord = consumerRecord.value();
+        if (avroRecord == null) {
             metrics.recordProcessed(workerNumber, "deserialization_error");
-            throw new AccountedProcessingException(exception);
+            throw new AccountedProcessingException(
+                    new IllegalArgumentException("Kafka record value is null; tombstones are not supported"));
+        }
+
+        try {
+            schemaEvolutionManager.ensureSchema(avroRecord.getSchema());
+        } catch (RuntimeException exception) {
+            metrics.recordProcessed(workerNumber, "schema_evolution_error");
+            throw new NonSkippableProcessingException(exception);
         }
         ValidationResult validation = validationService.validate(avroRecord);
         TopicPartition partition = new TopicPartition(consumerRecord.topic(), consumerRecord.partition());
@@ -91,6 +104,11 @@ public class BatchProcessor {
         updateBatchMetrics();
     }
 
+    public void skipDeserializationFailure(TopicPartition partition, long nextOffset) {
+        batchBuffer.addOffset(partition, new OffsetAndMetadata(nextOffset));
+        submitBatch(BatchBuffer.FlushReason.DESERIALIZATION_ERROR);
+    }
+
     public void flushIfNeeded() {
         updateBatchMetrics();
         BatchBuffer.FlushReason reason = batchBuffer.flushReason();
@@ -106,7 +124,9 @@ public class BatchProcessor {
 
         BatchBuffer.BatchSnapshot batchSnapshot = batchBuffer.snapshot();
         String label = labelGenerator.generateLabel(workerNumber, batchSnapshot.offsets());
-        CompletableFuture<StreamLoadResult> future = retryHandler.sendRequest(batchSnapshot.rows(), label);
+        CompletableFuture<StreamLoadResult> future = batchSnapshot.rows().isEmpty()
+                ? CompletableFuture.completedFuture(StreamLoadResult.offsetOnly(label))
+                : retryHandler.sendRequest(batchSnapshot.rows(), label);
         PendingLoad pendingLoad = new PendingLoad(label, batchSnapshot.rows().size(), batchSnapshot.offsets(), future);
 
         inFlightLoadManager.add(pendingLoad);
@@ -117,7 +137,7 @@ public class BatchProcessor {
         log.debug("Worker {} submitted batch. label={}, rows={}", workerNumber, label, batchSnapshot.rows().size());
     }
 
-    public void drainCompletedLoads(KafkaConsumer<byte[], byte[]> consumer) {
+    public void drainCompletedLoads(KafkaConsumer<byte[], GenericRecord> consumer) {
         inFlightLoadManager.drain(consumer);
     }
 
@@ -133,7 +153,7 @@ public class BatchProcessor {
         kafkaPaused = false;
     }
 
-    public void shutdown(KafkaConsumer<byte[], byte[]> consumer) {
+    public void shutdown(KafkaConsumer<byte[], GenericRecord> consumer) {
         if (!batchBuffer.isEmpty()) {
             submitBatch(BatchBuffer.FlushReason.SHUTDOWN);
         }
@@ -146,6 +166,12 @@ public class BatchProcessor {
 
     private static final class AccountedProcessingException extends RuntimeException {
         private AccountedProcessingException(RuntimeException cause) {
+            super(cause);
+        }
+    }
+
+    private static final class NonSkippableProcessingException extends RuntimeException {
+        private NonSkippableProcessingException(RuntimeException cause) {
             super(cause);
         }
     }

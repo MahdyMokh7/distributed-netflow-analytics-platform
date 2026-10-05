@@ -14,6 +14,7 @@ public final class TestContextInitializer
 
         TestKafka kafka = infrastructure.kafka();
         TestStarRocks starRocks = infrastructure.starRocks();
+        TestSchemaRegistry schemaRegistry = infrastructure.schemaRegistry();
         TestPropertyValues.of(
                         "spring.datasource.url=" + starRocks.jdbcUrl(),
                         "spring.datasource.username=root",
@@ -27,6 +28,7 @@ public final class TestContextInitializer
                         "starrockswriter.kafka.poll-timeout-ms=100",
                         "starrockswriter.kafka.max-partition-fetch-bytes=1048576",
                         "starrockswriter.kafka.consumer-count=2",
+                        "starrockswriter.schema-registry.url=" + schemaRegistry.url(),
                         "starrockswriter.starrocks.stream-load-backends[0]=http://" + starRocks.host() + ":"
                                 + starRocks.beHttpPort(),
                         "starrockswriter.starrocks.stream-load-backends[1]=http://" + starRocks.host() + ":"

@@ -9,10 +9,13 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.EncoderFactory;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ClassPathResource;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,7 +30,7 @@ class StarRocksWriterIT {
     }
 
     @Test
-    void consumesMixedKafkaRecordsAndPersistsValidRecords() throws Exception {
+    void consumesMixedKafkaRecordsAndPersistsValidRecords() throws SQLException {
         infrastructure.kafka().awaitConsumerGroupMembers(2);
 
         Schema schema = loadAvroSchema();
@@ -67,7 +70,7 @@ class StarRocksWriterIT {
     }
 
     @Test
-    void flushesBatchOnTimeThresholdWhenBelowMaxBatchSize() throws Exception {
+    void flushesBatchOnTimeThresholdWhenBelowMaxBatchSize() throws SQLException {
         infrastructure.kafka().awaitConsumerGroupMembers(2);
 
         Schema schema = loadAvroSchema();
@@ -80,28 +83,28 @@ class StarRocksWriterIT {
         assertPersistedRow("192.0.2.30", 0, 0L, timestamp, 4242L);
     }
 
-    private long produce(GenericRecord record, Schema schema, long timestamp) throws Exception {
+    private long produce(GenericRecord record, Schema schema, long timestamp) {
         return produce(record, schema, timestamp, 0);
     }
 
-    private long produce(GenericRecord record, Schema schema, long timestamp, int partition) throws Exception {
+    private long produce(GenericRecord record, Schema schema, long timestamp, int partition) {
         return produceBytes(serialize(record, schema), timestamp, partition);
     }
 
-    private long produceBytes(byte[] payload, long timestamp) throws Exception {
+    private long produceBytes(byte[] payload, long timestamp) {
         return produceBytes(payload, timestamp, 0);
     }
 
-    private long produceBytes(byte[] payload, long timestamp, int partition) throws Exception {
+    private long produceBytes(byte[] payload, long timestamp, int partition) {
         return infrastructure.kafka().produce(payload, timestamp, partition);
     }
 
     private void assertPersistedRow(String sourceIp, int expectedPartition, long expectedOffset,
-                                    long expectedTimestamp, long expectedBytes) throws Exception {
+                                    long expectedTimestamp, long expectedBytes) throws SQLException {
         infrastructure.starRocks().withDatabase(connection -> {
             try (Statement statement = connection.createStatement();
                  ResultSet row = statement.executeQuery("""
-                         SELECT kafka_topic, kafka_partition, kafka_offset, kafka_timestamp,
+                         SELECT kafka_topic, kafka_partition, kafka_offset, PROCESS_TIME,
                                 ipv4_dst_addr, in_bytes
                          FROM nimbo.netflow
                          WHERE ipv4_src_addr = '%s'
@@ -110,7 +113,7 @@ class StarRocksWriterIT {
                 assertThat(row.getString("kafka_topic")).isEqualTo(infrastructure.kafka().topic());
                 assertThat(row.getInt("kafka_partition")).isEqualTo(expectedPartition);
                 assertThat(row.getLong("kafka_offset")).isEqualTo(expectedOffset);
-                assertThat(row.getLong("kafka_timestamp")).isEqualTo(expectedTimestamp);
+                assertThat(row.getLong("PROCESS_TIME")).isEqualTo(expectedTimestamp);
                 assertThat(row.getString("ipv4_dst_addr")).isEqualTo("198.51.100.20");
                 assertThat(row.getLong("in_bytes")).isEqualTo(expectedBytes);
                 assertThat(row.next()).isFalse();
@@ -118,8 +121,8 @@ class StarRocksWriterIT {
         });
     }
 
-    private Schema loadAvroSchema() throws Exception {
-        return new Schema.Parser().parse(new ClassPathResource("avro/NetFlowV2Record.avsc").getInputStream());
+    private Schema loadAvroSchema() {
+        return infrastructure.schemaRegistry().schema();
     }
 
     private GenericRecord validNetflowRecord(Schema schema, String sourceIp, long inBytes) {
@@ -141,11 +144,21 @@ class StarRocksWriterIT {
         return record;
     }
 
-    private byte[] serialize(GenericRecord record, Schema schema) throws Exception {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(output, null);
-        new GenericDatumWriter<GenericRecord>(schema).write(record, encoder);
-        encoder.flush();
-        return output.toByteArray();
+    private byte[] serialize(GenericRecord record, Schema schema) {
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(output, null);
+            new GenericDatumWriter<GenericRecord>(schema).write(record, encoder);
+            encoder.flush();
+
+            byte[] avro = output.toByteArray();
+            return ByteBuffer.allocate(5 + avro.length)
+                    .put((byte) 0)
+                    .putInt(com.nimbo.starrockswriter.support.TestSchemaRegistry.SCHEMA_ID)
+                    .put(avro)
+                    .array();
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Could not serialize integration-test Avro record", exception);
+        }
     }
 }
