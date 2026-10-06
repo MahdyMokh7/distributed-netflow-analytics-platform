@@ -68,16 +68,18 @@ public final class StarRocksCatalogTestExtension
   private static final class Infrastructure implements ExtensionContext.Store.CloseableResource {
 
     private static final int FE_HTTP_PORT = 8030;
+    private static final int BE_HTTP_PORT = 8040;
     private static final int MYSQL_PORT = 9030;
 
     private final GenericContainer<?> container =
         new GenericContainer<>(DockerImageName.parse("starrocks/allin1-ubuntu:4.0.12"))
-            .withExposedPorts(FE_HTTP_PORT, MYSQL_PORT)
+            .withExposedPorts(FE_HTTP_PORT, BE_HTTP_PORT, MYSQL_PORT)
             .waitingFor(
                 Wait.forHttp("/api/health")
                     .forPort(FE_HTTP_PORT)
                     .forStatusCode(200)
-                    .withStartupTimeout(Duration.ofMinutes(4)));
+                    .withStartupTimeout(Duration.ofMinutes(4)))
+            .withReuse(true);
 
     private boolean started;
 

@@ -156,9 +156,7 @@ public final class StarRocksContainerExtension implements BeforeAllCallback, Bef
 
     @Override
     public synchronized void close() {
-      if (container.isRunning()) {
-        container.stop();
-      }
+      // analytics-query is the final StarRocks test-container owner in the reactor.
       started = false;
     }
 

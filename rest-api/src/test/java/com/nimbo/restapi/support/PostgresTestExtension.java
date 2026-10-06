@@ -106,7 +106,7 @@ public final class PostgresTestExtension implements BeforeAllCallback {
 
     @Override
     public void close() {
-      POSTGRES.stop();
+      // analytics-query is the final PostgreSQL test-container owner in the reactor.
     }
   }
 

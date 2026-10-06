@@ -15,6 +15,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 public final class PostgresSqlExecutionTestExtension
     implements BeforeAllCallback, BeforeEachCallback, ParameterResolver {
 
+  private static final String DATABASE_NAME = "nimbo_analytics_query";
+
   private static final ExtensionContext.Namespace NAMESPACE =
       ExtensionContext.Namespace.create(PostgresSqlExecutionTestExtension.class);
 
@@ -55,7 +57,7 @@ public final class PostgresSqlExecutionTestExtension
 
   public String jdbcUrl() {
     INFRASTRUCTURE.start();
-    return INFRASTRUCTURE.container.getJdbcUrl();
+    return INFRASTRUCTURE.jdbcUrl();
   }
 
   public String username() {
@@ -72,8 +74,8 @@ public final class PostgresSqlExecutionTestExtension
     INFRASTRUCTURE.start();
 
     try (Connection connection =
-            DriverManager.getConnection(
-                INFRASTRUCTURE.container.getJdbcUrl(), username(), password());
+        DriverManager.getConnection(
+            INFRASTRUCTURE.jdbcUrl(), username(), password());
         Statement statement = connection.createStatement();
         ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM traffic_aggregates")) {
 
@@ -89,9 +91,10 @@ public final class PostgresSqlExecutionTestExtension
 
     private final PostgreSQLContainer<?> container =
         new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("nimbo")
+            .withDatabaseName("postgres")
             .withUsername("postgres")
-            .withPassword("postgres");
+            .withPassword("postgres")
+            .withReuse(true);
 
     private boolean started;
 
@@ -101,37 +104,78 @@ public final class PostgresSqlExecutionTestExtension
       }
 
       container.start();
+      createDatabaseIfMissing();
       executeAsAdministrator(
           """
-          CREATE ROLE analytics_query_app
-              LOGIN
-              PASSWORD 'analytics-query-test-password';
-          CREATE TABLE traffic_aggregates (
-              src_ip TEXT NOT NULL,
-              window_start TIMESTAMP NOT NULL,
-              in_bytes BIGINT NOT NULL
-          );
-          GRANT USAGE ON SCHEMA public TO analytics_query_app;
-          GRANT SELECT ON traffic_aggregates TO analytics_query_app;
-          """);
+              DO $$
+              BEGIN
+                IF NOT EXISTS (
+                  SELECT 1 FROM pg_roles WHERE rolname = 'analytics_query_app'
+                ) THEN
+                  CREATE ROLE analytics_query_app
+                    LOGIN
+                    PASSWORD 'analytics-query-test-password';
+                END IF;
+              END
+              $$;
+              DROP TABLE IF EXISTS traffic_aggregates;
+              CREATE TABLE traffic_aggregates (
+                src_ip TEXT NOT NULL,
+                window_start TIMESTAMP NOT NULL,
+                in_bytes BIGINT NOT NULL
+              );
+              GRANT USAGE ON SCHEMA public TO analytics_query_app;
+              GRANT SELECT ON traffic_aggregates TO analytics_query_app;
+              """);
       started = true;
+    }
+
+    private void createDatabaseIfMissing() {
+      try (Connection connection =
+          DriverManager.getConnection(
+              container.getJdbcUrl(), container.getUsername(), container.getPassword());
+          Statement statement = connection.createStatement()) {
+
+        boolean databaseExists;
+        try (ResultSet result =
+            statement.executeQuery(
+                "SELECT 1 FROM pg_database WHERE datname = '" + DATABASE_NAME + "'")) {
+          databaseExists = result.next();
+        }
+
+        if (!databaseExists) {
+          statement.execute("CREATE DATABASE " + DATABASE_NAME);
+        }
+      } catch (SQLException exception) {
+        throw new IllegalStateException(
+            "Failed to create analytics-query test database", exception);
+      }
+    }
+
+    private String jdbcUrl() {
+      return "jdbc:postgresql://"
+          + container.getHost()
+          + ":"
+          + container.getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT)
+          + "/"
+          + DATABASE_NAME;
     }
 
     void resetData() {
       executeAsAdministrator(
           """
-          TRUNCATE TABLE traffic_aggregates;
-          INSERT INTO traffic_aggregates (src_ip, window_start, in_bytes)
-          VALUES
-              ('10.0.0.1', TIMESTAMP '2026-10-01 08:15:00', 100),
-              ('10.0.0.2', TIMESTAMP '2026-10-01 08:30:00', 200);
-          """);
+              TRUNCATE TABLE traffic_aggregates;
+              INSERT INTO traffic_aggregates (src_ip, window_start, in_bytes)
+              VALUES
+                ('10.0.0.1', TIMESTAMP '2026-10-01 08:15:00', 100),
+                ('10.0.0.2', TIMESTAMP '2026-10-01 08:30:00', 200);
+              """);
     }
 
     private void executeAsAdministrator(String sql) {
       try (Connection connection =
-              DriverManager.getConnection(
-                  container.getJdbcUrl(), container.getUsername(), container.getPassword());
+          DriverManager.getConnection(
+              jdbcUrl(), container.getUsername(), container.getPassword());
           Statement statement = connection.createStatement()) {
 
         statement.execute(sql);
