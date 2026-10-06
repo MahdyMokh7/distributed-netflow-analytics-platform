@@ -11,16 +11,16 @@ import org.springframework.context.annotation.Configuration;
 @Setter
 public class BatchConfig {
 
-    private String schedule;
-    private String windowDuration;
-    private boolean enabled;
-    private int maxFilesPerBatch;
-    private Retention retention = new Retention();
+  private String schedule;
+  private String windowDuration;
+  private boolean enabled;
+  private int maxFilesPerBatch;
+  private Retention retention = new Retention();
 
-    @Getter
-    @Setter
-    public static class Retention {
-        private boolean enabled;
-        private int previousDays;
-    }
+  @Getter
+  @Setter
+  public static class Retention {
+    private boolean enabled;
+    private int previousDays;
+  }
 }

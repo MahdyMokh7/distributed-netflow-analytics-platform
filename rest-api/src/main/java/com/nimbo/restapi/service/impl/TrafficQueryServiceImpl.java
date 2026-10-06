@@ -10,6 +10,9 @@ import com.nimbo.restapi.service.TrafficQueryService;
 import com.nimbo.restapi.util.QueryMetrics;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -20,127 +23,131 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.time.Duration;
-import java.util.Set;
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
 public class TrafficQueryServiceImpl implements TrafficQueryService {
 
-    private final TrafficRepository trafficRepository;
-    private final QueryMetrics metrics;
+  private final TrafficRepository trafficRepository;
+  private final QueryMetrics metrics;
 
-    private static final int MAX_TIME_RANGE_DAYS = 7;
-    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            "srcIp", "windowStart", "windowEnd", "inBytes", "outBytes",
-            "inPackets", "outPackets", "recordCount", "ingestedAt"
-    );
+  private static final int MAX_TIME_RANGE_DAYS = 7;
+  private static final Set<String> ALLOWED_SORT_FIELDS =
+      Set.of(
+          "srcIp",
+          "windowStart",
+          "windowEnd",
+          "inBytes",
+          "outBytes",
+          "inPackets",
+          "outPackets",
+          "recordCount",
+          "ingestedAt");
 
-    @Override
-    @Cacheable(value = "traffic", key = "#request.srcIp + '_' + #request.startTime + '_' + #request.endTime + '_' + #request.pagination.page + '_' + #request.pagination.size + '_' + #request.pagination.sortBy + '_' + #request.pagination.sortDirection")
-    @CircuitBreaker(name = "database")
-    @Retry(name = "database")
-    public Page<TrafficResponseDto> queryTraffic(TrafficQueryRequestDto request) {
-        long startTime = System.currentTimeMillis();
+  @Override
+  @Cacheable(
+      value = "traffic",
+      key =
+          "#request.srcIp + '_' + #request.startTime + '_' + #request.endTime + '_' +"
+              + " #request.pagination.page + '_' + #request.pagination.size + '_' +"
+              + " #request.pagination.sortBy + '_' + #request.pagination.sortDirection")
+  @CircuitBreaker(name = "database")
+  @Retry(name = "database")
+  public Page<TrafficResponseDto> queryTraffic(TrafficQueryRequestDto request) {
+    long startTime = System.currentTimeMillis();
 
-        try {
-            validateTimeRange(request.getStartTime(), request.getEndTime());
+    try {
+      validateTimeRange(request.getStartTime(), request.getEndTime());
 
-            Pageable pageable = createPageable(request);
+      Pageable pageable = createPageable(request);
 
-            Page<TrafficAggregate> aggregates;
+      Page<TrafficAggregate> aggregates;
 
-            if (request.getSrcIp() != null) {
-                aggregates = trafficRepository.findBySrcIpAndTimeRange(
-                        request.getSrcIp(),
-                        request.getStartTime(),
-                        request.getEndTime(),
-                        pageable
-                );
-            } else {
-                aggregates = trafficRepository.findByTimeRange(
-                        request.getStartTime(),
-                        request.getEndTime(),
-                        pageable
-                );
-            }
+      if (request.getSrcIp() != null) {
+        aggregates =
+            trafficRepository.findBySrcIpAndTimeRange(
+                request.getSrcIp(), request.getStartTime(), request.getEndTime(), pageable);
+      } else {
+        aggregates =
+            trafficRepository.findByTimeRange(
+                request.getStartTime(), request.getEndTime(), pageable);
+      }
 
-            if (aggregates.isEmpty()) {
-                throw new ResourceNotFoundException("No traffic data found for the given criteria");
-            }
+      if (aggregates.isEmpty()) {
+        throw new ResourceNotFoundException("No traffic data found for the given criteria");
+      }
 
-            Page<TrafficResponseDto> response = aggregates.map(this::toResponse);
+      Page<TrafficResponseDto> response = aggregates.map(this::toResponse);
 
-            long duration = System.currentTimeMillis() - startTime;
-            metrics.recordQuery("traffic", duration);
+      long duration = System.currentTimeMillis() - startTime;
+      metrics.recordQuery("traffic", duration);
 
-            return response;
+      return response;
 
-        } catch (Exception e) {
-            long duration = System.currentTimeMillis() - startTime;
-            metrics.recordError("traffic", duration);
-            throw e;
-        }
+    } catch (Exception e) {
+      long duration = System.currentTimeMillis() - startTime;
+      metrics.recordError("traffic", duration);
+      throw e;
+    }
+  }
+
+  @Override
+  @Cacheable(
+      value = "traffic",
+      key =
+          "#srcIp + '_' + #request.startTime + '_' + #request.endTime + '_' +"
+              + " #request.pagination.page + '_' + #request.pagination.size + '_' +"
+              + " #request.pagination.sortBy + '_' + #request.pagination.sortDirection")
+  @CircuitBreaker(name = "database")
+  @Retry(name = "database")
+  public Page<TrafficResponseDto> queryTrafficBySrcIp(
+      String srcIp, TrafficQueryRequestDto request) {
+    request.setSrcIp(srcIp);
+    return queryTraffic(request);
+  }
+
+  private void validateTimeRange(Instant start, Instant end) {
+    if (!end.isAfter(start)) {
+      throw new InvalidTimeRangeException("End time must be after start time");
     }
 
-    @Override
-    @Cacheable(value = "traffic", key = "#srcIp + '_' + #request.startTime + '_' + #request.endTime + '_' + #request.pagination.page + '_' + #request.pagination.size + '_' + #request.pagination.sortBy + '_' + #request.pagination.sortDirection")
-    @CircuitBreaker(name = "database")
-    @Retry(name = "database")
-    public Page<TrafficResponseDto> queryTrafficBySrcIp(String srcIp, TrafficQueryRequestDto request) {
-        request.setSrcIp(srcIp);
-        return queryTraffic(request);
+    Instant now = Instant.now();
+    if (end.isAfter(now)) {
+      throw new InvalidTimeRangeException("Cannot query future dates");
     }
 
-    private void validateTimeRange(Instant start, Instant end) {
-        if (!end.isAfter(start)) {
-            throw new InvalidTimeRangeException("End time must be after start time");
-        }
-
-        Instant now = Instant.now();
-        if (end.isAfter(now)) {
-            throw new InvalidTimeRangeException("Cannot query future dates");
-        }
-
-        if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_TIME_RANGE_DAYS)) > 0) {
-            throw new InvalidTimeRangeException(
-                    "Time range cannot exceed " + MAX_TIME_RANGE_DAYS + " days"
-            );
-        }
+    if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_TIME_RANGE_DAYS)) > 0) {
+      throw new InvalidTimeRangeException(
+          "Time range cannot exceed " + MAX_TIME_RANGE_DAYS + " days");
     }
+  }
 
-    private TrafficResponseDto toResponse(TrafficAggregate aggregate) {
-        return TrafficResponseDto.builder()
-                .srcIp(aggregate.getSrcIp())
-                .windowStart(aggregate.getWindowStart())
-                .windowEnd(aggregate.getWindowEnd())
-                .inBytes(aggregate.getInBytes())
-                .outBytes(aggregate.getOutBytes())
-                .totalBytes(aggregate.getInBytes().add(aggregate.getOutBytes()))
-                .inPackets(aggregate.getInPackets())
-                .outPackets(aggregate.getOutPackets())
-                .totalPackets(aggregate.getInPackets().add(aggregate.getOutPackets()))
-                .recordCount(aggregate.getRecordCount())
-                .batchId(aggregate.getBatchId())
-                .ingestedAt(aggregate.getIngestedAt())
-                .build();
-    }
+  private TrafficResponseDto toResponse(TrafficAggregate aggregate) {
+    return TrafficResponseDto.builder()
+        .srcIp(aggregate.getSrcIp())
+        .windowStart(aggregate.getWindowStart())
+        .windowEnd(aggregate.getWindowEnd())
+        .inBytes(aggregate.getInBytes())
+        .outBytes(aggregate.getOutBytes())
+        .totalBytes(aggregate.getInBytes().add(aggregate.getOutBytes()))
+        .inPackets(aggregate.getInPackets())
+        .outPackets(aggregate.getOutPackets())
+        .totalPackets(aggregate.getInPackets().add(aggregate.getOutPackets()))
+        .recordCount(aggregate.getRecordCount())
+        .batchId(aggregate.getBatchId())
+        .ingestedAt(aggregate.getIngestedAt())
+        .build();
+  }
 
-    private Pageable createPageable(TrafficQueryRequestDto request) {
-        String sortBy = request.getPagination().getSortBy();
-        if (!ALLOWED_SORT_FIELDS.contains(sortBy)) {
-            throw new IllegalArgumentException("Unsupported traffic sort field: " + sortBy);
-        }
-        return PageRequest.of(
-                request.getPagination().getPage(),
-                request.getPagination().getSize(),
-                Sort.by(
-                        Sort.Direction.fromString(request.getPagination().getSortDirection()),
-                        sortBy
-                )
-        );
+  private Pageable createPageable(TrafficQueryRequestDto request) {
+    String sortBy = request.getPagination().getSortBy();
+    if (!ALLOWED_SORT_FIELDS.contains(sortBy)) {
+      throw new IllegalArgumentException("Unsupported traffic sort field: " + sortBy);
     }
+    return PageRequest.of(
+        request.getPagination().getPage(),
+        request.getPagination().getSize(),
+        Sort.by(Sort.Direction.fromString(request.getPagination().getSortDirection()), sortBy));
+  }
 }

@@ -5,7 +5,7 @@ import com.nimbo.analyticsquery.model.AnalyticsResult;
 
 public interface SqlExecutor {
 
-    AnalysisDataSource dataSource();
+  AnalysisDataSource dataSource();
 
-    AnalyticsResult execute(String sql);
+  AnalyticsResult execute(String sql);
 }

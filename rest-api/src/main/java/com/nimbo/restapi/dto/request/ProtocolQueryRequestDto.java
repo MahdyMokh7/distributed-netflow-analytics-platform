@@ -11,5 +11,5 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode(callSuper = true)
 public class ProtocolQueryRequestDto extends TimeRangeRequestDto {
 
-    private Double l7Protocol;
+  private Double l7Protocol;
 }

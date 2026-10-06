@@ -8,8 +8,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class CommonValidationConfiguration {
 
-    @Bean
-    public NetflowValidationService netflowValidationService() {
-        return new SchemaAwareNetflowValidationService();
-    }
+  @Bean
+  public NetflowValidationService netflowValidationService() {
+    return new SchemaAwareNetflowValidationService();
+  }
 }

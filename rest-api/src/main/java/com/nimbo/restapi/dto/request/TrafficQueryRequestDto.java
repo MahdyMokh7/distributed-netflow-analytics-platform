@@ -12,8 +12,7 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode(callSuper = true)
 public class TrafficQueryRequestDto extends TimeRangeRequestDto {
 
-    @ValidIpAddress
-    private String srcIp;
+  @ValidIpAddress private String srcIp;
 
-    private PaginationRequestDto pagination;
+  private PaginationRequestDto pagination;
 }

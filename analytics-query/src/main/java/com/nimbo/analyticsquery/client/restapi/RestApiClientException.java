@@ -2,42 +2,35 @@ package com.nimbo.analyticsquery.client.restapi;
 
 public class RestApiClientException extends RuntimeException {
 
-    private final Kind kind;
-    private final Integer httpStatus;
+  private final Kind kind;
+  private final Integer httpStatus;
 
-    public RestApiClientException(
-            Kind kind,
-            Integer httpStatus,
-            String message) {
+  public RestApiClientException(Kind kind, Integer httpStatus, String message) {
 
-        super(message);
-        this.kind = kind;
-        this.httpStatus = httpStatus;
-    }
+    super(message);
+    this.kind = kind;
+    this.httpStatus = httpStatus;
+  }
 
-    public RestApiClientException(
-            Kind kind,
-            Integer httpStatus,
-            String message,
-            Throwable cause) {
+  public RestApiClientException(Kind kind, Integer httpStatus, String message, Throwable cause) {
 
-        super(message, cause);
-        this.kind = kind;
-        this.httpStatus = httpStatus;
-    }
+    super(message, cause);
+    this.kind = kind;
+    this.httpStatus = httpStatus;
+  }
 
-    public Kind kind() {
-        return kind;
-    }
+  public Kind kind() {
+    return kind;
+  }
 
-    public Integer httpStatus() {
-        return httpStatus;
-    }
+  public Integer httpStatus() {
+    return httpStatus;
+  }
 
-    public enum Kind {
-        NO_DATA,
-        BAD_REQUEST,
-        UNAVAILABLE,
-        INVALID_RESPONSE
-    }
+  public enum Kind {
+    NO_DATA,
+    BAD_REQUEST,
+    UNAVAILABLE,
+    INVALID_RESPONSE
+  }
 }

@@ -13,36 +13,30 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "starrockswriter.kafka")
 public class KafkaProperties {
 
-    @NotBlank
-    private String bootstrapServers;
+  @NotBlank private String bootstrapServers;
 
-    @NotBlank
-    private String topic;
+  @NotBlank private String topic;
 
-    @NotBlank
-    private String consumerGroup;
+  @NotBlank private String consumerGroup;
 
-    @NotBlank
-    private String clientId;
+  @NotBlank private String clientId;
 
-    @NotBlank
-    private String autoOffsetReset;
+  @NotBlank private String autoOffsetReset;
 
-    @Min(1)
-    private int maxPollRecords = 1000;
+  @Min(1)
+  private int maxPollRecords = 1000;
 
-    @Min(100)
-    private long pollTimeoutMs = 1000;
+  @Min(100)
+  private long pollTimeoutMs = 1000;
 
-    @Min(1048576)
-    private int maxPartitionFetchBytes;
+  @Min(1048576)
+  private int maxPartitionFetchBytes;
 
-    @Min(1)
-    private int consumerCount;
+  @Min(1)
+  private int consumerCount;
 
-    @NotBlank
-    private String dlqTopic = "netflow-dlq";
+  @NotBlank private String dlqTopic = "netflow-dlq";
 
-    @Min(100)
-    private long dlqPublishTimeoutMs = 10000;
+  @Min(100)
+  private long dlqPublishTimeoutMs = 10000;
 }

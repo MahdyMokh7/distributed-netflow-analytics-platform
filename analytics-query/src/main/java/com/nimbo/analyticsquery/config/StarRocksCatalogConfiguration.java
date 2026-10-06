@@ -11,38 +11,40 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration
 @EnableScheduling
-@ConditionalOnProperty(prefix = "analytics-query.schema.starrocks", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(
+    prefix = "analytics-query.schema.starrocks",
+    name = "enabled",
+    havingValue = "true")
 public class StarRocksCatalogConfiguration {
 
-    @Bean(name = "starRocksCatalogDataSource", destroyMethod = "close")
-    public HikariDataSource starRocksCatalogDataSource(StarRocksCatalogProperties properties) {
+  @Bean(name = "starRocksCatalogDataSource", destroyMethod = "close")
+  public HikariDataSource starRocksCatalogDataSource(StarRocksCatalogProperties properties) {
 
-        HikariConfig config = new HikariConfig();
+    HikariConfig config = new HikariConfig();
 
-        config.setJdbcUrl(properties.jdbcUrl());
-        config.setUsername(properties.username());
-        config.setPassword(properties.password());
-        config.setDriverClassName("com.mysql.cj.jdbc.Driver");
-        config.setMaximumPoolSize(properties.poolSize());
-        config.setMinimumIdle(0);
-        config.setReadOnly(true);
-        config.setConnectionTimeout(properties.connectionTimeout().toMillis());
-        config.setInitializationFailTimeout(-1);
-        config.setPoolName("analytics-query-starrocks-catalog");
+    config.setJdbcUrl(properties.jdbcUrl());
+    config.setUsername(properties.username());
+    config.setPassword(properties.password());
+    config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+    config.setMaximumPoolSize(properties.poolSize());
+    config.setMinimumIdle(0);
+    config.setReadOnly(true);
+    config.setConnectionTimeout(properties.connectionTimeout().toMillis());
+    config.setInitializationFailTimeout(-1);
+    config.setPoolName("analytics-query-starrocks-catalog");
 
-        return new HikariDataSource(config);
-    }
+    return new HikariDataSource(config);
+  }
 
-    @Bean(name = "starRocksCatalogJdbcTemplate")
-    public JdbcTemplate starRocksCatalogJdbcTemplate(
-            @Qualifier("starRocksCatalogDataSource")
-            HikariDataSource dataSource,
-            StarRocksCatalogProperties properties) {
+  @Bean(name = "starRocksCatalogJdbcTemplate")
+  public JdbcTemplate starRocksCatalogJdbcTemplate(
+      @Qualifier("starRocksCatalogDataSource") HikariDataSource dataSource,
+      StarRocksCatalogProperties properties) {
 
-        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+    JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
 
-        jdbcTemplate.setQueryTimeout(properties.queryTimeoutSeconds());
+    jdbcTemplate.setQueryTimeout(properties.queryTimeoutSeconds());
 
-        return jdbcTemplate;
-    }
+    return jdbcTemplate;
+  }
 }

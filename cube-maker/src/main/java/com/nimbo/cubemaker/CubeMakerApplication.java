@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class CubeMakerApplication {
 
-    public static void main(String[] args) {
-        SpringApplication.run(CubeMakerApplication.class, args);
-    }
+  public static void main(String[] args) {
+    SpringApplication.run(CubeMakerApplication.class, args);
+  }
 }

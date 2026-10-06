@@ -5,16 +5,17 @@ import com.nimbo.analyticsquery.model.AnalyticsResult;
 
 public interface AnalyticsTool {
 
-    String name();
+  String name();
 
-    boolean supports(QueryRequirements requirements);
+  boolean supports(QueryRequirements requirements);
 
-    AnalyticsResult execute(QueryRequirements requirements);
+  AnalyticsResult execute(QueryRequirements requirements);
 
-    default void requireSupported(QueryRequirements requirements) {
+  default void requireSupported(QueryRequirements requirements) {
 
-        if (!supports(requirements)) {
-            throw new IllegalArgumentException("Tool " + name() + " cannot satisfy the supplied query requirements");
-        }
+    if (!supports(requirements)) {
+      throw new IllegalArgumentException(
+          "Tool " + name() + " cannot satisfy the supplied query requirements");
     }
+  }
 }

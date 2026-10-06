@@ -1,15 +1,15 @@
 package com.nimbo.analyticsquery.sql;
 
-public class    SqlValidationException extends RuntimeException {
+public class SqlValidationException extends RuntimeException {
 
-    private final SqlPolicyViolation violation;
+  private final SqlPolicyViolation violation;
 
-    public SqlValidationException(SqlPolicyViolation violation, String message) {
-        super(message);
-        this.violation = violation;
-    }
+  public SqlValidationException(SqlPolicyViolation violation, String message) {
+    super(message);
+    this.violation = violation;
+  }
 
-    public SqlPolicyViolation violation() {
-        return violation;
-    }
+  public SqlPolicyViolation violation() {
+    return violation;
+  }
 }

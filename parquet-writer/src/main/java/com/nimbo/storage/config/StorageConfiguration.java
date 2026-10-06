@@ -5,21 +5,17 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-
 @Configuration
 @EnableConfigurationProperties({
-        RollingProperties.class,
-        HdfsProperties.class,
-        ParquetProperties.class
+    RollingProperties.class,
+    HdfsProperties.class,
+    ParquetProperties.class
 })
 public class StorageConfiguration {
 
-    @Bean
-    public BatchPolicy batchPolicy(RollingProperties properties) {
-        return new BatchPolicy(
-                properties.getMaxRecordCount(),
-                properties.getMaxSizeBytes(),
-                properties.getMaxAge()
-        );
-    }
+  @Bean
+  public BatchPolicy batchPolicy(RollingProperties properties) {
+    return new BatchPolicy(
+        properties.getMaxRecordCount(), properties.getMaxSizeBytes(), properties.getMaxAge());
+  }
 }

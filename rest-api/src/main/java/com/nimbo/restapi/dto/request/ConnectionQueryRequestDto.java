@@ -14,11 +14,9 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode(callSuper = true)
 public class ConnectionQueryRequestDto extends TimeRangeRequestDto {
 
-    @ValidIpAddress
-    private String srcIp;
+  @ValidIpAddress private String srcIp;
 
-    @ValidIpAddress
-    private String dstIp;
+  @ValidIpAddress private String dstIp;
 
-    private PaginationRequestDto pagination;
+  private PaginationRequestDto pagination;
 }

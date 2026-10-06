@@ -57,34 +57,34 @@ public class StarrocksQueryRepository {
 
   static String trafficSql(String table) {
     return """
-        WITH hourly_source AS (
-            SELECT
-                ipv4_src_addr,
-                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
-                in_bytes,
-                out_bytes,
-                in_pkts,
-                out_pkts
-            FROM %s
-        )
-        SELECT
-            ipv4_src_addr,
-            window_start,
-            window_start + 3600000 AS window_end,
-            COALESCE(SUM(in_bytes), 0) AS in_bytes,
-            COALESCE(SUM(out_bytes), 0) AS out_bytes,
-            COALESCE(SUM(in_bytes + out_bytes), 0) AS total_bytes,
-            COALESCE(SUM(in_pkts), 0) AS in_packets,
-            COALESCE(SUM(out_pkts), 0) AS out_packets,
-            COALESCE(SUM(in_pkts + out_pkts), 0) AS total_packets,
-            COUNT(*) AS record_count
-        FROM hourly_source
-        WHERE window_start >= :startTime
-          AND window_start < :endTime
-          AND ipv4_src_addr = :ip
-        GROUP BY ipv4_src_addr, window_start
-        ORDER BY window_start DESC
-        """
+           WITH hourly_source AS (
+               SELECT
+                   ipv4_src_addr,
+                   CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
+                   in_bytes,
+                   out_bytes,
+                   in_pkts,
+                   out_pkts
+               FROM %s
+           )
+           SELECT
+               ipv4_src_addr,
+               window_start,
+               window_start + 3600000 AS window_end,
+               COALESCE(SUM(in_bytes), 0) AS in_bytes,
+               COALESCE(SUM(out_bytes), 0) AS out_bytes,
+               COALESCE(SUM(in_bytes + out_bytes), 0) AS total_bytes,
+               COALESCE(SUM(in_pkts), 0) AS in_packets,
+               COALESCE(SUM(out_pkts), 0) AS out_packets,
+               COALESCE(SUM(in_pkts + out_pkts), 0) AS total_packets,
+               COUNT(*) AS record_count
+           FROM hourly_source
+           WHERE window_start >= :startTime
+             AND window_start < :endTime
+             AND ipv4_src_addr = :ip
+           GROUP BY ipv4_src_addr, window_start
+           ORDER BY window_start DESC
+           """
         .formatted(table);
   }
 
@@ -128,47 +128,47 @@ public class StarrocksQueryRepository {
 
     return hourlyCte
         + """
-            SELECT
-                ipv4_src_addr,
-                ipv4_dst_addr,
-                window_start,
-                window_start + 3600000 AS window_end,
-                COALESCE(SUM(in_bytes), 0) AS in_bytes,
-                COALESCE(SUM(out_bytes), 0) AS out_bytes,
-                COALESCE(SUM(in_bytes + out_bytes), 0) AS total_bytes,
-                COALESCE(SUM(in_pkts), 0) AS in_packets,
-                COALESCE(SUM(out_pkts), 0) AS out_packets,
-                COALESCE(SUM(in_pkts + out_pkts), 0) AS total_packets
-            FROM hourly
-            WHERE window_start >= :startTime
-              AND window_start < :endTime
-              AND (ipv4_src_addr = :ip OR ipv4_dst_addr = :ip)
-            GROUP BY ipv4_src_addr, ipv4_dst_addr, window_start
-            ORDER BY window_start DESC, ipv4_src_addr, ipv4_dst_addr
-            LIMIT :limit
-            OFFSET :offset
-            """;
+          SELECT
+              ipv4_src_addr,
+              ipv4_dst_addr,
+              window_start,
+              window_start + 3600000 AS window_end,
+              COALESCE(SUM(in_bytes), 0) AS in_bytes,
+              COALESCE(SUM(out_bytes), 0) AS out_bytes,
+              COALESCE(SUM(in_bytes + out_bytes), 0) AS total_bytes,
+              COALESCE(SUM(in_pkts), 0) AS in_packets,
+              COALESCE(SUM(out_pkts), 0) AS out_packets,
+              COALESCE(SUM(in_pkts + out_pkts), 0) AS total_packets
+          FROM hourly
+          WHERE window_start >= :startTime
+            AND window_start < :endTime
+            AND (ipv4_src_addr = :ip OR ipv4_dst_addr = :ip)
+          GROUP BY ipv4_src_addr, ipv4_dst_addr, window_start
+          ORDER BY window_start DESC, ipv4_src_addr, ipv4_dst_addr
+          LIMIT :limit
+          OFFSET :offset
+          """;
   }
 
   static String connectionCountSql(String table) {
     return """
-        WITH hourly AS (
-            SELECT
-                ipv4_src_addr,
-                ipv4_dst_addr,
-                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start
-            FROM %s
-        )
-            SELECT COUNT(*)
-            FROM (
-                SELECT ipv4_src_addr, ipv4_dst_addr, window_start
-                FROM hourly
-                WHERE window_start >= :startTime
-                  AND window_start < :endTime
-                  AND (ipv4_src_addr = :ip OR ipv4_dst_addr = :ip)
-                GROUP BY ipv4_src_addr, ipv4_dst_addr, window_start
-            ) grouped_connections
-        """
+           WITH hourly AS (
+               SELECT
+                   ipv4_src_addr,
+                   ipv4_dst_addr,
+                   CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start
+               FROM %s
+           )
+               SELECT COUNT(*)
+               FROM (
+                   SELECT ipv4_src_addr, ipv4_dst_addr, window_start
+                   FROM hourly
+                   WHERE window_start >= :startTime
+                     AND window_start < :endTime
+                     AND (ipv4_src_addr = :ip OR ipv4_dst_addr = :ip)
+                   GROUP BY ipv4_src_addr, ipv4_dst_addr, window_start
+               ) grouped_connections
+           """
         .formatted(table);
   }
 
@@ -195,57 +195,56 @@ public class StarrocksQueryRepository {
 
   static String bandwidthSql(String table) {
     return """
-        WITH endpoint_rows AS (
-            SELECT
-                ipv4_src_addr AS ip,
-                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
-                in_bytes AS inbound_bytes,
-                out_bytes AS outbound_bytes,
-                in_pkts AS inbound_packets,
-                out_pkts AS outbound_packets
-            FROM %s
+           WITH endpoint_rows AS (
+               SELECT
+                   ipv4_src_addr AS ip,
+                   CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
+                   in_bytes AS inbound_bytes,
+                   out_bytes AS outbound_bytes,
+                   in_pkts AS inbound_packets,
+                   out_pkts AS outbound_packets
+               FROM %s
 
-            UNION ALL
+               UNION ALL
 
-            SELECT
-                ipv4_dst_addr AS ip,
-                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
-                out_bytes AS inbound_bytes,
-                in_bytes AS outbound_bytes,
-                out_pkts AS inbound_packets,
-                in_pkts AS outbound_packets
-            FROM %s
-        ), hourly AS (
-            SELECT
-                ip,
-                window_start,
-                SUM(inbound_bytes) AS inbound_bytes,
-                SUM(outbound_bytes) AS outbound_bytes,
-                SUM(inbound_packets) AS inbound_packets,
-                SUM(outbound_packets) AS outbound_packets
-            FROM endpoint_rows
-            WHERE window_start >= :startTime
-              AND window_start < :endTime
-            GROUP BY ip, window_start
-        )
-        SELECT
-            ip,
-            COALESCE(SUM(inbound_bytes), 0) AS inbound_bytes,
-            COALESCE(SUM(outbound_bytes), 0) AS outbound_bytes,
-            COALESCE(SUM(inbound_bytes + outbound_bytes), 0) AS total_bytes,
-            COALESCE(SUM(inbound_packets), 0) AS inbound_packets,
-            COALESCE(SUM(outbound_packets), 0) AS outbound_packets,
-            COALESCE(SUM(inbound_packets + outbound_packets), 0) AS total_packets
-        FROM hourly
-        GROUP BY ip
-        ORDER BY total_bytes DESC
-        LIMIT :limit
-        """
+               SELECT
+                   ipv4_dst_addr AS ip,
+                   CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
+                   out_bytes AS inbound_bytes,
+                   in_bytes AS outbound_bytes,
+                   out_pkts AS inbound_packets,
+                   in_pkts AS outbound_packets
+               FROM %s
+           ), hourly AS (
+               SELECT
+                   ip,
+                   window_start,
+                   SUM(inbound_bytes) AS inbound_bytes,
+                   SUM(outbound_bytes) AS outbound_bytes,
+                   SUM(inbound_packets) AS inbound_packets,
+                   SUM(outbound_packets) AS outbound_packets
+               FROM endpoint_rows
+               WHERE window_start >= :startTime
+                 AND window_start < :endTime
+               GROUP BY ip, window_start
+           )
+           SELECT
+               ip,
+               COALESCE(SUM(inbound_bytes), 0) AS inbound_bytes,
+               COALESCE(SUM(outbound_bytes), 0) AS outbound_bytes,
+               COALESCE(SUM(inbound_bytes + outbound_bytes), 0) AS total_bytes,
+               COALESCE(SUM(inbound_packets), 0) AS inbound_packets,
+               COALESCE(SUM(outbound_packets), 0) AS outbound_packets,
+               COALESCE(SUM(inbound_packets + outbound_packets), 0) AS total_packets
+           FROM hourly
+           GROUP BY ip
+           ORDER BY total_bytes DESC
+           LIMIT :limit
+           """
         .formatted(table, table);
   }
 
-  public List<StarrocksProtocolResponseDto> findProtocolUsage(
-      Instant startTime, Instant endTime) {
+  public List<StarrocksProtocolResponseDto> findProtocolUsage(Instant startTime, Instant endTime) {
     String sql = protocolSql(table);
 
     return jdbc.query(
@@ -268,33 +267,33 @@ public class StarrocksQueryRepository {
 
   static String protocolSql(String table) {
     return """
-        WITH hourly AS (
-            SELECT
-                l7_proto,
-                CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
-                in_bytes,
-                out_bytes,
-                in_pkts,
-                out_pkts
-            FROM %s
-        )
-        SELECT
-            l7_proto,
-            window_start,
-            window_start + 3600000 AS window_end,
-            COALESCE(SUM(in_bytes), 0) AS in_bytes,
-            COALESCE(SUM(out_bytes), 0) AS out_bytes,
-            COALESCE(SUM(in_bytes + out_bytes), 0) AS total_bytes,
-            COALESCE(SUM(in_pkts), 0) AS in_packets,
-            COALESCE(SUM(out_pkts), 0) AS out_packets,
-            COALESCE(SUM(in_pkts + out_pkts), 0) AS total_packets,
-            COUNT(*) AS connection_count
-        FROM hourly
-        WHERE window_start >= :startTime
-          AND window_start < :endTime
-        GROUP BY l7_proto, window_start
-        ORDER BY l7_proto, window_start DESC
-        """
+           WITH hourly AS (
+               SELECT
+                   l7_proto,
+                   CAST(FLOOR(PROCESS_TIME / 3600000) * 3600000 AS BIGINT) AS window_start,
+                   in_bytes,
+                   out_bytes,
+                   in_pkts,
+                   out_pkts
+               FROM %s
+           )
+           SELECT
+               l7_proto,
+               window_start,
+               window_start + 3600000 AS window_end,
+               COALESCE(SUM(in_bytes), 0) AS in_bytes,
+               COALESCE(SUM(out_bytes), 0) AS out_bytes,
+               COALESCE(SUM(in_bytes + out_bytes), 0) AS total_bytes,
+               COALESCE(SUM(in_pkts), 0) AS in_packets,
+               COALESCE(SUM(out_pkts), 0) AS out_packets,
+               COALESCE(SUM(in_pkts + out_pkts), 0) AS total_packets,
+               COUNT(*) AS connection_count
+           FROM hourly
+           WHERE window_start >= :startTime
+             AND window_start < :endTime
+           GROUP BY l7_proto, window_start
+           ORDER BY l7_proto, window_start DESC
+           """
         .formatted(table);
   }
 

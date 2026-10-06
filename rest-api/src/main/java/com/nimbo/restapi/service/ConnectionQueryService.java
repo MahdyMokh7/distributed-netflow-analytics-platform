@@ -6,7 +6,7 @@ import org.springframework.data.domain.Page;
 
 public interface ConnectionQueryService {
 
-    Page<ConnectionResponseDto> queryConnections(ConnectionQueryRequestDto request);
+  Page<ConnectionResponseDto> queryConnections(ConnectionQueryRequestDto request);
 
-    Page<ConnectionResponseDto> queryConnectionsByIp(String ip, ConnectionQueryRequestDto request);
+  Page<ConnectionResponseDto> queryConnectionsByIp(String ip, ConnectionQueryRequestDto request);
 }

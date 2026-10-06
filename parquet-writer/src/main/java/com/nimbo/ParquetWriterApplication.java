@@ -8,13 +8,11 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 /**
  * Nimbo Parquet Writer Service
  *
- * This is the main entry point for the Nimbo data processing pipeline.
- * The service consumes Netflow data from Kafka, deserializes Avro records,
- * and writes them as Parquet files to HDFS.
+ * <p>This is the main entry point for the Nimbo data processing pipeline. The service consumes
+ * Netflow data from Kafka, deserializes Avro records, and writes them as Parquet files to HDFS.
  *
- * Responsibilities:
- *   - Kafka consumption and Avro deserialization
- *   - HDFS Parquet writing and batch management
+ * <p>Responsibilities: - Kafka consumption and Avro deserialization - HDFS Parquet writing and
+ * batch management
  *
  * @author Nimbo Team
  */
@@ -23,8 +21,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class ParquetWriterApplication {
 
-    public static void main(String[] args) {
-        System.setProperty("HADOOP_USER_NAME", "hadoop");
-        SpringApplication.run(ParquetWriterApplication.class, args);
-    }
+  public static void main(String[] args) {
+    System.setProperty("HADOOP_USER_NAME", "hadoop");
+    SpringApplication.run(ParquetWriterApplication.class, args);
+  }
 }

@@ -4,7 +4,7 @@ import com.nimbo.analyticsquery.model.AnalysisDataSource;
 
 public interface QueryPlanSafetyChecker {
 
-    AnalysisDataSource dataSource();
+  AnalysisDataSource dataSource();
 
-    void check(String sql);
+  void check(String sql);
 }

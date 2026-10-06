@@ -10,19 +10,19 @@ import org.springframework.web.client.RestClient;
 @Configuration
 public class LlmClientConfiguration {
 
-    @Bean
-    @Qualifier("llmRestClient")
-    public RestClient llmRestClient(RestClient.Builder builder, LlmProperties properties) {
+  @Bean
+  @Qualifier("llmRestClient")
+  public RestClient llmRestClient(RestClient.Builder builder, LlmProperties properties) {
 
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+    SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
 
-        requestFactory.setConnectTimeout(properties.timeout().connect());
-        requestFactory.setReadTimeout(properties.timeout().read());
+    requestFactory.setConnectTimeout(properties.timeout().connect());
+    requestFactory.setReadTimeout(properties.timeout().read());
 
-        return builder
-                .baseUrl(properties.baseUrl().toString())
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.apiKey())
-                .requestFactory(requestFactory)
-                .build();
-    }
+    return builder
+        .baseUrl(properties.baseUrl().toString())
+        .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.apiKey())
+        .requestFactory(requestFactory)
+        .build();
+  }
 }

@@ -9,9 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "storage.parquet")
 public class ParquetProperties {
 
-    private String compressionCodec;
-    private int blockSizeBytes;
-    private int pageSizeBytes;
-    private boolean enableDictionary;
-
+  private String compressionCodec;
+  private int blockSizeBytes;
+  private int pageSizeBytes;
+  private boolean enableDictionary;
 }

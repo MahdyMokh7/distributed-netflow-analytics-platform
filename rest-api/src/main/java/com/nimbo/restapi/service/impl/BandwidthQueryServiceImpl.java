@@ -10,6 +10,11 @@ import com.nimbo.restapi.service.BandwidthQueryService;
 import com.nimbo.restapi.util.QueryMetrics;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+import java.math.BigInteger;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -19,152 +24,142 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigInteger;
-import java.time.Instant;
-import java.time.Duration;
-import java.util.List;
-import java.util.stream.Collectors;
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
 public class BandwidthQueryServiceImpl implements BandwidthQueryService {
 
-    private final BandwidthRepository bandwidthRepository;
-    private final QueryMetrics metrics;
+  private final BandwidthRepository bandwidthRepository;
+  private final QueryMetrics metrics;
 
-    private static final int MAX_TIME_RANGE_DAYS = 7;
-    private static final int DEFAULT_TOP_LIMIT = 10;
-    private static final int MAX_TOP_LIMIT = 100;
+  private static final int MAX_TIME_RANGE_DAYS = 7;
+  private static final int DEFAULT_TOP_LIMIT = 10;
+  private static final int MAX_TOP_LIMIT = 100;
 
-    @Override
-    @Cacheable(value = "bandwidth", key = "'top_' + #request.limit + '_' + #request.startTime + '_' + #request.endTime")
-    @CircuitBreaker(name = "database")
-    @Retry(name = "database")
-    public List<BandwidthResponseDto> getTopBandwidthIps(BandwidthQueryRequestDto request) {
-        long startTime = System.currentTimeMillis();
+  @Override
+  @Cacheable(
+      value = "bandwidth",
+      key = "'top_' + #request.limit + '_' + #request.startTime + '_' + #request.endTime")
+  @CircuitBreaker(name = "database")
+  @Retry(name = "database")
+  public List<BandwidthResponseDto> getTopBandwidthIps(BandwidthQueryRequestDto request) {
+    long startTime = System.currentTimeMillis();
 
-        try {
-            validateTimeRange(request.getStartTime(), request.getEndTime());
+    try {
+      validateTimeRange(request.getStartTime(), request.getEndTime());
 
-            int limit = request.getLimit() != null ?
-                    Math.min(request.getLimit(), MAX_TOP_LIMIT) :
-                    DEFAULT_TOP_LIMIT;
+      int limit =
+          request.getLimit() != null
+              ? Math.min(request.getLimit(), MAX_TOP_LIMIT)
+              : DEFAULT_TOP_LIMIT;
 
-            Pageable pageable = PageRequest.of(0, limit);
-            Page<Object[]> topBandwidth = bandwidthRepository.findTopBandwidthIps(
-                    request.getStartTime(),
-                    request.getEndTime(),
-                    pageable
-            );
+      Pageable pageable = PageRequest.of(0, limit);
+      Page<Object[]> topBandwidth =
+          bandwidthRepository.findTopBandwidthIps(
+              request.getStartTime(), request.getEndTime(), pageable);
 
-            if (topBandwidth.isEmpty()) {
-                throw new ResourceNotFoundException("No bandwidth data found for the given criteria");
-            }
+      if (topBandwidth.isEmpty()) {
+        throw new ResourceNotFoundException("No bandwidth data found for the given criteria");
+      }
 
-            List<BandwidthResponseDto> responses = topBandwidth.getContent().stream()
-                    .map(this::toTopResponse)
-                    .collect(Collectors.toList());
+      List<BandwidthResponseDto> responses =
+          topBandwidth.getContent().stream().map(this::toTopResponse).collect(Collectors.toList());
 
-            long duration = System.currentTimeMillis() - startTime;
-            metrics.recordQuery("bandwidth_top", duration);
+      long duration = System.currentTimeMillis() - startTime;
+      metrics.recordQuery("bandwidth_top", duration);
 
-            return responses;
+      return responses;
 
-        } catch (Exception e) {
-            long duration = System.currentTimeMillis() - startTime;
-            metrics.recordError("bandwidth_top", duration);
-            throw e;
-        }
+    } catch (Exception e) {
+      long duration = System.currentTimeMillis() - startTime;
+      metrics.recordError("bandwidth_top", duration);
+      throw e;
+    }
+  }
+
+  @Override
+  @Cacheable(value = "bandwidth", key = "#ip + '_' + #request.startTime + '_' + #request.endTime")
+  @CircuitBreaker(name = "database")
+  @Retry(name = "database")
+  public BandwidthResponseDto queryBandwidthByIp(String ip, BandwidthQueryRequestDto request) {
+    long startTime = System.currentTimeMillis();
+
+    try {
+      validateTimeRange(request.getStartTime(), request.getEndTime());
+
+      List<IpBandwidthAggregate> aggregates =
+          bandwidthRepository.findByIpAndTimeRange(
+              ip, request.getStartTime(), request.getEndTime());
+
+      if (aggregates.isEmpty()) {
+        throw new ResourceNotFoundException("No bandwidth data found for IP: " + ip);
+      }
+
+      IpBandwidthAggregate aggregate = aggregates.get(0);
+
+      long duration = System.currentTimeMillis() - startTime;
+      metrics.recordQuery("bandwidth_by_ip", duration);
+
+      return toResponse(aggregate);
+
+    } catch (Exception e) {
+      long duration = System.currentTimeMillis() - startTime;
+      metrics.recordError("bandwidth_by_ip", duration);
+      throw e;
+    }
+  }
+
+  private void validateTimeRange(Instant start, Instant end) {
+    if (!end.isAfter(start)) {
+      throw new InvalidTimeRangeException("End time must be after start time");
     }
 
-    @Override
-    @Cacheable(value = "bandwidth", key = "#ip + '_' + #request.startTime + '_' + #request.endTime")
-    @CircuitBreaker(name = "database")
-    @Retry(name = "database")
-    public BandwidthResponseDto queryBandwidthByIp(String ip, BandwidthQueryRequestDto request) {
-        long startTime = System.currentTimeMillis();
-
-        try {
-            validateTimeRange(request.getStartTime(), request.getEndTime());
-
-            List<IpBandwidthAggregate> aggregates = bandwidthRepository.findByIpAndTimeRange(
-                    ip,
-                    request.getStartTime(),
-                    request.getEndTime()
-            );
-
-            if (aggregates.isEmpty()) {
-                throw new ResourceNotFoundException("No bandwidth data found for IP: " + ip);
-            }
-
-            IpBandwidthAggregate aggregate = aggregates.get(0);
-
-            long duration = System.currentTimeMillis() - startTime;
-            metrics.recordQuery("bandwidth_by_ip", duration);
-
-            return toResponse(aggregate);
-
-        } catch (Exception e) {
-            long duration = System.currentTimeMillis() - startTime;
-            metrics.recordError("bandwidth_by_ip", duration);
-            throw e;
-        }
+    Instant now = Instant.now();
+    if (end.isAfter(now)) {
+      throw new InvalidTimeRangeException("Cannot query future dates");
     }
 
-    private void validateTimeRange(Instant start, Instant end) {
-        if (!end.isAfter(start)) {
-            throw new InvalidTimeRangeException("End time must be after start time");
-        }
-
-        Instant now = Instant.now();
-        if (end.isAfter(now)) {
-            throw new InvalidTimeRangeException("Cannot query future dates");
-        }
-
-        if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_TIME_RANGE_DAYS)) > 0) {
-            throw new InvalidTimeRangeException(
-                    "Time range cannot exceed " + MAX_TIME_RANGE_DAYS + " days"
-            );
-        }
+    if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_TIME_RANGE_DAYS)) > 0) {
+      throw new InvalidTimeRangeException(
+          "Time range cannot exceed " + MAX_TIME_RANGE_DAYS + " days");
     }
+  }
 
-    private BandwidthResponseDto toTopResponse(Object[] row) {
-        BigInteger inboundPackets = toBigInteger(row[3]);
-        BigInteger outboundPackets = toBigInteger(row[4]);
-        return BandwidthResponseDto.builder()
-                .ip((String) row[0])
-                .inboundBytes(toBigInteger(row[1]))
-                .outboundBytes(toBigInteger(row[2]))
-                .inboundPackets(inboundPackets)
-                .outboundPackets(outboundPackets)
-                .totalPackets(inboundPackets.add(outboundPackets))
-                .totalBytes(toBigInteger(row[5]))
-                .build();
+  private BandwidthResponseDto toTopResponse(Object[] row) {
+    BigInteger inboundPackets = toBigInteger(row[3]);
+    BigInteger outboundPackets = toBigInteger(row[4]);
+    return BandwidthResponseDto.builder()
+        .ip((String) row[0])
+        .inboundBytes(toBigInteger(row[1]))
+        .outboundBytes(toBigInteger(row[2]))
+        .inboundPackets(inboundPackets)
+        .outboundPackets(outboundPackets)
+        .totalPackets(inboundPackets.add(outboundPackets))
+        .totalBytes(toBigInteger(row[5]))
+        .build();
+  }
+
+  private BigInteger toBigInteger(Object value) {
+    if (value instanceof BigInteger bigInteger) {
+      return bigInteger;
     }
+    return BigInteger.valueOf(((Number) value).longValue());
+  }
 
-    private BigInteger toBigInteger(Object value) {
-        if (value instanceof BigInteger bigInteger) {
-            return bigInteger;
-        }
-        return BigInteger.valueOf(((Number) value).longValue());
-    }
-
-    private BandwidthResponseDto toResponse(IpBandwidthAggregate aggregate) {
-        return BandwidthResponseDto.builder()
-                .ip(aggregate.getIp())
-                .windowStart(aggregate.getWindowStart())
-                .windowEnd(aggregate.getWindowEnd())
-                .inboundBytes(aggregate.getInboundBytes())
-                .outboundBytes(aggregate.getOutboundBytes())
-                .totalBytes(aggregate.getInboundBytes().add(aggregate.getOutboundBytes()))
-                .inboundPackets(aggregate.getInboundPackets())
-                .outboundPackets(aggregate.getOutboundPackets())
-                .totalPackets(aggregate.getInboundPackets().add(aggregate.getOutboundPackets()))
-                .batchId(aggregate.getBatchId())
-                .ingestedAt(aggregate.getIngestedAt())
-                .build();
-    }
-
+  private BandwidthResponseDto toResponse(IpBandwidthAggregate aggregate) {
+    return BandwidthResponseDto.builder()
+        .ip(aggregate.getIp())
+        .windowStart(aggregate.getWindowStart())
+        .windowEnd(aggregate.getWindowEnd())
+        .inboundBytes(aggregate.getInboundBytes())
+        .outboundBytes(aggregate.getOutboundBytes())
+        .totalBytes(aggregate.getInboundBytes().add(aggregate.getOutboundBytes()))
+        .inboundPackets(aggregate.getInboundPackets())
+        .outboundPackets(aggregate.getOutboundPackets())
+        .totalPackets(aggregate.getInboundPackets().add(aggregate.getOutboundPackets()))
+        .batchId(aggregate.getBatchId())
+        .ingestedAt(aggregate.getIngestedAt())
+        .build();
+  }
 }

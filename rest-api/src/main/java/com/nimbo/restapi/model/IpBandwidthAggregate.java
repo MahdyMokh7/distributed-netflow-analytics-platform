@@ -5,16 +5,15 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
+import java.math.BigInteger;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-
-import java.math.BigInteger;
-import java.time.Instant;
-import java.util.UUID;
 
 @Data
 @Builder
@@ -25,38 +24,38 @@ import java.util.UUID;
 @IdClass(IpBandwidthAggregateId.class)
 public class IpBandwidthAggregate {
 
-    @Id
-    @Column(name = "ip", nullable = false, columnDefinition = "INET")
-    @JdbcTypeCode(SqlTypes.INET)
-    private String ip;
+  @Id
+  @Column(name = "ip", nullable = false, columnDefinition = "INET")
+  @JdbcTypeCode(SqlTypes.INET)
+  private String ip;
 
-    @Id
-    @Column(name = "window_start", nullable = false)
-    private Instant windowStart;
+  @Id
+  @Column(name = "window_start", nullable = false)
+  private Instant windowStart;
 
-    @Column(name = "window_end", nullable = false)
-    private Instant windowEnd;
+  @Column(name = "window_end", nullable = false)
+  private Instant windowEnd;
 
-    @Column(name = "inbound_bytes", nullable = false, columnDefinition = "BIGINT")
-    @JdbcTypeCode(SqlTypes.BIGINT)
-    private BigInteger inboundBytes;
+  @Column(name = "inbound_bytes", nullable = false, columnDefinition = "BIGINT")
+  @JdbcTypeCode(SqlTypes.BIGINT)
+  private BigInteger inboundBytes;
 
-    @Column(name = "outbound_bytes", nullable = false, columnDefinition = "BIGINT")
-    @JdbcTypeCode(SqlTypes.BIGINT)
-    private BigInteger outboundBytes;
+  @Column(name = "outbound_bytes", nullable = false, columnDefinition = "BIGINT")
+  @JdbcTypeCode(SqlTypes.BIGINT)
+  private BigInteger outboundBytes;
 
-    @Column(name = "inbound_packets", nullable = false, columnDefinition = "BIGINT")
-    @JdbcTypeCode(SqlTypes.BIGINT)
-    private BigInteger inboundPackets;
+  @Column(name = "inbound_packets", nullable = false, columnDefinition = "BIGINT")
+  @JdbcTypeCode(SqlTypes.BIGINT)
+  private BigInteger inboundPackets;
 
-    @Column(name = "outbound_packets", nullable = false, columnDefinition = "BIGINT")
-    @JdbcTypeCode(SqlTypes.BIGINT)
-    private BigInteger outboundPackets;
+  @Column(name = "outbound_packets", nullable = false, columnDefinition = "BIGINT")
+  @JdbcTypeCode(SqlTypes.BIGINT)
+  private BigInteger outboundPackets;
 
-    @Id
-    @Column(name = "batch_id", nullable = false)
-    private UUID batchId;
+  @Id
+  @Column(name = "batch_id", nullable = false)
+  private UUID batchId;
 
-    @Column(name = "ingested_at", nullable = false)
-    private Instant ingestedAt;
+  @Column(name = "ingested_at", nullable = false)
+  private Instant ingestedAt;
 }

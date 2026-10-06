@@ -33,5 +33,4 @@ public class StarrocksBandwidthResponseDto {
 
   @Schema(example = "2150")
   private BigInteger totalPackets;
-
 }

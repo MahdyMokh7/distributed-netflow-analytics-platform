@@ -1,13 +1,12 @@
 package com.nimbo.restapi.dto.response;
 
+import java.math.BigInteger;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigInteger;
-import java.time.Instant;
-import java.util.UUID;
 
 @Data
 @Builder
@@ -15,27 +14,27 @@ import java.util.UUID;
 @AllArgsConstructor
 public class TrafficResponseDto {
 
-    private String srcIp;
+  private String srcIp;
 
-    private Instant windowStart;
+  private Instant windowStart;
 
-    private Instant windowEnd;
+  private Instant windowEnd;
 
-    private BigInteger inBytes;
+  private BigInteger inBytes;
 
-    private BigInteger outBytes;
+  private BigInteger outBytes;
 
-    private BigInteger totalBytes;
+  private BigInteger totalBytes;
 
-    private BigInteger inPackets;
+  private BigInteger inPackets;
 
-    private BigInteger outPackets;
+  private BigInteger outPackets;
 
-    private BigInteger totalPackets;
+  private BigInteger totalPackets;
 
-    private BigInteger recordCount;
+  private BigInteger recordCount;
 
-    private UUID batchId;
+  private UUID batchId;
 
-    private Instant ingestedAt;
+  private Instant ingestedAt;
 }

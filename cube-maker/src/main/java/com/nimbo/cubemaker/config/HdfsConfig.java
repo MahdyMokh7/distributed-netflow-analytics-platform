@@ -11,15 +11,15 @@ import org.springframework.context.annotation.Configuration;
 @Setter
 public class HdfsConfig {
 
-    private String uri;
-    private String parquetPath;
-    private String sparkHistoryPath;
+  private String uri;
+  private String parquetPath;
+  private String sparkHistoryPath;
 
-    public String getFullParquetPath() {
-        return uri + parquetPath;
-    }
+  public String getFullParquetPath() {
+    return uri + parquetPath;
+  }
 
-    public String getFullSparkHistoryPath() {
-        return uri + sparkHistoryPath;
-    }
+  public String getFullSparkHistoryPath() {
+    return uri + sparkHistoryPath;
+  }
 }

@@ -42,13 +42,13 @@ public class StarrocksController {
   @GetMapping("/traffic/{ip}")
   @Operation(summary = "Get traffic for an IP")
   @Parameters({
-    @Parameter(
+      @Parameter(
         name = "startTime",
         description = "Start of the query time range",
         required = true,
         in = ParameterIn.QUERY,
         example = START_TIME_EXAMPLE),
-    @Parameter(
+      @Parameter(
         name = "endTime",
         description = "End of the query time range",
         required = true,
@@ -70,13 +70,13 @@ public class StarrocksController {
   @GetMapping("/connections/{ip}")
   @Operation(summary = "List connections for an IP")
   @Parameters({
-    @Parameter(
+      @Parameter(
         name = "startTime",
         description = "Start of the query time range",
         required = true,
         in = ParameterIn.QUERY,
         example = START_TIME_EXAMPLE),
-    @Parameter(
+      @Parameter(
         name = "endTime",
         description = "End of the query time range",
         required = true,
@@ -108,13 +108,13 @@ public class StarrocksController {
   @GetMapping("/bandwidth/top")
   @Operation(summary = "Get IPs with highest bandwidth usage")
   @Parameters({
-    @Parameter(
+      @Parameter(
         name = "startTime",
         description = "Start of the query time range",
         required = true,
         in = ParameterIn.QUERY,
         example = START_TIME_EXAMPLE),
-    @Parameter(
+      @Parameter(
         name = "endTime",
         description = "End of the query time range",
         required = true,
@@ -135,13 +135,13 @@ public class StarrocksController {
   @GetMapping("/protocols")
   @Operation(summary = "Get most commonly used protocols")
   @Parameters({
-    @Parameter(
+      @Parameter(
         name = "startTime",
         description = "Start of the query time range",
         required = true,
         in = ParameterIn.QUERY,
         example = START_TIME_EXAMPLE),
-    @Parameter(
+      @Parameter(
         name = "endTime",
         description = "End of the query time range",
         required = true,

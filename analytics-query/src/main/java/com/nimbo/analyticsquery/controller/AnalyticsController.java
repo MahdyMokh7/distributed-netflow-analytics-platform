@@ -28,112 +28,112 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Analytics", description = "Natural-language analytics and controlled SQL query API")
 public class AnalyticsController {
 
-    private final AnalyticsQueryService analyticsQueryService;
-    private final SqlGenerationService sqlGenerationService;
-    private final SqlExecutionService sqlExecutionService;
-    private final AnalyticsQueryMetrics metrics;
+  private final AnalyticsQueryService analyticsQueryService;
+  private final SqlGenerationService sqlGenerationService;
+  private final SqlExecutionService sqlExecutionService;
+  private final AnalyticsQueryMetrics metrics;
 
-    public AnalyticsController(
-            AnalyticsQueryService analyticsQueryService,
-            SqlGenerationService sqlGenerationService,
-            SqlExecutionService sqlExecutionService,
-            AnalyticsQueryMetrics metrics) {
-        this.analyticsQueryService = analyticsQueryService;
-        this.sqlGenerationService = sqlGenerationService;
-        this.sqlExecutionService = sqlExecutionService;
-        this.metrics = metrics;
+  public AnalyticsController(
+      AnalyticsQueryService analyticsQueryService,
+      SqlGenerationService sqlGenerationService,
+      SqlExecutionService sqlExecutionService,
+      AnalyticsQueryMetrics metrics) {
+    this.analyticsQueryService = analyticsQueryService;
+    this.sqlGenerationService = sqlGenerationService;
+    this.sqlExecutionService = sqlExecutionService;
+    this.metrics = metrics;
+  }
+
+  @PostMapping("/query")
+  @Operation(
+      summary = "Execute an analytics question",
+      description =
+          "Interprets a natural-language analytics question and executes it "
+              + "through an approved analytics tool or guarded SQL fallback. "
+              + "The response status identifies success, clarification, unsupported, "
+              + "rejected, and dependency-failure outcomes.")
+  public AnalyticsQueryResponse query(@Valid @RequestBody AnalyticsQueryRequest request) {
+    long startedAt = System.nanoTime();
+    AnalyticsQueryResponse response =
+        metrics.observeRequest(
+            Endpoint.QUERY,
+            () -> AnalyticsQueryResponse.from(analyticsQueryService.query(request.question())),
+            AnalyticsQueryResponse::status);
+
+    if (response.status() == AnalysisStatus.SUCCESS) {
+      metrics.recordExecution(response.executionMode(), response.dataSource());
     }
 
-    @PostMapping("/query")
-    @Operation(summary = "Execute an analytics question",
-            description = "Interprets a natural-language analytics question and executes it "
-                    + "through an approved analytics tool or guarded SQL fallback. "
-                    + "The response status identifies success, clarification, unsupported, "
-                    + "rejected, and dependency-failure outcomes."
-    )
-    public AnalyticsQueryResponse query(@Valid @RequestBody AnalyticsQueryRequest request) {
-        long startedAt = System.nanoTime();
-        AnalyticsQueryResponse response = metrics.observeRequest(
-                Endpoint.QUERY,
-                () -> AnalyticsQueryResponse.from(
-                        analyticsQueryService.query(request.question())),
-                AnalyticsQueryResponse::status);
+    log.info(
+        "Analytics request completed endpoint={} status={} executionMode={} "
+            + "datasource={} rowCount={} durationMs={}",
+        Endpoint.QUERY,
+        response.status(),
+        response.executionMode(),
+        response.dataSource(),
+        response.data() == null ? 0 : response.data().size(),
+        elapsedMillis(startedAt));
 
-        if (response.status() == AnalysisStatus.SUCCESS) {
-            metrics.recordExecution(response.executionMode(), response.dataSource());
-        }
+    return response;
+  }
 
-        log.info(
-                "Analytics request completed endpoint={} status={} executionMode={} "
-                        + "datasource={} rowCount={} durationMs={}",
-                Endpoint.QUERY,
-                response.status(),
-                response.executionMode(),
-                response.dataSource(),
-                response.data() == null ? 0 : response.data().size(),
-                elapsedMillis(startedAt));
+  @PostMapping("/sql/generate")
+  @Operation(
+      summary = "Generate validated SQL",
+      description =
+          "Generates and validates SQL for a natural-language analytics question "
+              + "without executing the query. Controlled failures are returned in the "
+              + "response status.")
+  public SqlGenerationResponse generateSql(@Valid @RequestBody SqlGenerationRequest request) {
+    long startedAt = System.nanoTime();
+    SqlGenerationResponse response =
+        metrics.observeRequest(
+            Endpoint.SQL_GENERATE,
+            () -> SqlGenerationResponse.from(sqlGenerationService.generate(request.question())),
+            SqlGenerationResponse::status);
 
-        return response;
+    log.info(
+        "Analytics request completed endpoint={} status={} datasource={} durationMs={}",
+        Endpoint.SQL_GENERATE,
+        response.status(),
+        response.dataSource(),
+        elapsedMillis(startedAt));
+
+    return response;
+  }
+
+  @PostMapping("/sql/execute")
+  @Operation(
+      summary = "Validate and execute SQL",
+      description =
+          "Validates the supplied SQL against the analytics query security policy "
+              + "before read-only execution. Unsafe SQL returns QUERY_REJECTED.")
+  public SqlExecutionResponse executeSql(@Valid @RequestBody SqlExecutionRequest request) {
+    long startedAt = System.nanoTime();
+    SqlExecutionResponse response =
+        metrics.observeRequest(
+            Endpoint.SQL_EXECUTE,
+            () -> SqlExecutionResponse.from(sqlExecutionService.execute(request.sql())),
+            SqlExecutionResponse::status);
+
+    if (response.status() == AnalysisStatus.SUCCESS) {
+      metrics.recordExecution(ExecutionMode.GENERATED_SQL, response.dataSource());
     }
 
-    @PostMapping("/sql/generate")
-    @Operation(summary = "Generate validated SQL",
-            description = "Generates and validates SQL for a natural-language analytics question "
-                    + "without executing the query. Controlled failures are returned in the "
-                    + "response status."
-    )
-    public SqlGenerationResponse generateSql(@Valid @RequestBody SqlGenerationRequest request) {
-        long startedAt = System.nanoTime();
-        SqlGenerationResponse response = metrics.observeRequest(
-                Endpoint.SQL_GENERATE,
-                () -> SqlGenerationResponse.from(
-                        sqlGenerationService.generate(request.question())),
-                SqlGenerationResponse::status);
+    log.info(
+        "Analytics request completed endpoint={} status={} executionMode={} "
+            + "datasource={} rowCount={} durationMs={}",
+        Endpoint.SQL_EXECUTE,
+        response.status(),
+        ExecutionMode.GENERATED_SQL,
+        response.dataSource(),
+        response.rowCount(),
+        elapsedMillis(startedAt));
 
-        log.info(
-                "Analytics request completed endpoint={} status={} datasource={} durationMs={}",
-                Endpoint.SQL_GENERATE,
-                response.status(),
-                response.dataSource(),
-                elapsedMillis(startedAt));
+    return response;
+  }
 
-        return response;
-    }
-
-    @PostMapping("/sql/execute")
-    @Operation(summary = "Validate and execute SQL",
-            description = "Validates the supplied SQL against the analytics query security policy "
-                    + "before read-only execution. Unsafe SQL returns QUERY_REJECTED."
-    )
-    public SqlExecutionResponse executeSql(@Valid @RequestBody SqlExecutionRequest request) {
-        long startedAt = System.nanoTime();
-        SqlExecutionResponse response = metrics.observeRequest(
-                Endpoint.SQL_EXECUTE,
-                () -> SqlExecutionResponse.from(
-                        sqlExecutionService.execute(request.sql())),
-                SqlExecutionResponse::status);
-
-        if (response.status() == AnalysisStatus.SUCCESS) {
-            metrics.recordExecution(
-                    ExecutionMode.GENERATED_SQL,
-                    response.dataSource());
-        }
-
-        log.info(
-                "Analytics request completed endpoint={} status={} executionMode={} "
-                        + "datasource={} rowCount={} durationMs={}",
-                Endpoint.SQL_EXECUTE,
-                response.status(),
-                ExecutionMode.GENERATED_SQL,
-                response.dataSource(),
-                response.rowCount(),
-                elapsedMillis(startedAt));
-
-        return response;
-    }
-
-    private static long elapsedMillis(long startedAt) {
-        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
-                System.nanoTime() - startedAt);
-    }
+  private static long elapsedMillis(long startedAt) {
+    return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+  }
 }

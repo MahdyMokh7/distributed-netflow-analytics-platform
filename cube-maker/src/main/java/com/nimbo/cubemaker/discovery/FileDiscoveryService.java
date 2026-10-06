@@ -8,16 +8,6 @@ import com.nimbo.cubemaker.metrics.CubeMakerMetrics.Stage;
 import com.nimbo.cubemaker.model.BatchStateRecord;
 import com.nimbo.cubemaker.retention.RetentionPolicy;
 import com.nimbo.cubemaker.retention.RetentionWindow;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Autowired;
-
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -30,304 +20,318 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
 public class FileDiscoveryService {
 
-    private final FileSystem fileSystem;
-    private final HdfsConfig hdfsConfig;
-    private final BatchConfig batchConfig;
-    private final BatchStateDao stateDao;
-    private final CubeMakerMetrics metrics;
-    private final RetentionPolicy retentionPolicy;
+  private final FileSystem fileSystem;
+  private final HdfsConfig hdfsConfig;
+  private final BatchConfig batchConfig;
+  private final BatchStateDao stateDao;
+  private final CubeMakerMetrics metrics;
+  private final RetentionPolicy retentionPolicy;
 
-    private final Set<String> inMemoryProcessedFiles = ConcurrentHashMap.newKeySet();
-    @Getter
-    private volatile boolean usingFallback = false;
+  private final Set<String> inMemoryProcessedFiles = ConcurrentHashMap.newKeySet();
+  @Getter private volatile boolean usingFallback = false;
 
-    @Getter
-    private volatile UUID failedBatchId = null;
+  @Getter private volatile UUID failedBatchId = null;
 
-    private static final java.time.format.DateTimeFormatter DATE_DIRECTORY_FORMATTER =
-            java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd")
-                    .withResolverStyle(java.time.format.ResolverStyle.STRICT);
-    private static final Pattern HOUR_DIRECTORY_PATTERN = Pattern.compile("(?:[01]\\d|2[0-3])");
+  private static final java.time.format.DateTimeFormatter DATE_DIRECTORY_FORMATTER =
+      java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd")
+          .withResolverStyle(java.time.format.ResolverStyle.STRICT);
+  private static final Pattern HOUR_DIRECTORY_PATTERN = Pattern.compile("(?:[01]\\d|2[0-3])");
 
-    @Autowired
-    public FileDiscoveryService(
-            FileSystem fileSystem,
-            HdfsConfig hdfsConfig,
-            BatchConfig batchConfig,
-            BatchStateDao stateDao,
-            CubeMakerMetrics metrics,
-            RetentionPolicy retentionPolicy) {
-        this.fileSystem = fileSystem;
-        this.hdfsConfig = hdfsConfig;
-        this.batchConfig = batchConfig;
-        this.stateDao = stateDao;
-        this.metrics = metrics;
-        this.retentionPolicy = retentionPolicy;
+  @Autowired
+  public FileDiscoveryService(
+      FileSystem fileSystem,
+      HdfsConfig hdfsConfig,
+      BatchConfig batchConfig,
+      BatchStateDao stateDao,
+      CubeMakerMetrics metrics,
+      RetentionPolicy retentionPolicy) {
+    this.fileSystem = fileSystem;
+    this.hdfsConfig = hdfsConfig;
+    this.batchConfig = batchConfig;
+    this.stateDao = stateDao;
+    this.metrics = metrics;
+    this.retentionPolicy = retentionPolicy;
+  }
+
+  public FileDiscoveryService(
+      FileSystem fileSystem,
+      HdfsConfig hdfsConfig,
+      BatchConfig batchConfig,
+      BatchStateDao stateDao,
+      CubeMakerMetrics metrics) {
+    this(fileSystem, hdfsConfig, batchConfig, stateDao, metrics, null);
+  }
+
+  public List<Path> discoverNewFiles(UUID batchId) {
+    RetentionWindow window =
+        retentionPolicy == null ? RetentionWindow.unbounded() : retentionPolicy.currentWindow();
+    return discoverNewFiles(batchId, window);
+  }
+
+  public List<Path> discoverNewFiles(UUID batchId, RetentionWindow window) {
+    log.info("Discovering new files for batch: {}", batchId);
+
+    try {
+      Set<String> processedFileNames = getProcessedFileNames();
+      log.debug("Found {} already processed files", processedFileNames.size());
+
+      int maxFiles = batchConfig.getMaxFilesPerBatch();
+      List<Path> newFiles = listOldestNewFiles(processedFileNames, maxFiles, window);
+      refreshParquetFileCount();
+
+      if (newFiles.isEmpty()) {
+        log.info("No new files to process (batch: {})", batchId);
+        return List.of();
+      }
+
+      log.info("Discovered {} new files to process (batch: {})", newFiles.size(), batchId);
+      return newFiles;
+
+    } catch (Exception e) {
+      log.error("Failed to discover files", e);
+      throw new RuntimeException("File discovery failed", e);
+    }
+  }
+
+  public void markFilesAsProcessed(List<Path> files, UUID batchId) {
+    if (files == null || files.isEmpty()) {
+      return;
     }
 
-    public FileDiscoveryService(
-            FileSystem fileSystem,
-            HdfsConfig hdfsConfig,
-            BatchConfig batchConfig,
-            BatchStateDao stateDao,
-            CubeMakerMetrics metrics) {
-        this(fileSystem, hdfsConfig, batchConfig, stateDao, metrics, null);
+    log.info("Marking {} files as processed for batch: {}", files.size(), batchId);
+
+    List<BatchStateRecord> records = new ArrayList<>();
+    for (Path file : files) {
+      String fileName = file.getName();
+      Instant timestamp = extractTimestamp(fileName);
+
+      if (timestamp == null) {
+        log.warn("Skipping file with unparseable timestamp: {}", fileName);
+        continue;
+      }
+
+      records.add(
+          BatchStateRecord.builder()
+              .fileName(fileName)
+              .fileTimestamp(timestamp)
+              .batchId(batchId)
+              .build());
     }
 
-    public List<Path> discoverNewFiles(UUID batchId) {
-        RetentionWindow window = retentionPolicy == null
-                ? RetentionWindow.unbounded()
-                : retentionPolicy.currentWindow();
-        return discoverNewFiles(batchId, window);
+    if (records.isEmpty()) {
+      return;
     }
 
-    public List<Path> discoverNewFiles(UUID batchId, RetentionWindow window) {
-        log.info("Discovering new files for batch: {}", batchId);
+    for (BatchStateRecord record : records) {
+      inMemoryProcessedFiles.add(record.getFileName());
+    }
 
-        try {
-            Set<String> processedFileNames = getProcessedFileNames();
-            log.debug("Found {} already processed files", processedFileNames.size());
+    try {
+      stateDao.markFilesAsProcessed(records);
+      setUsingFallback(false);
+      Instant newestTimestamp =
+          records.stream()
+              .map(BatchStateRecord::getFileTimestamp)
+              .max(Comparator.naturalOrder())
+              .orElse(null);
+      metrics.filesProcessed(records.size(), newestTimestamp);
+      log.info("Successfully marked {} files as processed in PostgreSQL", records.size());
+    } catch (Exception e) {
+      log.warn(
+          "Failed to mark files in PostgreSQL. State preserved in memory only. ({} files)",
+          records.size(),
+          e);
+      setUsingFallback(true);
+      metrics.stageFailed(Stage.STATE_COMMIT);
+    }
+  }
 
-            int maxFiles = batchConfig.getMaxFilesPerBatch();
-            List<Path> newFiles = listOldestNewFiles(processedFileNames, maxFiles, window);
-            refreshParquetFileCount();
+  private Set<String> getProcessedFileNames() {
+    try {
+      Set<String> dbFiles = stateDao.getProcessedFileNames();
+      inMemoryProcessedFiles.clear();
+      inMemoryProcessedFiles.addAll(dbFiles);
+      setUsingFallback(false);
+      log.debug("Loaded {} processed files from PostgreSQL", dbFiles.size());
+      return dbFiles;
+    } catch (Exception e) {
+      log.warn(
+          "PostgreSQL unavailable, using in-memory fallback ({} files)",
+          inMemoryProcessedFiles.size(),
+          e);
+      setUsingFallback(true);
+      return inMemoryProcessedFiles;
+    }
+  }
 
-            if (newFiles.isEmpty()) {
-                log.info("No new files to process (batch: {})", batchId);
-                return List.of();
+  private List<Path> listOldestNewFiles(
+      Set<String> processedFileNames, int maxFiles, RetentionWindow window) {
+    if (maxFiles <= 0) {
+      return List.of();
+    }
+
+    try {
+      Path basePath = new Path(hdfsConfig.getFullParquetPath());
+      List<FileStatus> dateDirectories = validDateDirectories(fileSystem.listStatus(basePath));
+      List<Path> result = new ArrayList<>(maxFiles);
+
+      for (FileStatus dateDirectory : dateDirectories) {
+        LocalDate date = parseDateDirectory(dateDirectory.getPath().getName());
+        List<FileStatus> hourDirectories =
+            validHourDirectories(fileSystem.listStatus(dateDirectory.getPath()));
+
+        for (FileStatus hourDirectory : hourDirectories) {
+          int hour = Integer.parseInt(hourDirectory.getPath().getName());
+          List<FileInfo> files =
+              validFiles(fileSystem.listStatus(hourDirectory.getPath()), date, hour, window);
+
+          for (FileInfo file : files) {
+            if (!processedFileNames.contains(file.path.getName())) {
+              result.add(file.path);
+              if (result.size() == maxFiles) {
+                return result;
+              }
             }
-
-            log.info("Discovered {} new files to process (batch: {})", newFiles.size(), batchId);
-            return newFiles;
-
-        } catch (Exception e) {
-            log.error("Failed to discover files", e);
-            throw new RuntimeException("File discovery failed", e);
+          }
         }
+      }
+      return result;
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to list HDFS files", e);
     }
+  }
 
-    public void markFilesAsProcessed(List<Path> files, UUID batchId) {
-        if (files == null || files.isEmpty()) {
-            return;
+  private void refreshParquetFileCount() {
+    Path root = new Path(hdfsConfig.getFullParquetPath());
+    try {
+      if (!fileSystem.exists(root)) {
+        metrics.hdfsParquetFiles(0);
+        return;
+      }
+
+      long count = 0;
+      RemoteIterator<LocatedFileStatus> files = fileSystem.listFiles(root, true);
+      while (files.hasNext()) {
+        String fileName = files.next().getPath().getName();
+        if (!fileName.startsWith(".") && fileName.endsWith(".parquet")) {
+          count++;
         }
-
-        log.info("Marking {} files as processed for batch: {}", files.size(), batchId);
-
-        List<BatchStateRecord> records = new ArrayList<>();
-        for (Path file : files) {
-            String fileName = file.getName();
-            Instant timestamp = extractTimestamp(fileName);
-
-            if (timestamp == null) {
-                log.warn("Skipping file with unparseable timestamp: {}", fileName);
-                continue;
-            }
-
-            records.add(BatchStateRecord.builder()
-                    .fileName(fileName)
-                    .fileTimestamp(timestamp)
-                    .batchId(batchId)
-                    .build());
-        }
-
-        if (records.isEmpty()) {
-            return;
-        }
-
-        for (BatchStateRecord record : records) {
-            inMemoryProcessedFiles.add(record.getFileName());
-        }
-
-        try {
-            stateDao.markFilesAsProcessed(records);
-            setUsingFallback(false);
-            Instant newestTimestamp = records.stream()
-                    .map(BatchStateRecord::getFileTimestamp)
-                    .max(Comparator.naturalOrder())
-                    .orElse(null);
-            metrics.filesProcessed(records.size(), newestTimestamp);
-            log.info("Successfully marked {} files as processed in PostgreSQL", records.size());
-        } catch (Exception e) {
-            log.warn("Failed to mark files in PostgreSQL. State preserved in memory only. ({} files)",
-                    records.size(), e);
-            setUsingFallback(true);
-            metrics.stageFailed(Stage.STATE_COMMIT);
-        }
+      }
+      metrics.hdfsParquetFiles(count);
+    } catch (IOException exception) {
+      log.warn("Failed to refresh the HDFS Parquet-file count for {}", root, exception);
     }
+  }
 
-    private Set<String> getProcessedFileNames() {
-        try {
-            Set<String> dbFiles = stateDao.getProcessedFileNames();
-            inMemoryProcessedFiles.clear();
-            inMemoryProcessedFiles.addAll(dbFiles);
-            setUsingFallback(false);
-            log.debug("Loaded {} processed files from PostgreSQL", dbFiles.size());
-            return dbFiles;
-        } catch (Exception e) {
-            log.warn("PostgreSQL unavailable, using in-memory fallback ({} files)",
-                    inMemoryProcessedFiles.size(), e);
-            setUsingFallback(true);
-            return inMemoryProcessedFiles;
-        }
+  private List<FileStatus> validDateDirectories(FileStatus[] statuses) {
+    List<FileStatus> directories = new ArrayList<>();
+    for (FileStatus status : statuses) {
+      if (status.isDirectory() && parseDateDirectory(status.getPath().getName()) != null) {
+        directories.add(status);
+      }
     }
+    directories.sort(
+        Comparator.comparing(status -> parseDateDirectory(status.getPath().getName())));
+    return directories;
+  }
 
-    private List<Path> listOldestNewFiles(
-            Set<String> processedFileNames, int maxFiles, RetentionWindow window) {
-        if (maxFiles <= 0) {
-            return List.of();
-        }
-
-        try {
-            Path basePath = new Path(hdfsConfig.getFullParquetPath());
-            List<FileStatus> dateDirectories = validDateDirectories(fileSystem.listStatus(basePath));
-            List<Path> result = new ArrayList<>(maxFiles);
-
-            for (FileStatus dateDirectory : dateDirectories) {
-                LocalDate date = parseDateDirectory(dateDirectory.getPath().getName());
-                List<FileStatus> hourDirectories = validHourDirectories(fileSystem.listStatus(dateDirectory.getPath()));
-
-                for (FileStatus hourDirectory : hourDirectories) {
-                    int hour = Integer.parseInt(hourDirectory.getPath().getName());
-                    List<FileInfo> files = validFiles(
-                            fileSystem.listStatus(hourDirectory.getPath()), date, hour, window);
-
-                    for (FileInfo file : files) {
-                        if (!processedFileNames.contains(file.path.getName())) {
-                            result.add(file.path);
-                            if (result.size() == maxFiles) {
-                                return result;
-                            }
-                        }
-                    }
-                }
-            }
-            return result;
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to list HDFS files", e);
-        }
+  private List<FileStatus> validHourDirectories(FileStatus[] statuses) {
+    List<FileStatus> directories = new ArrayList<>();
+    for (FileStatus status : statuses) {
+      if (status.isDirectory()
+          && HOUR_DIRECTORY_PATTERN.matcher(status.getPath().getName()).matches()) {
+        directories.add(status);
+      }
     }
+    directories.sort(
+        Comparator.comparingInt(status -> Integer.parseInt(status.getPath().getName())));
+    return directories;
+  }
 
-    private void refreshParquetFileCount() {
-        Path root = new Path(hdfsConfig.getFullParquetPath());
-        try {
-            if (!fileSystem.exists(root)) {
-                metrics.hdfsParquetFiles(0);
-                return;
-            }
+  private List<FileInfo> validFiles(
+      FileStatus[] statuses, LocalDate directoryDate, int directoryHour, RetentionWindow window) {
+    List<FileInfo> files = new ArrayList<>();
+    for (FileStatus status : statuses) {
+      String fileName = status.getPath().getName();
+      if (status.isDirectory() || fileName.startsWith(".") || !fileName.endsWith(".parquet")) {
+        continue;
+      }
 
-            long count = 0;
-            RemoteIterator<LocatedFileStatus> files = fileSystem.listFiles(root, true);
-            while (files.hasNext()) {
-                String fileName = files.next().getPath().getName();
-                if (!fileName.startsWith(".") && fileName.endsWith(".parquet")) {
-                    count++;
-                }
-            }
-            metrics.hdfsParquetFiles(count);
-        } catch (IOException exception) {
-            log.warn("Failed to refresh the HDFS Parquet-file count for {}", root, exception);
-        }
+      Instant timestamp = extractTimestamp(fileName);
+      if (timestamp == null) {
+        log.warn("Could not parse timestamp from filename: {}", fileName);
+        continue;
+      }
+
+      if (!window.retains(timestamp)) {
+        log.info("Excluding expired Parquet file from discovery: {}", status.getPath());
+        continue;
+      }
+
+      var timestampUtc = timestamp.atZone(ZoneOffset.UTC);
+      if (!timestampUtc.toLocalDate().equals(directoryDate)
+          || timestampUtc.getHour() != directoryHour) {
+        log.warn("Ignoring Parquet file outside its timestamp partition: {}", status.getPath());
+        continue;
+      }
+      files.add(new FileInfo(status.getPath(), timestamp));
     }
+    files.sort(Comparator.comparing(file -> file.timestamp));
+    return files;
+  }
 
-    private List<FileStatus> validDateDirectories(FileStatus[] statuses) {
-        List<FileStatus> directories = new ArrayList<>();
-        for (FileStatus status : statuses) {
-            if (status.isDirectory() && parseDateDirectory(status.getPath().getName()) != null) {
-                directories.add(status);
-            }
-        }
-        directories.sort(Comparator.comparing(status -> parseDateDirectory(status.getPath().getName())));
-        return directories;
+  private LocalDate parseDateDirectory(String name) {
+    try {
+      return LocalDate.parse(name, DATE_DIRECTORY_FORMATTER);
+    } catch (DateTimeParseException e) {
+      return null;
     }
+  }
 
-    private List<FileStatus> validHourDirectories(FileStatus[] statuses) {
-        List<FileStatus> directories = new ArrayList<>();
-        for (FileStatus status : statuses) {
-            if (status.isDirectory() && HOUR_DIRECTORY_PATTERN.matcher(status.getPath().getName()).matches()) {
-                directories.add(status);
-            }
-        }
-        directories.sort(Comparator.comparingInt(status -> Integer.parseInt(status.getPath().getName())));
-        return directories;
+  private Instant extractTimestamp(String fileName) {
+    return NetflowFileTimestampParser.parse(fileName).orElse(null);
+  }
+
+  private static class FileInfo {
+    final Path path;
+    final Instant timestamp;
+
+    FileInfo(Path path, Instant timestamp) {
+      this.path = path;
+      this.timestamp = timestamp;
     }
+  }
 
-    private List<FileInfo> validFiles(
-            FileStatus[] statuses,
-            LocalDate directoryDate,
-            int directoryHour,
-            RetentionWindow window) {
-        List<FileInfo> files = new ArrayList<>();
-        for (FileStatus status : statuses) {
-            String fileName = status.getPath().getName();
-            if (status.isDirectory() || fileName.startsWith(".") || !fileName.endsWith(".parquet")) {
-                continue;
-            }
+  public void storeFailedBatch(UUID batchId) {
+    this.failedBatchId = batchId;
+    metrics.failedBatchPending(true);
+    log.info("Stored failed batch ID: {} for retry", batchId);
+  }
 
-            Instant timestamp = extractTimestamp(fileName);
-            if (timestamp == null) {
-                log.warn("Could not parse timestamp from filename: {}", fileName);
-                continue;
-            }
-
-            if (!window.retains(timestamp)) {
-                log.info("Excluding expired Parquet file from discovery: {}", status.getPath());
-                continue;
-            }
-
-            var timestampUtc = timestamp.atZone(ZoneOffset.UTC);
-            if (!timestampUtc.toLocalDate().equals(directoryDate) || timestampUtc.getHour() != directoryHour) {
-                log.warn("Ignoring Parquet file outside its timestamp partition: {}", status.getPath());
-                continue;
-            }
-            files.add(new FileInfo(status.getPath(), timestamp));
-        }
-        files.sort(Comparator.comparing(file -> file.timestamp));
-        return files;
+  public void clearFailedBatch() {
+    if (failedBatchId != null) {
+      log.info("Clearing failed batch: {}", failedBatchId);
+      failedBatchId = null;
+      metrics.failedBatchPending(false);
     }
+  }
 
-    private LocalDate parseDateDirectory(String name) {
-        try {
-            return LocalDate.parse(name, DATE_DIRECTORY_FORMATTER);
-        } catch (DateTimeParseException e) {
-            return null;
-        }
-    }
-
-    private Instant extractTimestamp(String fileName) {
-        return NetflowFileTimestampParser.parse(fileName).orElse(null);
-    }
-
-    private static class FileInfo {
-        final Path path;
-        final Instant timestamp;
-
-        FileInfo(Path path, Instant timestamp) {
-            this.path = path;
-            this.timestamp = timestamp;
-        }
-    }
-
-    public void storeFailedBatch(UUID batchId) {
-        this.failedBatchId = batchId;
-        metrics.failedBatchPending(true);
-        log.info("Stored failed batch ID: {} for retry", batchId);
-    }
-
-    public void clearFailedBatch() {
-        if (failedBatchId != null) {
-            log.info("Clearing failed batch: {}", failedBatchId);
-            failedBatchId = null;
-            metrics.failedBatchPending(false);
-        }
-    }
-
-    private void setUsingFallback(boolean active) {
-        usingFallback = active;
-        metrics.stateFallbackActive(active);
-    }
+  private void setUsingFallback(boolean active) {
+    usingFallback = active;
+    metrics.stateFallbackActive(active);
+  }
 }

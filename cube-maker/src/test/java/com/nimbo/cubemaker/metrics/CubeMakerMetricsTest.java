@@ -1,118 +1,121 @@
 package com.nimbo.cubemaker.metrics;
 
-import io.micrometer.core.instrument.Timer;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-
 import static com.nimbo.cubemaker.metrics.CubeMakerMetrics.Cube.CONNECTION;
 import static com.nimbo.cubemaker.metrics.CubeMakerMetrics.RunOutcome.SUCCESS;
 import static com.nimbo.cubemaker.metrics.CubeMakerMetrics.Stage.DISCOVERY;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 class CubeMakerMetricsTest {
 
-    private SimpleMeterRegistry registry;
-    private CubeMakerMetrics metrics;
+  private SimpleMeterRegistry registry;
+  private CubeMakerMetrics metrics;
 
-    @BeforeEach
-    void setUp() {
-        registry = new SimpleMeterRegistry();
-        metrics = new CubeMakerMetrics(registry);
-    }
+  @BeforeEach
+  void setUp() {
+    registry = new SimpleMeterRegistry();
+    metrics = new CubeMakerMetrics(registry);
+  }
 
-    @AfterEach
-    void closeRegistry() {
-        registry.close();
-    }
+  @AfterEach
+  void closeRegistry() {
+    registry.close();
+  }
 
-    @Test
-    void givenASuccessfulRun_whenFinished_thenLifecycleMetricsDescribeItsFinalState() {
-        // Given: a newly started timed batch run
-        long earliestExpectedTimestamp = Instant.now().getEpochSecond();
-        Timer.Sample sample = metrics.startTimer();
+  @Test
+  void givenASuccessfulRun_whenFinished_thenLifecycleMetricsDescribeItsFinalState() {
+    // Given: a newly started timed batch run
+    long earliestExpectedTimestamp = Instant.now().getEpochSecond();
+    Timer.Sample sample = metrics.startTimer();
 
-        // When: the run finishes successfully
-        metrics.runStarted();
-        metrics.runFinished(sample, SUCCESS);
+    // When: the run finishes successfully
+    metrics.runStarted();
+    metrics.runFinished(sample, SUCCESS);
 
-        // Then: counters, duration, progress, and success time describe completion
-        assertThat(registry.get("cube.maker.runs").tag("outcome", "success").counter().count())
-                .isEqualTo(1.0);
-        assertThat(registry.get("cube.maker.run.duration").tag("outcome", "success").timer().count())
-                .isEqualTo(1L);
-        assertThat(registry.get("cube.maker.run.in.progress").gauge().value()).isZero();
-        assertThat(registry.get("cube.maker.last.success.timestamp.seconds").gauge().value())
-                .isGreaterThanOrEqualTo(earliestExpectedTimestamp);
-    }
+    // Then: counters, duration, progress, and success time describe completion
+    assertThat(registry.get("cube.maker.runs").tag("outcome", "success").counter().count())
+        .isEqualTo(1.0);
+    assertThat(registry.get("cube.maker.run.duration").tag("outcome", "success").timer().count())
+        .isEqualTo(1L);
+    assertThat(registry.get("cube.maker.run.in.progress").gauge().value()).isZero();
+    assertThat(registry.get("cube.maker.last.success.timestamp.seconds").gauge().value())
+        .isGreaterThanOrEqualTo(earliestExpectedTimestamp);
+  }
 
-    @Test
-    void givenAStageFailure_whenRecorded_thenDurationAndFailureUseTheSameBoundedStage() {
-        // Given: a timed discovery stage
-        Timer.Sample sample = metrics.startTimer();
+  @Test
+  void givenAStageFailure_whenRecorded_thenDurationAndFailureUseTheSameBoundedStage() {
+    // Given: a timed discovery stage
+    Timer.Sample sample = metrics.startTimer();
 
-        // When: discovery records failure and completion
-        metrics.stageFailed(DISCOVERY);
-        metrics.stageFinished(sample, DISCOVERY);
+    // When: discovery records failure and completion
+    metrics.stageFailed(DISCOVERY);
+    metrics.stageFinished(sample, DISCOVERY);
 
-        // Then: failure and duration use the bounded discovery label
-        assertThat(registry.get("cube.maker.stage.failures").tag("stage", "discovery").counter().count())
-                .isEqualTo(1.0);
-        assertThat(registry.get("cube.maker.stage.duration").tag("stage", "discovery").timer().count())
-                .isEqualTo(1L);
-    }
+    // Then: failure and duration use the bounded discovery label
+    assertThat(
+            registry.get("cube.maker.stage.failures").tag("stage", "discovery").counter().count())
+        .isEqualTo(1.0);
+    assertThat(registry.get("cube.maker.stage.duration").tag("stage", "discovery").timer().count())
+        .isEqualTo(1L);
+  }
 
-    @Test
-    void givenDurableWorkAndExecutorRetries_whenRecorded_thenOperationalTotalsAndGaugesAreAccurate() {
-        // Given: deterministic committed work and retry totals
-        Instant newestFileTimestamp = Instant.parse("2026-09-08T13:45:00Z");
+  @Test
+  void givenDurableWorkAndExecutorRetries_whenRecorded_thenOperationalTotalsAndGaugesAreAccurate() {
+    // Given: deterministic committed work and retry totals
+    Instant newestFileTimestamp = Instant.parse("2026-09-08T13:45:00Z");
 
-        // When: operational counters and state gauges are recorded
-        metrics.filesProcessed(2, newestFileTimestamp);
-        metrics.sourceRecordsProcessed(4_000);
-        metrics.outputRows(CONNECTION, 750);
-        metrics.postgresRetries(CONNECTION, 2);
-        metrics.stateFallbackActive(true);
-        metrics.failedBatchPending(true);
-        metrics.hdfsParquetFiles(12);
+    // When: operational counters and state gauges are recorded
+    metrics.filesProcessed(2, newestFileTimestamp);
+    metrics.sourceRecordsProcessed(4_000);
+    metrics.outputRows(CONNECTION, 750);
+    metrics.postgresRetries(CONNECTION, 2);
+    metrics.stateFallbackActive(true);
+    metrics.failedBatchPending(true);
+    metrics.hdfsParquetFiles(12);
 
-        // Then: each metric exposes its exact expected value
-        assertThat(registry.get("cube.maker.files.processed").counter().count()).isEqualTo(2.0);
-        assertThat(registry.get("cube.maker.source.records").counter().count()).isEqualTo(4_000.0);
-        assertThat(registry.get("cube.maker.output.rows").tag("cube", "connection").counter().count())
-                .isEqualTo(750.0);
-        assertThat(registry.get("cube.maker.postgres.retries").tag("cube", "connection").counter().count())
-                .isEqualTo(2.0);
-        assertThat(registry.get("cube.maker.last.processed.file.timestamp.seconds").gauge().value())
-                .isEqualTo(newestFileTimestamp.getEpochSecond());
-        assertThat(registry.get("cube.maker.state.fallback.active").gauge().value()).isEqualTo(1.0);
-        assertThat(registry.get("cube.maker.failed.batch.pending").gauge().value()).isEqualTo(1.0);
-        assertThat(registry.get("cube.maker.hdfs.parquet.files").gauge().value()).isEqualTo(12.0);
-    }
+    // Then: each metric exposes its exact expected value
+    assertThat(registry.get("cube.maker.files.processed").counter().count()).isEqualTo(2.0);
+    assertThat(registry.get("cube.maker.source.records").counter().count()).isEqualTo(4_000.0);
+    assertThat(registry.get("cube.maker.output.rows").tag("cube", "connection").counter().count())
+        .isEqualTo(750.0);
+    assertThat(
+            registry.get("cube.maker.postgres.retries").tag("cube", "connection").counter().count())
+        .isEqualTo(2.0);
+    assertThat(registry.get("cube.maker.last.processed.file.timestamp.seconds").gauge().value())
+        .isEqualTo(newestFileTimestamp.getEpochSecond());
+    assertThat(registry.get("cube.maker.state.fallback.active").gauge().value()).isEqualTo(1.0);
+    assertThat(registry.get("cube.maker.failed.batch.pending").gauge().value()).isEqualTo(1.0);
+    assertThat(registry.get("cube.maker.hdfs.parquet.files").gauge().value()).isEqualTo(12.0);
+  }
 
-    @Test
-    void givenNoPositiveWork_whenRecorded_thenMonotonicMetricsDoNotMove() {
-        // Given: zero completed files, records, rows, and retries
-        long noWork = 0L;
+  @Test
+  void givenNoPositiveWork_whenRecorded_thenMonotonicMetricsDoNotMove() {
+    // Given: zero completed files, records, rows, and retries
+    long noWork = 0L;
 
-        // When: zero work is submitted to monotonic metrics
-        metrics.filesProcessed(noWork, null);
-        metrics.sourceRecordsProcessed(noWork);
-        metrics.outputRows(CONNECTION, noWork);
-        metrics.postgresRetries(CONNECTION, noWork);
-        metrics.hdfsParquetFiles(noWork);
+    // When: zero work is submitted to monotonic metrics
+    metrics.filesProcessed(noWork, null);
+    metrics.sourceRecordsProcessed(noWork);
+    metrics.outputRows(CONNECTION, noWork);
+    metrics.postgresRetries(CONNECTION, noWork);
+    metrics.hdfsParquetFiles(noWork);
 
-        // Then: all monotonic metrics and the file timestamp remain unchanged
-        assertThat(registry.get("cube.maker.files.processed").counter().count()).isZero();
-        assertThat(registry.get("cube.maker.source.records").counter().count()).isZero();
-        assertThat(registry.get("cube.maker.output.rows").tag("cube", "connection").counter().count())
-                .isZero();
-        assertThat(registry.get("cube.maker.postgres.retries").tag("cube", "connection").counter().count())
-                .isZero();
-        assertThat(registry.get("cube.maker.last.processed.file.timestamp.seconds").gauge().value()).isZero();
-        assertThat(registry.get("cube.maker.hdfs.parquet.files").gauge().value()).isZero();
-    }
+    // Then: all monotonic metrics and the file timestamp remain unchanged
+    assertThat(registry.get("cube.maker.files.processed").counter().count()).isZero();
+    assertThat(registry.get("cube.maker.source.records").counter().count()).isZero();
+    assertThat(registry.get("cube.maker.output.rows").tag("cube", "connection").counter().count())
+        .isZero();
+    assertThat(
+            registry.get("cube.maker.postgres.retries").tag("cube", "connection").counter().count())
+        .isZero();
+    assertThat(registry.get("cube.maker.last.processed.file.timestamp.seconds").gauge().value())
+        .isZero();
+    assertThat(registry.get("cube.maker.hdfs.parquet.files").gauge().value()).isZero();
+  }
 }

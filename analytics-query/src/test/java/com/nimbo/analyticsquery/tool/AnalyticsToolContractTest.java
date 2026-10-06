@@ -1,5 +1,7 @@
 package com.nimbo.analyticsquery.tool;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.nimbo.analyticsquery.client.restapi.RestApiResponse;
 import com.nimbo.analyticsquery.client.restapi.dto.BandwidthRow;
 import com.nimbo.analyticsquery.client.restapi.dto.ConnectionRow;
@@ -8,166 +10,172 @@ import com.nimbo.analyticsquery.client.restapi.dto.TrafficRow;
 import com.nimbo.analyticsquery.intent.model.QueryRequirements;
 import com.nimbo.analyticsquery.model.AnalyticsResult;
 import com.nimbo.analyticsquery.schema.SemanticFieldNames;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class AnalyticsToolContractTest {
 
-    private static final Instant START = Instant.parse("2026-10-01T08:00:00Z");
-    private static final Instant END = Instant.parse("2026-10-01T09:00:00Z");
-    private static final UUID BATCH_ID =
-            UUID.fromString("11111111-1111-1111-1111-111111111111");
+  private static final Instant START = Instant.parse("2026-10-01T08:00:00Z");
+  private static final Instant END = Instant.parse("2026-10-01T09:00:00Z");
+  private static final UUID BATCH_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-    @Test
-    void givenTrafficWindowRequirementsWhenCheckedThenTrafficToolSupportsThem() {
-        // Given: source traffic requirements supported by the REST endpoint
-        QueryRequirements requirements = windowRequirements(
-                List.of(SemanticFieldNames.SOURCE_IP),
-                SemanticFieldNames.IN_BYTES);
+  @Test
+  void givenTrafficWindowRequirementsWhenCheckedThenTrafficToolSupportsThem() {
+    // Given: source traffic requirements supported by the REST endpoint
+    QueryRequirements requirements =
+        windowRequirements(List.of(SemanticFieldNames.SOURCE_IP), SemanticFieldNames.IN_BYTES);
 
-        // When: the traffic tool checks its finite capability
-        boolean supported = TrafficWindowsTool.supportsRequirements(requirements);
+    // When: the traffic tool checks its finite capability
+    boolean supported = TrafficWindowsTool.supportsRequirements(requirements);
 
-        // Then: the requirements are accepted
-        assertThat(supported).isTrue();
-    }
+    // Then: the requirements are accepted
+    assertThat(supported).isTrue();
+  }
 
-    @Test
-    void givenConnectionWindowRequirementsWhenCheckedThenConnectionToolSupportsThem() {
-        // Given: connection requirements supported by the REST endpoint
-        QueryRequirements requirements = windowRequirements(
-                List.of(SemanticFieldNames.SOURCE_IP, SemanticFieldNames.DESTINATION_IP),
-                SemanticFieldNames.OUT_PACKETS);
+  @Test
+  void givenConnectionWindowRequirementsWhenCheckedThenConnectionToolSupportsThem() {
+    // Given: connection requirements supported by the REST endpoint
+    QueryRequirements requirements =
+        windowRequirements(
+            List.of(SemanticFieldNames.SOURCE_IP, SemanticFieldNames.DESTINATION_IP),
+            SemanticFieldNames.OUT_PACKETS);
 
-        // When: the connection tool checks its finite capability
-        boolean supported = ConnectionWindowsTool.supportsRequirements(requirements);
+    // When: the connection tool checks its finite capability
+    boolean supported = ConnectionWindowsTool.supportsRequirements(requirements);
 
-        // Then: the requirements are accepted
-        assertThat(supported).isTrue();
-    }
+    // Then: the requirements are accepted
+    assertThat(supported).isTrue();
+  }
 
-    @Test
-    void givenProtocolWindowRequirementsWhenCheckedThenProtocolToolSupportsThem() {
-        // Given: protocol requirements supported by the REST endpoint
-        QueryRequirements requirements = windowRequirements(
-                List.of(SemanticFieldNames.L7_PROTOCOL),
-                SemanticFieldNames.CONNECTION_COUNT);
+  @Test
+  void givenProtocolWindowRequirementsWhenCheckedThenProtocolToolSupportsThem() {
+    // Given: protocol requirements supported by the REST endpoint
+    QueryRequirements requirements =
+        windowRequirements(
+            List.of(SemanticFieldNames.L7_PROTOCOL), SemanticFieldNames.CONNECTION_COUNT);
 
-        // When: the protocol tool checks its finite capability
-        boolean supported = ProtocolUsageWindowsTool.supportsRequirements(requirements);
+    // When: the protocol tool checks its finite capability
+    boolean supported = ProtocolUsageWindowsTool.supportsRequirements(requirements);
 
-        // Then: the requirements are accepted
-        assertThat(supported).isTrue();
-    }
+    // Then: the requirements are accepted
+    assertThat(supported).isTrue();
+  }
 
-    @Test
-    void givenRankedBandwidthRequirementsWhenCheckedThenBandwidthToolSupportsThem() {
-        // Given: ranked bandwidth requirements supported by the REST endpoint
-        QueryRequirements requirements = new QueryRequirements(
-                List.of(SemanticFieldNames.IP_ADDRESS),
-                List.of(metric(SemanticFieldNames.TOTAL_BYTES, QueryRequirements.Aggregation.SUM)),
-                List.of(),
-                List.of(),
-                QueryRequirements.TrafficDirection.BOTH,
-                new QueryRequirements.TimeRange(START, END),
-                List.of(SemanticFieldNames.IP_ADDRESS),
-                null,
-                List.of(new QueryRequirements.SortRequirement(
-                        SemanticFieldNames.TOTAL_BYTES,
-                        QueryRequirements.Aggregation.SUM,
-                        QueryRequirements.SortDirection.DESC)),
-                10,
-                false);
+  @Test
+  void givenRankedBandwidthRequirementsWhenCheckedThenBandwidthToolSupportsThem() {
+    // Given: ranked bandwidth requirements supported by the REST endpoint
+    QueryRequirements requirements =
+        new QueryRequirements(
+            List.of(SemanticFieldNames.IP_ADDRESS),
+            List.of(metric(SemanticFieldNames.TOTAL_BYTES, QueryRequirements.Aggregation.SUM)),
+            List.of(),
+            List.of(),
+            QueryRequirements.TrafficDirection.BOTH,
+            new QueryRequirements.TimeRange(START, END),
+            List.of(SemanticFieldNames.IP_ADDRESS),
+            null,
+            List.of(
+                new QueryRequirements.SortRequirement(
+                    SemanticFieldNames.TOTAL_BYTES,
+                    QueryRequirements.Aggregation.SUM,
+                    QueryRequirements.SortDirection.DESC)),
+            10,
+            false);
 
-        // When: the bandwidth tool checks its finite capability
-        boolean supported = TopBandwidthIpsTool.supportsRequirements(requirements);
+    // When: the bandwidth tool checks its finite capability
+    boolean supported = TopBandwidthIpsTool.supportsRequirements(requirements);
 
-        // Then: the requirements are accepted
-        assertThat(supported).isTrue();
-    }
+    // Then: the requirements are accepted
+    assertThat(supported).isTrue();
+  }
 
-    @Test
-    void givenConnectionDimensionsInDifferentOrderWhenCheckedThenExactGrainIsSupported() {
-        // Given: the complete connection grain in a different dimension order
-        QueryRequirements requirements = windowRequirements(
-                List.of(SemanticFieldNames.DESTINATION_IP, SemanticFieldNames.SOURCE_IP),
-                SemanticFieldNames.IN_BYTES);
+  @Test
+  void givenConnectionDimensionsInDifferentOrderWhenCheckedThenExactGrainIsSupported() {
+    // Given: the complete connection grain in a different dimension order
+    QueryRequirements requirements =
+        windowRequirements(
+            List.of(SemanticFieldNames.DESTINATION_IP, SemanticFieldNames.SOURCE_IP),
+            SemanticFieldNames.IN_BYTES);
 
-        // When: the connection tool checks its endpoint grain
-        boolean supported = ConnectionWindowsTool.supportsRequirements(requirements);
+    // When: the connection tool checks its endpoint grain
+    boolean supported = ConnectionWindowsTool.supportsRequirements(requirements);
 
-        // Then: dimension order does not change the semantic grain
-        assertThat(supported).isTrue();
-    }
+    // Then: dimension order does not change the semantic grain
+    assertThat(supported).isTrue();
+  }
 
-    @Test
-    void givenPartialOrMissingGrainWhenCheckedThenWindowToolsRejectIt() {
-        // Given: requirements that omit each endpoint's complete semantic grain
-        QueryRequirements sourceOnly = windowRequirements(
-                List.of(SemanticFieldNames.SOURCE_IP),
-                SemanticFieldNames.IN_BYTES);
-        QueryRequirements noDimensions = windowRequirements(
-                List.of(),
-                SemanticFieldNames.IN_BYTES);
+  @Test
+  void givenPartialOrMissingGrainWhenCheckedThenWindowToolsRejectIt() {
+    // Given: requirements that omit each endpoint's complete semantic grain
+    QueryRequirements sourceOnly =
+        windowRequirements(List.of(SemanticFieldNames.SOURCE_IP), SemanticFieldNames.IN_BYTES);
+    QueryRequirements noDimensions = windowRequirements(List.of(), SemanticFieldNames.IN_BYTES);
 
-        // When: tools for other grains evaluate the incomplete requirements
-        boolean connectionSupportsSourceOnly =
-                ConnectionWindowsTool.supportsRequirements(sourceOnly);
-        boolean trafficSupportsNoDimensions =
-                TrafficWindowsTool.supportsRequirements(noDimensions);
-        boolean protocolSupportsNoDimensions =
-                ProtocolUsageWindowsTool.supportsRequirements(noDimensions);
+    // When: tools for other grains evaluate the incomplete requirements
+    boolean connectionSupportsSourceOnly = ConnectionWindowsTool.supportsRequirements(sourceOnly);
+    boolean trafficSupportsNoDimensions = TrafficWindowsTool.supportsRequirements(noDimensions);
+    boolean protocolSupportsNoDimensions =
+        ProtocolUsageWindowsTool.supportsRequirements(noDimensions);
 
-        // Then: subset relationships do not make the tools interchangeable
-        assertThat(connectionSupportsSourceOnly).isFalse();
-        assertThat(trafficSupportsNoDimensions).isFalse();
-        assertThat(protocolSupportsNoDimensions).isFalse();
-    }
+    // Then: subset relationships do not make the tools interchangeable
+    assertThat(connectionSupportsSourceOnly).isFalse();
+    assertThat(trafficSupportsNoDimensions).isFalse();
+    assertThat(protocolSupportsNoDimensions).isFalse();
+  }
 
-    @Test
-    void givenRangeLongerThanSevenDaysWhenCheckedThenRestToolsRejectIt() {
-        // Given: endpoint-shaped requirements exceeding the REST API range
-        QueryRequirements requirements = new QueryRequirements(
-                List.of(SemanticFieldNames.SOURCE_IP),
-                List.of(metric(SemanticFieldNames.IN_BYTES, QueryRequirements.Aggregation.NONE)),
-                List.of(),
-                List.of(),
-                QueryRequirements.TrafficDirection.BOTH,
-                new QueryRequirements.TimeRange(START, START.plusSeconds(8 * 24 * 60 * 60)),
-                List.of(),
-                null,
-                List.of(),
-                null,
-                false);
+  @Test
+  void givenRangeLongerThanSevenDaysWhenCheckedThenRestToolsRejectIt() {
+    // Given: endpoint-shaped requirements exceeding the REST API range
+    QueryRequirements requirements =
+        new QueryRequirements(
+            List.of(SemanticFieldNames.SOURCE_IP),
+            List.of(metric(SemanticFieldNames.IN_BYTES, QueryRequirements.Aggregation.NONE)),
+            List.of(),
+            List.of(),
+            QueryRequirements.TrafficDirection.BOTH,
+            new QueryRequirements.TimeRange(START, START.plusSeconds(8 * 24 * 60 * 60)),
+            List.of(),
+            null,
+            List.of(),
+            null,
+            false);
 
-        // When: the traffic tool checks the downstream endpoint limit
-        boolean supported = TrafficWindowsTool.supportsRequirements(requirements);
+    // When: the traffic tool checks the downstream endpoint limit
+    boolean supported = TrafficWindowsTool.supportsRequirements(requirements);
 
-        // Then: the incapable REST tool is not selected
-        assertThat(supported).isFalse();
-    }
+    // Then: the incapable REST tool is not selected
+    assertThat(supported).isFalse();
+  }
 
-    @Test
-    void givenTrafficResponseWhenNormalizedThenColumnOrderAndValuesArePreserved() {
-        // Given: one traffic row returned by the existing REST API
-        TrafficRow row = new TrafficRow(
-                "10.0.0.1", START, END,
-                number(10), number(20), number(30),
-                number(1), number(2), number(3), number(4),
-                BATCH_ID, END);
+  @Test
+  void givenTrafficResponseWhenNormalizedThenColumnOrderAndValuesArePreserved() {
+    // Given: one traffic row returned by the existing REST API
+    TrafficRow row =
+        new TrafficRow(
+            "10.0.0.1",
+            START,
+            END,
+            number(10),
+            number(20),
+            number(30),
+            number(1),
+            number(2),
+            number(3),
+            number(4),
+            BATCH_ID,
+            END);
 
-        // When: the traffic tool normalizes the downstream response
-        AnalyticsResult result = TrafficWindowsTool.normalize(response(row));
+    // When: the traffic tool normalizes the downstream response
+    AnalyticsResult result = TrafficWindowsTool.normalize(response(row));
 
-        // Then: normalized columns and values remain aligned
-        assertThat(result.rows()).containsExactly(Map.ofEntries(
+    // Then: normalized columns and values remain aligned
+    assertThat(result.rows())
+        .containsExactly(
+            Map.ofEntries(
                 Map.entry("srcIp", "10.0.0.1"),
                 Map.entry("windowStart", START),
                 Map.entry("windowEnd", END),
@@ -180,97 +188,124 @@ class AnalyticsToolContractTest {
                 Map.entry("recordCount", number(4)),
                 Map.entry("batchId", BATCH_ID),
                 Map.entry("ingestedAt", END)));
-        assertThat(result.columns()).containsExactlyElementsOf(result.rows().get(0).keySet());
-    }
+    assertThat(result.columns()).containsExactlyElementsOf(result.rows().get(0).keySet());
+  }
 
-    @Test
-    void givenConnectionResponseWhenNormalizedThenColumnOrderAndValuesArePreserved() {
-        // Given: one connection row returned by the existing REST API
-        ConnectionRow row = new ConnectionRow(
-                "connection-id", "10.0.0.1", "10.0.0.2", START, END,
-                number(10), number(20), number(30),
-                number(1), number(2), number(3), BATCH_ID, END);
+  @Test
+  void givenConnectionResponseWhenNormalizedThenColumnOrderAndValuesArePreserved() {
+    // Given: one connection row returned by the existing REST API
+    ConnectionRow row =
+        new ConnectionRow(
+            "connection-id",
+            "10.0.0.1",
+            "10.0.0.2",
+            START,
+            END,
+            number(10),
+            number(20),
+            number(30),
+            number(1),
+            number(2),
+            number(3),
+            BATCH_ID,
+            END);
 
-        // When: the connection tool normalizes the downstream response
-        AnalyticsResult result = ConnectionWindowsTool.normalize(response(row));
+    // When: the connection tool normalizes the downstream response
+    AnalyticsResult result = ConnectionWindowsTool.normalize(response(row));
 
-        // Then: normalized columns and values remain aligned
-        assertThat(result.rows().get(0))
-                .containsEntry("id", "connection-id")
-                .containsEntry("srcIp", "10.0.0.1")
-                .containsEntry("dstIp", "10.0.0.2")
-                .containsEntry("totalBytes", number(30));
-        assertThat(result.columns()).containsExactlyElementsOf(result.rows().get(0).keySet());
-    }
+    // Then: normalized columns and values remain aligned
+    assertThat(result.rows().get(0))
+        .containsEntry("id", "connection-id")
+        .containsEntry("srcIp", "10.0.0.1")
+        .containsEntry("dstIp", "10.0.0.2")
+        .containsEntry("totalBytes", number(30));
+    assertThat(result.columns()).containsExactlyElementsOf(result.rows().get(0).keySet());
+  }
 
-    @Test
-    void givenProtocolResponseWhenNormalizedThenColumnOrderAndValuesArePreserved() {
-        // Given: one protocol row returned by the existing REST API
-        ProtocolRow row = new ProtocolRow(
-                6.0, START, END,
-                number(10), number(20), number(30),
-                number(1), number(2), number(3), 4L, BATCH_ID, END);
+  @Test
+  void givenProtocolResponseWhenNormalizedThenColumnOrderAndValuesArePreserved() {
+    // Given: one protocol row returned by the existing REST API
+    ProtocolRow row =
+        new ProtocolRow(
+            6.0,
+            START,
+            END,
+            number(10),
+            number(20),
+            number(30),
+            number(1),
+            number(2),
+            number(3),
+            4L,
+            BATCH_ID,
+            END);
 
-        // When: the protocol tool normalizes the downstream response
-        AnalyticsResult result = ProtocolUsageWindowsTool.normalize(response(row));
+    // When: the protocol tool normalizes the downstream response
+    AnalyticsResult result = ProtocolUsageWindowsTool.normalize(response(row));
 
-        // Then: normalized columns and values remain aligned
-        assertThat(result.rows().get(0))
-                .containsEntry("l7Protocol", 6.0)
-                .containsEntry("connectionCount", 4L)
-                .containsEntry("totalPackets", number(3));
-        assertThat(result.columns()).containsExactlyElementsOf(result.rows().get(0).keySet());
-    }
+    // Then: normalized columns and values remain aligned
+    assertThat(result.rows().get(0))
+        .containsEntry("l7Protocol", 6.0)
+        .containsEntry("connectionCount", 4L)
+        .containsEntry("totalPackets", number(3));
+    assertThat(result.columns()).containsExactlyElementsOf(result.rows().get(0).keySet());
+  }
 
-    @Test
-    void givenBandwidthResponseWhenNormalizedThenColumnOrderAndValuesArePreserved() {
-        // Given: one bandwidth row returned by the existing REST API
-        BandwidthRow row = new BandwidthRow(
-                "10.0.0.1", START, END,
-                number(10), number(20), number(30),
-                number(1), number(2), number(3), BATCH_ID, END);
+  @Test
+  void givenBandwidthResponseWhenNormalizedThenColumnOrderAndValuesArePreserved() {
+    // Given: one bandwidth row returned by the existing REST API
+    BandwidthRow row =
+        new BandwidthRow(
+            "10.0.0.1",
+            START,
+            END,
+            number(10),
+            number(20),
+            number(30),
+            number(1),
+            number(2),
+            number(3),
+            BATCH_ID,
+            END);
 
-        // When: the bandwidth tool normalizes the downstream response
-        AnalyticsResult result = TopBandwidthIpsTool.normalize(response(row));
+    // When: the bandwidth tool normalizes the downstream response
+    AnalyticsResult result = TopBandwidthIpsTool.normalize(response(row));
 
-        // Then: normalized columns and values remain aligned
-        assertThat(result.rows().get(0))
-                .containsEntry("ip", "10.0.0.1")
-                .containsEntry("totalBytes", number(30))
-                .containsEntry("totalPackets", number(3));
-        assertThat(result.columns()).containsExactlyElementsOf(result.rows().get(0).keySet());
-    }
+    // Then: normalized columns and values remain aligned
+    assertThat(result.rows().get(0))
+        .containsEntry("ip", "10.0.0.1")
+        .containsEntry("totalBytes", number(30))
+        .containsEntry("totalPackets", number(3));
+    assertThat(result.columns()).containsExactlyElementsOf(result.rows().get(0).keySet());
+  }
 
-    private static QueryRequirements windowRequirements(
-            List<String> dimensions,
-            String metric) {
+  private static QueryRequirements windowRequirements(List<String> dimensions, String metric) {
 
-        return new QueryRequirements(
-                dimensions,
-                List.of(metric(metric, QueryRequirements.Aggregation.NONE)),
-                List.of(),
-                List.of(),
-                QueryRequirements.TrafficDirection.BOTH,
-                new QueryRequirements.TimeRange(START, END),
-                List.of(),
-                null,
-                List.of(),
-                null,
-                false);
-    }
+    return new QueryRequirements(
+        dimensions,
+        List.of(metric(metric, QueryRequirements.Aggregation.NONE)),
+        List.of(),
+        List.of(),
+        QueryRequirements.TrafficDirection.BOTH,
+        new QueryRequirements.TimeRange(START, END),
+        List.of(),
+        null,
+        List.of(),
+        null,
+        false);
+  }
 
-    private static QueryRequirements.MetricRequirement metric(
-            String field,
-            QueryRequirements.Aggregation aggregation) {
+  private static QueryRequirements.MetricRequirement metric(
+      String field, QueryRequirements.Aggregation aggregation) {
 
-        return new QueryRequirements.MetricRequirement(field, aggregation);
-    }
+    return new QueryRequirements.MetricRequirement(field, aggregation);
+  }
 
-    private static BigInteger number(long value) {
-        return BigInteger.valueOf(value);
-    }
+  private static BigInteger number(long value) {
+    return BigInteger.valueOf(value);
+  }
 
-    private static <T> RestApiResponse<List<T>> response(T row) {
-        return new RestApiResponse<>(true, null, List.of(row), null, END);
-    }
+  private static <T> RestApiResponse<List<T>> response(T row) {
+    return new RestApiResponse<>(true, null, List.of(row), null, END);
+  }
 }

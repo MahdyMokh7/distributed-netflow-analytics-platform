@@ -1,5 +1,11 @@
 package com.nimbo.analyticsquery.planner;
 
+import com.nimbo.analyticsquery.intent.model.QueryRequirements;
+import com.nimbo.analyticsquery.model.AnalysisDataSource;
+import com.nimbo.analyticsquery.model.AnalysisStatus;
+import com.nimbo.analyticsquery.schema.SemanticFieldNames;
+import com.nimbo.analyticsquery.schema.SemanticSchemaCatalog;
+import com.nimbo.analyticsquery.schema.SemanticTable;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -7,136 +13,125 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-
 import org.springframework.stereotype.Component;
-
-import com.nimbo.analyticsquery.intent.model.QueryRequirements;
-import com.nimbo.analyticsquery.model.AnalysisDataSource;
-import com.nimbo.analyticsquery.model.AnalysisStatus;
-import com.nimbo.analyticsquery.schema.SemanticFieldNames;
-import com.nimbo.analyticsquery.schema.SemanticSchemaCatalog;
-import com.nimbo.analyticsquery.schema.SemanticTable;
 
 @Component
 public class SqlFallbackEligibilityPolicy {
 
-    private final SemanticSchemaCatalog catalog;
+  private final SemanticSchemaCatalog catalog;
 
-    public SqlFallbackEligibilityPolicy(SemanticSchemaCatalog catalog) {
-        this.catalog = catalog;
+  public SqlFallbackEligibilityPolicy(SemanticSchemaCatalog catalog) {
+    this.catalog = catalog;
+  }
+
+  public SqlFallbackEligibility evaluate(QueryRequirements requirements) {
+
+    Objects.requireNonNull(requirements, "queryRequirements must not be null");
+
+    Collection<SemanticTable> tables = catalog.tables();
+
+    if (tables.stream().anyMatch(table -> coversRequiredFields(List.of(table), requirements))) {
+      return SqlFallbackEligibility.allow();
     }
 
-    public SqlFallbackEligibility evaluate(QueryRequirements requirements) {
+    if (canSingleDataSourceSatisfy(tables, requirements)) {
 
-        Objects.requireNonNull(requirements, "queryRequirements must not be null");
-
-        Collection<SemanticTable> tables = catalog.tables();
-
-        if (tables.stream().anyMatch(table -> coversRequiredFields(List.of(table), requirements))) {
-            return SqlFallbackEligibility.allow();
-        }
-
-        if (canSingleDataSourceSatisfy(tables, requirements)) {
-
-            return SqlFallbackEligibility.deny(
-                    AnalysisStatus.UNSUPPORTED_ANALYSIS,
-                    "Request requires combining multiple semantic tables, "
-                            + "which is outside V1 SQL fallback scope");
-        }
-
-        if (coversRequiredFields(tables, requirements)) {
-            return SqlFallbackEligibility.deny(
-                    AnalysisStatus.UNSUPPORTED_ANALYSIS,
-                    "Request requires combining multiple physical datasources");
-        }
-
-        return SqlFallbackEligibility.deny(
-                AnalysisStatus.UNSUPPORTED_ANALYSIS,
-                "Required analytics information is not available "
-                        + "from the approved semantic schema");
+      return SqlFallbackEligibility.deny(
+          AnalysisStatus.UNSUPPORTED_ANALYSIS,
+          "Request requires combining multiple semantic tables, "
+              + "which is outside V1 SQL fallback scope");
     }
 
-    private boolean canSingleDataSourceSatisfy(
-            Collection<SemanticTable> tables, QueryRequirements requirements) {
-
-        Map<AnalysisDataSource, Collection<SemanticTable>> tablesByDataSource = new HashMap<>();
-
-        for (SemanticTable table : tables) {
-            tablesByDataSource
-                    .computeIfAbsent(table.dataSource(), ignored -> new java.util.ArrayList<>())
-                    .add(table);
-        }
-
-        return tablesByDataSource.values().stream()
-                .anyMatch(dataSourceTables -> coversRequiredFields(dataSourceTables, requirements));
+    if (coversRequiredFields(tables, requirements)) {
+      return SqlFallbackEligibility.deny(
+          AnalysisStatus.UNSUPPORTED_ANALYSIS,
+          "Request requires combining multiple physical datasources");
     }
 
-    private boolean coversRequiredFields(
-            Collection<SemanticTable> tables, QueryRequirements requirements) {
+    return SqlFallbackEligibility.deny(
+        AnalysisStatus.UNSUPPORTED_ANALYSIS,
+        "Required analytics information is not available " + "from the approved semantic schema");
+  }
 
-        if (tables.isEmpty()) {
-            return false;
-        }
+  private boolean canSingleDataSourceSatisfy(
+      Collection<SemanticTable> tables, QueryRequirements requirements) {
 
-        Set<String> availableFields = collectAvailableFields(tables);
+    Map<AnalysisDataSource, Collection<SemanticTable>> tablesByDataSource = new HashMap<>();
 
-        if (!availableFields.containsAll(requiredSemanticFields(requirements))) {
-
-            return false;
-        }
-
-        return supportsIpRequirements(availableFields, requirements.ipRequirements());
+    for (SemanticTable table : tables) {
+      tablesByDataSource
+          .computeIfAbsent(table.dataSource(), ignored -> new java.util.ArrayList<>())
+          .add(table);
     }
 
-    private Set<String> collectAvailableFields(Collection<SemanticTable> tables) {
+    return tablesByDataSource.values().stream()
+        .anyMatch(dataSourceTables -> coversRequiredFields(dataSourceTables, requirements));
+  }
 
-        Set<String> fields = new HashSet<>();
+  private boolean coversRequiredFields(
+      Collection<SemanticTable> tables, QueryRequirements requirements) {
 
-        for (SemanticTable table : tables) {
-            fields.addAll(table.semanticFields());
-        }
-
-        return fields;
+    if (tables.isEmpty()) {
+      return false;
     }
 
-    private Set<String> requiredSemanticFields(QueryRequirements requirements) {
+    Set<String> availableFields = collectAvailableFields(tables);
 
-        Set<String> fields = new HashSet<>(requirements.dimensions());
+    if (!availableFields.containsAll(requiredSemanticFields(requirements))) {
 
-        requirements.metrics().forEach(metric -> fields.add(metric.field()));
-
-        requirements.filters().forEach(filter -> fields.add(filter.field()));
-
-        fields.addAll(requirements.groupBy());
-
-        requirements.sort().forEach(sort -> fields.add(sort.field()));
-
-        return fields;
+      return false;
     }
 
-    private boolean supportsIpRequirements(
-            Set<String> availableFields, List<QueryRequirements.IpRequirement> ipRequirements) {
+    return supportsIpRequirements(availableFields, requirements.ipRequirements());
+  }
 
-        for (QueryRequirements.IpRequirement requirement : ipRequirements) {
+  private Set<String> collectAvailableFields(Collection<SemanticTable> tables) {
 
-            boolean supported =
-                    switch (requirement.role()) {
-                        case SOURCE -> availableFields.contains(SemanticFieldNames.SOURCE_IP);
+    Set<String> fields = new HashSet<>();
 
-                        case DESTINATION -> availableFields.contains(
-                                SemanticFieldNames.DESTINATION_IP);
-
-                        case EITHER -> availableFields.contains(SemanticFieldNames.IP_ADDRESS)
-                                || availableFields.contains(SemanticFieldNames.SOURCE_IP)
-                                        && availableFields.contains(
-                                                SemanticFieldNames.DESTINATION_IP);
-                    };
-
-            if (!supported) {
-                return false;
-            }
-        }
-
-        return true;
+    for (SemanticTable table : tables) {
+      fields.addAll(table.semanticFields());
     }
+
+    return fields;
+  }
+
+  private Set<String> requiredSemanticFields(QueryRequirements requirements) {
+
+    Set<String> fields = new HashSet<>(requirements.dimensions());
+
+    requirements.metrics().forEach(metric -> fields.add(metric.field()));
+
+    requirements.filters().forEach(filter -> fields.add(filter.field()));
+
+    fields.addAll(requirements.groupBy());
+
+    requirements.sort().forEach(sort -> fields.add(sort.field()));
+
+    return fields;
+  }
+
+  private boolean supportsIpRequirements(
+      Set<String> availableFields, List<QueryRequirements.IpRequirement> ipRequirements) {
+
+    for (QueryRequirements.IpRequirement requirement : ipRequirements) {
+
+      boolean supported = switch (requirement.role()) {
+        case SOURCE -> availableFields.contains(SemanticFieldNames.SOURCE_IP);
+
+        case DESTINATION -> availableFields.contains(SemanticFieldNames.DESTINATION_IP);
+
+        case EITHER ->
+            availableFields.contains(SemanticFieldNames.IP_ADDRESS)
+                || availableFields.contains(SemanticFieldNames.SOURCE_IP)
+                    && availableFields.contains(SemanticFieldNames.DESTINATION_IP);
+      };
+
+      if (!supported) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 }

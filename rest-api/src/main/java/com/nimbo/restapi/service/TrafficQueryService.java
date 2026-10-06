@@ -6,7 +6,7 @@ import org.springframework.data.domain.Page;
 
 public interface TrafficQueryService {
 
-    Page<TrafficResponseDto> queryTraffic(TrafficQueryRequestDto request);
+  Page<TrafficResponseDto> queryTraffic(TrafficQueryRequestDto request);
 
-    Page<TrafficResponseDto> queryTrafficBySrcIp(String srcIp, TrafficQueryRequestDto request);
+  Page<TrafficResponseDto> queryTrafficBySrcIp(String srcIp, TrafficQueryRequestDto request);
 }

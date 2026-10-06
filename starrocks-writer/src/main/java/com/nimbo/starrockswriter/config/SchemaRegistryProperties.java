@@ -13,12 +13,11 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "starrockswriter.schema-registry")
 public class SchemaRegistryProperties {
 
-    @NotBlank
-    private String url;
+  @NotBlank private String url;
 
-    @Min(100)
-    private int connectTimeoutMs = 3000;
+  @Min(100)
+  private int connectTimeoutMs = 3000;
 
-    @Min(100)
-    private int requestTimeoutMs = 5000;
+  @Min(100)
+  private int requestTimeoutMs = 5000;
 }

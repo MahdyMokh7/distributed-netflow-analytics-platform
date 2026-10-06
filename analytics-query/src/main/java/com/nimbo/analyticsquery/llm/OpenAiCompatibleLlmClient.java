@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbo.analyticsquery.config.LlmProperties;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
@@ -11,144 +12,135 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-import java.util.List;
-
 @Component
 public class OpenAiCompatibleLlmClient implements LlmClient {
 
-    private static final String SYSTEM_ROLE = "system";
-    private static final String USER_ROLE = "user";
-    private static final String JSON_OBJECT = "json_object";
+  private static final String SYSTEM_ROLE = "system";
+  private static final String USER_ROLE = "user";
+  private static final String JSON_OBJECT = "json_object";
 
-    private final RestClient restClient;
-    private final LlmProperties properties;
-    private final ObjectMapper objectMapper;
+  private final RestClient restClient;
+  private final LlmProperties properties;
+  private final ObjectMapper objectMapper;
 
-    public OpenAiCompatibleLlmClient(
-            @Qualifier("llmRestClient") RestClient restClient,
-            LlmProperties properties,
-            ObjectMapper objectMapper) {
+  public OpenAiCompatibleLlmClient(
+      @Qualifier("llmRestClient") RestClient restClient,
+      LlmProperties properties,
+      ObjectMapper objectMapper) {
 
-        this.restClient = restClient;
-        this.properties = properties;
-        this.objectMapper = objectMapper;
+    this.restClient = restClient;
+    this.properties = properties;
+    this.objectMapper = objectMapper;
+  }
+
+  @Override
+  public <T> T generateStructured(String systemPrompt, String userPrompt, Class<T> responseType) {
+
+    validatePrompt(systemPrompt, "systemPrompt");
+    validatePrompt(userPrompt, "userPrompt");
+
+    if (responseType == null) {
+      throw new IllegalArgumentException("responseType must not be null");
     }
 
-    @Override
-    public <T> T generateStructured(String systemPrompt, String userPrompt, Class<T> responseType) {
+    ChatCompletionRequest request =
+        new ChatCompletionRequest(
+            properties.model(),
+            List.of(
+                new ChatMessage(SYSTEM_ROLE, systemPrompt), new ChatMessage(USER_ROLE, userPrompt)),
+            0.0,
+            new ChatCompletionRequest.ResponseFormat(JSON_OBJECT));
 
-        validatePrompt(systemPrompt, "systemPrompt");
-        validatePrompt(userPrompt, "userPrompt");
+    ChatCompletionResponse response = execute(request);
 
-        if (responseType == null) {
-            throw new IllegalArgumentException("responseType must not be null");
-        }
+    String content = extractContent(response);
 
-        ChatCompletionRequest request = new ChatCompletionRequest(
-                properties.model(),
-                List.of(
-                        new ChatMessage(SYSTEM_ROLE, systemPrompt),
-                        new ChatMessage(USER_ROLE, userPrompt)
-                ),
-                0.0,
-                new ChatCompletionRequest.ResponseFormat(JSON_OBJECT)
-        );
+    try {
+      return objectMapper
+          .readerFor(responseType)
+          .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+          .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+          .readValue(content);
+    } catch (JsonProcessingException exception) {
+      throw new LlmClientException(
+          LlmClientException.Kind.INVALID_RESPONSE,
+          "LLM returned invalid structured JSON",
+          exception);
+    }
+  }
 
-        ChatCompletionResponse response = execute(request);
+  private ChatCompletionResponse execute(ChatCompletionRequest request) {
+    try {
+      ChatCompletionResponse response =
+          restClient
+              .post()
+              .uri(properties.chatCompletionsPath())
+              .body(request)
+              .retrieve()
+              .onStatus(
+                  HttpStatusCode::isError,
+                  (httpRequest, httpResponse) -> {
+                    throw new LlmClientException(
+                        LlmClientException.Kind.UNAVAILABLE,
+                        "LLM request failed with HTTP status "
+                            + httpResponse.getStatusCode().value());
+                  })
+              .body(ChatCompletionResponse.class);
 
-        String content = extractContent(response);
+      if (response == null) {
+        throw invalidResponse("LLM returned an empty HTTP response");
+      }
 
-        try {
-            return objectMapper
-                    .readerFor(responseType)
-                    .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                    .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
-                    .readValue(content);
-        } catch (JsonProcessingException exception) {
-            throw new LlmClientException(
-                    LlmClientException.Kind.INVALID_RESPONSE,
-                    "LLM returned invalid structured JSON",
-                    exception);
-        }
+      return response;
+
+    } catch (LlmClientException exception) {
+      throw exception;
+
+    } catch (ResourceAccessException exception) {
+      throw new LlmClientException(
+          LlmClientException.Kind.UNAVAILABLE,
+          "LLM request timed out or the service is unreachable",
+          exception);
+
+    } catch (RestClientException exception) {
+      throw new LlmClientException(
+          LlmClientException.Kind.INVALID_RESPONSE,
+          "LLM response could not be processed",
+          exception);
+    }
+  }
+
+  private String extractContent(ChatCompletionResponse response) {
+    if (response.choices() == null || response.choices().isEmpty()) {
+      throw invalidResponse("LLM response contains no choices");
     }
 
-    private ChatCompletionResponse execute(ChatCompletionRequest request) {
-        try {
-            ChatCompletionResponse response = restClient
-                    .post()
-                    .uri(properties.chatCompletionsPath())
-                    .body(request)
-                    .retrieve()
-                    .onStatus(
-                            HttpStatusCode::isError,
-                            (httpRequest, httpResponse) -> {
-                                throw new LlmClientException(
-                                        LlmClientException.Kind.UNAVAILABLE,
-                                        "LLM request failed with HTTP status "
-                                                + httpResponse.getStatusCode().value());
-                            })
-                    .body(ChatCompletionResponse.class);
+    ChatCompletionResponse.Choice choice = response.choices().get(0);
+    validateFinishReason(choice.finishReason());
 
-            if (response == null) {
-                throw invalidResponse("LLM returned an empty HTTP response");
-            }
+    ChatCompletionResponse.Message message = choice.message();
 
-            return response;
-
-        } catch (LlmClientException exception) {
-            throw exception;
-
-        } catch (ResourceAccessException exception) {
-            throw new LlmClientException(
-                    LlmClientException.Kind.UNAVAILABLE,
-                    "LLM request timed out or the service is unreachable", exception
-            );
-
-        } catch (RestClientException exception) {
-            throw new LlmClientException(
-                    LlmClientException.Kind.INVALID_RESPONSE,
-                    "LLM response could not be processed",
-                    exception);
-        }
+    if (message == null || message.content() == null || message.content().isBlank()) {
+      throw invalidResponse("LLM response contains no message content");
     }
 
-    private String extractContent(ChatCompletionResponse response) {
-        if (response.choices() == null || response.choices().isEmpty()) {
-            throw invalidResponse("LLM response contains no choices");
-        }
+    return message.content();
+  }
 
-        ChatCompletionResponse.Choice choice = response.choices().get(0);
-        validateFinishReason(choice.finishReason());
+  private void validateFinishReason(String finishReason) {
+    if (finishReason != null && !finishReason.isBlank() && !"stop".equals(finishReason)) {
 
-        ChatCompletionResponse.Message message = choice.message();
-
-        if (message == null || message.content() == null || message.content().isBlank()) {
-            throw invalidResponse("LLM response contains no message content");
-        }
-
-        return message.content();
+      throw invalidResponse("LLM response did not complete normally: " + finishReason);
     }
+  }
 
-    private void validateFinishReason(String finishReason) {
-        if (finishReason != null
-                && !finishReason.isBlank()
-                && !"stop".equals(finishReason)) {
+  private LlmClientException invalidResponse(String message) {
+    return new LlmClientException(LlmClientException.Kind.INVALID_RESPONSE, message);
+  }
 
-            throw invalidResponse(
-                    "LLM response did not complete normally: " + finishReason);
-        }
+  private void validatePrompt(String prompt, String name) {
+    if (prompt == null || prompt.isBlank()) {
+      throw new IllegalArgumentException(name + " must not be blank");
     }
-
-    private LlmClientException invalidResponse(String message) {
-        return new LlmClientException(
-                LlmClientException.Kind.INVALID_RESPONSE,
-                message);
-    }
-
-    private void validatePrompt(String prompt, String name) {
-        if (prompt == null || prompt.isBlank()) {
-            throw new IllegalArgumentException(
-                    name + " must not be blank");
-        }
-    }
+  }
 }

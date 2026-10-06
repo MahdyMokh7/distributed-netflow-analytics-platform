@@ -6,73 +6,72 @@ import java.util.Objects;
 
 public record BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBatchAge) {
 
-    public BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBatchAge) {
-        if (maxRecordCount <= 0) {
-            throw new IllegalArgumentException("maxRecordCount must be positive");
-        }
-
-        if (maxSizeBytes <= 0) {
-            throw new IllegalArgumentException("maxSizeBytes must be positive");
-        }
-
-        this.maxBatchAge = Objects.requireNonNull(maxBatchAge, "maxBatchAge must not be null");
-
-        if (maxBatchAge.isZero() || maxBatchAge.isNegative()) {
-            throw new IllegalArgumentException("maxBatchAge must be positive");
-        }
-
-        this.maxRecordCount = maxRecordCount;
-        this.maxSizeBytes = maxSizeBytes;
+  public BatchPolicy(long maxRecordCount, long maxSizeBytes, Duration maxBatchAge) {
+    if (maxRecordCount <= 0) {
+      throw new IllegalArgumentException("maxRecordCount must be positive");
     }
 
-    public enum FlushReason {
-        RECORD_COUNT,
-        SIZE,
-        AGE,
-        TIME_BUCKET_BOUNDARY,
-        SCHEMA_CHANGE,
-        LIFECYCLE,
-        NONE
+    if (maxSizeBytes <= 0) {
+      throw new IllegalArgumentException("maxSizeBytes must be positive");
     }
 
-    public boolean shouldFlush(
-            long recordCount, long totalSizeBytes, Instant firstRecordAt, Instant now) {
-        Objects.requireNonNull(now, "now must not be null");
+    this.maxBatchAge = Objects.requireNonNull(maxBatchAge, "maxBatchAge must not be null");
 
-        if (recordCount == 0) {
-            return false;
-        }
-
-        if (recordCount >= maxRecordCount) {
-            return true;
-        }
-
-        if (totalSizeBytes >= maxSizeBytes) {
-            return true;
-        }
-
-        if (firstRecordAt == null) {
-            return false;
-        }
-
-        return Duration.between(firstRecordAt, now).compareTo(maxBatchAge) >= 0;
+    if (maxBatchAge.isZero() || maxBatchAge.isNegative()) {
+      throw new IllegalArgumentException("maxBatchAge must be positive");
     }
 
-    public FlushReason flushReason(
-            long recordCount, long totalSizeBytes, Instant firstRecordAt, Instant now) {
-        if (recordCount == 0) {
-            return FlushReason.NONE;
-        }
-        if (recordCount >= maxRecordCount) {
-            return FlushReason.RECORD_COUNT;
-        }
-        if (totalSizeBytes >= maxSizeBytes) {
-            return FlushReason.SIZE;
-        }
-        if (firstRecordAt != null
-                && Duration.between(firstRecordAt, now).compareTo(maxBatchAge) >= 0) {
-            return FlushReason.AGE;
-        }
-        return FlushReason.NONE;
+    this.maxRecordCount = maxRecordCount;
+    this.maxSizeBytes = maxSizeBytes;
+  }
+
+  public enum FlushReason {
+    RECORD_COUNT,
+    SIZE,
+    AGE,
+    TIME_BUCKET_BOUNDARY,
+    SCHEMA_CHANGE,
+    LIFECYCLE,
+    NONE
+  }
+
+  public boolean shouldFlush(
+      long recordCount, long totalSizeBytes, Instant firstRecordAt, Instant now) {
+    Objects.requireNonNull(now, "now must not be null");
+
+    if (recordCount == 0) {
+      return false;
     }
+
+    if (recordCount >= maxRecordCount) {
+      return true;
+    }
+
+    if (totalSizeBytes >= maxSizeBytes) {
+      return true;
+    }
+
+    if (firstRecordAt == null) {
+      return false;
+    }
+
+    return Duration.between(firstRecordAt, now).compareTo(maxBatchAge) >= 0;
+  }
+
+  public FlushReason flushReason(
+      long recordCount, long totalSizeBytes, Instant firstRecordAt, Instant now) {
+    if (recordCount == 0) {
+      return FlushReason.NONE;
+    }
+    if (recordCount >= maxRecordCount) {
+      return FlushReason.RECORD_COUNT;
+    }
+    if (totalSizeBytes >= maxSizeBytes) {
+      return FlushReason.SIZE;
+    }
+    if (firstRecordAt != null && Duration.between(firstRecordAt, now).compareTo(maxBatchAge) >= 0) {
+      return FlushReason.AGE;
+    }
+    return FlushReason.NONE;
+  }
 }

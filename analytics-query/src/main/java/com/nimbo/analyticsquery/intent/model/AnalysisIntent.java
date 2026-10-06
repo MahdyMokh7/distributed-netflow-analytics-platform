@@ -5,15 +5,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
 public record AnalysisIntent(
-
-        @NotNull
-        AnalysisStatus status,
-
-        @NotNull
-        @Valid
-        QueryRequirements queryRequirements,
-
-        @NotNull
-        @Valid
-        ClarificationRequirement clarification) {
-}
+    @NotNull AnalysisStatus status,
+    @NotNull @Valid QueryRequirements queryRequirements,
+    @NotNull @Valid ClarificationRequirement clarification) {}

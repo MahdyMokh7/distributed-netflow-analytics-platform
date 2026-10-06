@@ -43,5 +43,4 @@ public class StarrocksConnectionResponseDto {
 
   @Schema(example = "215")
   private BigInteger totalPackets;
-
 }

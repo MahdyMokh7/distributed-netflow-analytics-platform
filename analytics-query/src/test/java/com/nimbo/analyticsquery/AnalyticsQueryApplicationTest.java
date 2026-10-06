@@ -8,12 +8,12 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 class AnalyticsQueryApplicationTest {
 
-    @Test
-    void givenTestProfileWhenContextStartsThenApplicationLoads() {
-        // Given: test profile configuration is available
+  @Test
+  void givenTestProfileWhenContextStartsThenApplicationLoads() {
+    // Given: test profile configuration is available
 
-        // When: Spring creates the application context
+    // When: Spring creates the application context
 
-        // Then: context startup completes successfully
-    }
+    // Then: context startup completes successfully
+  }
 }
