@@ -3,6 +3,7 @@ package com.nimbo.starrockswriter.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.nimbo.starrockswriter.support.TestExtension;
+import com.nimbo.starrockswriter.support.TestSchemaRegistry;
 import com.nimbo.starrockswriter.support.annotations.TestAnnotations;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -82,6 +83,44 @@ class StarRocksWriterIT {
     assertPersistedRow("192.0.2.30", 0, 0L, timestamp, 4242L);
   }
 
+  @Test
+  void addsNullableColumnWhenSchemaV2ArrivesAndKeepsV1RowsReadable() throws SQLException {
+    infrastructure.kafka().awaitConsumerGroupMembers(2);
+
+    long timestamp = System.currentTimeMillis();
+    Schema schemaV1 = infrastructure.schemaRegistry().schema();
+    Schema schemaV2 = infrastructure.schemaRegistry().schemaV2();
+    GenericRecord v1 = validNetflowRecord(schemaV1, "192.0.2.50", 1111L);
+    GenericRecord v2 = validNetflowRecord(schemaV2, "192.0.2.51", 2222L);
+    v2.put(TestSchemaRegistry.ADDED_FIELD, "added-by-v2");
+
+    assertThat(produceBytes(serialize(v1, schemaV1, TestSchemaRegistry.SCHEMA_ID), timestamp, 0)).isZero();
+    infrastructure.starRocks().awaitRowCount(1);
+
+    assertThat(produceBytes(serialize(v2, schemaV2, TestSchemaRegistry.SCHEMA_ID_V2), timestamp + 1, 0))
+        .isEqualTo(1L);
+    infrastructure.starRocks().awaitRowCount(2);
+    infrastructure.kafka().awaitCommittedOffset(0, 2L);
+
+    assertAddedFieldValue("192.0.2.50", 1111L, null);
+    assertAddedFieldValue("192.0.2.51", 2222L, "added-by-v2");
+  }
+
+  private void assertAddedFieldValue(String sourceIp, long expectedBytes, String expectedValue)
+      throws SQLException {
+    infrastructure.starRocks().withDatabase(connection -> {
+      try (Statement statement = connection.createStatement();
+          ResultSet row = statement.executeQuery(
+              "SELECT in_bytes, integration_added_field FROM nimbo.netflow "
+                  + "WHERE ipv4_src_addr = '" + sourceIp + "'")) {
+        assertThat(row.next()).isTrue();
+        assertThat(row.getLong("in_bytes")).isEqualTo(expectedBytes);
+        assertThat(row.getString("integration_added_field")).isEqualTo(expectedValue);
+        assertThat(row.next()).isFalse();
+      }
+    });
+  }
+
   private long produce(GenericRecord record, Schema schema, long timestamp) {
     return produce(record, schema, timestamp, 0);
   }
@@ -132,6 +171,7 @@ class StarRocksWriterIT {
         case INT -> 1;
         case LONG -> 1L;
         case DOUBLE -> 1.0d;
+        case UNION -> null;
         case FLOAT -> 1.0f;
         default -> throw new IllegalArgumentException("Unsupported test field: " + field.name());
       };
@@ -144,6 +184,10 @@ class StarRocksWriterIT {
   }
 
   private byte[] serialize(GenericRecord record, Schema schema) {
+    return serialize(record, schema, TestSchemaRegistry.SCHEMA_ID);
+  }
+
+  private byte[] serialize(GenericRecord record, Schema schema, int schemaId) {
     try {
       ByteArrayOutputStream output = new ByteArrayOutputStream();
       BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(output, null);
@@ -153,7 +197,7 @@ class StarRocksWriterIT {
       byte[] avro = output.toByteArray();
       return ByteBuffer.allocate(5 + avro.length)
           .put((byte) 0)
-          .putInt(com.nimbo.starrockswriter.support.TestSchemaRegistry.SCHEMA_ID)
+          .putInt(schemaId)
           .put(avro)
           .array();
     } catch (IOException exception) {

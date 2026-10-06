@@ -10,6 +10,8 @@ import org.apache.avro.Schema;
 public final class TestSchemaRegistry implements AutoCloseable {
 
   public static final int SCHEMA_ID = 1;
+  public static final int SCHEMA_ID_V2 = 2;
+  public static final String ADDED_FIELD = "INTEGRATION_ADDED_FIELD";
 
   private static final String SCHEMA_JSON =
       """
@@ -25,6 +27,21 @@ public final class TestSchemaRegistry implements AutoCloseable {
           }
           """;
 
+  private static final String SCHEMA_V2_JSON =
+      """
+          {
+           "type":"record",
+           "name":"TestNetFlowRecord",
+           "namespace":"com.nimbo.netflow",
+           "fields":[
+            {"name":"IPV4_SRC_ADDR","type":"string"},
+            {"name":"IPV4_DST_ADDR","type":"string"},
+            {"name":"IN_BYTES","type":"long"},
+            {"name":"INTEGRATION_ADDED_FIELD","type":["null","string"],"default":null}
+           ]
+          }
+          """;
+
   private HttpServer server;
 
   public synchronized void start() {
@@ -33,7 +50,9 @@ public final class TestSchemaRegistry implements AutoCloseable {
     }
     try {
       server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-      server.createContext("/schemas/ids/" + SCHEMA_ID, this::schemaResponse);
+      server.createContext("/schemas/ids/" + SCHEMA_ID, exchange -> schemaResponse(exchange, SCHEMA_JSON));
+      server.createContext(
+          "/schemas/ids/" + SCHEMA_ID_V2, exchange -> schemaResponse(exchange, SCHEMA_V2_JSON));
       server.start();
     } catch (IOException exception) {
       throw new IllegalStateException("Failed to start test Schema Registry", exception);
@@ -51,14 +70,18 @@ public final class TestSchemaRegistry implements AutoCloseable {
     return new Schema.Parser().parse(SCHEMA_JSON);
   }
 
-  private void schemaResponse(HttpExchange exchange) throws IOException {
+  public Schema schemaV2() {
+    return new Schema.Parser().parse(SCHEMA_V2_JSON);
+  }
+
+  private void schemaResponse(HttpExchange exchange, String schemaJson) throws IOException {
     if (!"GET".equals(exchange.getRequestMethod())) {
       exchange.sendResponseHeaders(405, -1);
       exchange.close();
       return;
     }
 
-    String escaped = SCHEMA_JSON.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
+    String escaped = schemaJson.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
     byte[] body =
         ("{\"schemaType\":\"AVRO\",\"schema\":\"" + escaped + "\"}")
             .getBytes(StandardCharsets.UTF_8);

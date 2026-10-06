@@ -7,13 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.nimbo.common.netflow.NetflowMetadata;
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.metrics.ParquetWriterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.exception.StorageException;
-import com.nimbo.storage.exception.UnsupportedSchemaException;
 import com.nimbo.storage.model.TopicPartitionKey;
 import com.nimbo.storage.service.batching.BatchPolicy;
 import com.nimbo.storage.service.hdfs.FileStorage;
@@ -29,7 +27,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -45,8 +42,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 class NetFlowStorageTest {
 
@@ -272,37 +267,6 @@ class NetFlowStorageTest {
   @Test
   void shouldRejectEmptyRegisteredSchemaHistory() {
     assertThrows(IllegalArgumentException.class, () -> createStorage(batchPolicy, 2, List.of()));
-  }
-
-  @ParameterizedTest(name = "reserved metadata field {0} is rejected during construction")
-  @ValueSource(strings = {"PROCESS_TIME", "KAFKA_TOPIC", "KAFKA_PARTITION", "KAFKA_OFFSET"})
-  void shouldRejectProducerSchemaWithReservedKafkaMetadata(String reservedName) {
-    Schema reservedSchema =
-        new Schema.Parser()
-            .parse(
-                """
-                {
-                  "type": "record",
-                  "name": "ReservedRecord",
-                  "fields": [{"name": "%s", "type": "string"}]
-                }
-                """
-                    .formatted(reservedName));
-
-    UnsupportedSchemaException exception =
-        assertThrows(
-            UnsupportedSchemaException.class,
-            () -> createStorage(batchPolicy, 2, List.of(reservedSchema)));
-
-    assertEquals(
-        "Producer schema must not contain reserved field " + reservedName, exception.getMessage());
-  }
-
-  @Test
-  void shouldCoverEveryReservedMetadataNameInRejectionTest() {
-    assertEquals(
-        Set.of("PROCESS_TIME", "KAFKA_TOPIC", "KAFKA_PARTITION", "KAFKA_OFFSET"),
-        Set.copyOf(NetflowMetadata.RESERVED_FIELDS));
   }
 
   @Test

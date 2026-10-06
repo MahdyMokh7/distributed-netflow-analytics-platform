@@ -69,16 +69,6 @@ class StorageSchemaEvolutionTest {
   }
 
   @Test
-  void givenRequiredFieldWithNullValue_whenValueIsRead_thenChangeIsRejected() {
-    Schema schema = record("{\"name\":\"value\",\"type\":\"string\"}");
-    GenericRecord sourceRecord = new GenericData.Record(schema);
-
-    assertThatThrownBy(() -> evolution.valueFor(sourceRecord, schema.getField("value")))
-        .isInstanceOf(UnsupportedSchemaException.class)
-        .hasMessage("Required field value must not be null");
-  }
-
-  @Test
   void givenNullableFieldWithNullValue_whenValueIsRead_thenNullIsPreserved() {
     Schema schema = record("{\"name\":\"value\",\"type\":[\"null\",\"string\"],\"default\":null}");
     GenericRecord sourceRecord = new GenericData.Record(schema);

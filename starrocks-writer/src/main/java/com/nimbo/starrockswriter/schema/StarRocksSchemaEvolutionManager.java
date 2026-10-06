@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -29,9 +30,11 @@ public class StarRocksSchemaEvolutionManager {
   private final StarRocksProperties properties;
   private final SchemaMapping schemaMapping;
   private final Set<Long> ensuredSchemas = ConcurrentHashMap.newKeySet();
-  private volatile List<String> netFlowColumns = List.of();
+  private final AtomicReference<List<String>> netFlowColumns = new AtomicReference<>(List.of());
 
   public void ensureSchema(Schema writerSchema) {
+    requireSafeIdentifier(properties.getDatabase());
+    requireSafeIdentifier(properties.getTable());
     long fingerprint = SchemaNormalization.parsingFingerprint64(writerSchema);
     if (ensuredSchemas.contains(fingerprint)) {
       return;
@@ -67,15 +70,15 @@ public class StarRocksSchemaEvolutionManager {
   }
 
   public List<String> currentNetFlowColumns() {
-    List<String> snapshot = netFlowColumns;
+    List<String> snapshot = netFlowColumns.get();
     if (!snapshot.isEmpty()) {
       return snapshot;
     }
     synchronized (this) {
-      if (netFlowColumns.isEmpty()) {
+      if (netFlowColumns.get().isEmpty()) {
         updateColumnSnapshot(loadTableColumns());
       }
-      return netFlowColumns;
+      return netFlowColumns.get();
     }
   }
 
@@ -292,7 +295,7 @@ public class StarRocksSchemaEvolutionManager {
         properties.getTable()
     );
 
-    if (columns.isEmpty()) {
+    if (columns == null || columns.isEmpty()) {
       throw new IllegalStateException("StarRocks table does not exist: "
           + properties.getDatabase() + "." + properties.getTable());
     }
@@ -311,7 +314,7 @@ public class StarRocksSchemaEvolutionManager {
         dynamicColumns.add(normalized);
       }
     }
-    netFlowColumns = List.copyOf(dynamicColumns);
+    netFlowColumns.set(List.copyOf(dynamicColumns));
   }
 
   private String qualifiedTable() {
@@ -319,10 +322,14 @@ public class StarRocksSchemaEvolutionManager {
   }
 
   private String quoteIdentifier(String identifier) {
-    if (!identifier.matches("[A-Za-z0-9_]+")) {
-      throw new IllegalArgumentException("Unsafe SQL identifier: " + identifier);
-    }
+    requireSafeIdentifier(identifier);
     return "`" + identifier + "`";
+  }
+
+  private static void requireSafeIdentifier(String identifier) {
+    if (identifier == null || !identifier.matches("[A-Za-z0-9_]+")) {
+      throw new IllegalStateException("Unsafe SQL identifier: " + identifier);
+    }
   }
 
   private void sleep(long millis) {

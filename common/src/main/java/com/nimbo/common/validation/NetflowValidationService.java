@@ -14,44 +14,44 @@ public class NetflowValidationService {
 
     StringBuilder errors = new StringBuilder();
 
-    checkIpv4(genericRecord, "IPV4_SRC_ADDR", errors);
-    checkIpv4(genericRecord, "IPV4_DST_ADDR", errors);
+    verifyIpv4(genericRecord, "IPV4_SRC_ADDR", errors);
+    verifyIpv4(genericRecord, "IPV4_DST_ADDR", errors);
 
-    checkRange(genericRecord, "L4_SRC_PORT", 0, 65_535, errors);
-    checkRange(genericRecord, "L4_DST_PORT", 0, 65_535, errors);
-    checkRange(genericRecord, "PROTOCOL", 0, 255, errors);
+    verifyRange(genericRecord, "L4_SRC_PORT", 0, 65_535, errors);
+    verifyRange(genericRecord, "L4_DST_PORT", 0, 65_535, errors);
+    verifyRange(genericRecord, "PROTOCOL", 0, 255, errors);
 
-    checkRange(genericRecord, "MIN_TTL", 0, 255, errors);
-    checkRange(genericRecord, "MAX_TTL", 0, 255, errors);
+    verifyRange(genericRecord, "MIN_TTL", 0, 255, errors);
+    verifyRange(genericRecord, "MAX_TTL", 0, 255, errors);
 
-    checkRange(genericRecord, "MIN_IP_PKT_LEN", 0, 65_535, errors);
-    checkRange(genericRecord, "MAX_IP_PKT_LEN", 0, 65_535, errors);
+    verifyRange(genericRecord, "MIN_IP_PKT_LEN", 0, 65_535, errors);
+    verifyRange(genericRecord, "MAX_IP_PKT_LEN", 0, 65_535, errors);
 
-    checkRange(genericRecord, "ICMP_TYPE", 0, 65_535, errors);
-    checkRange(genericRecord, "ICMP_IPV4_TYPE", 0, 255, errors);
+    verifyRange(genericRecord, "ICMP_TYPE", 0, 65_535, errors);
+    verifyRange(genericRecord, "ICMP_IPV4_TYPE", 0, 255, errors);
 
-    checkRange(genericRecord, "DNS_QUERY_ID", 0, 65_535, errors);
-    checkRange(genericRecord, "DNS_QUERY_TYPE", 0, 65_535, errors);
+    verifyRange(genericRecord, "DNS_QUERY_ID", 0, 65_535, errors);
+    verifyRange(genericRecord, "DNS_QUERY_TYPE", 0, 65_535, errors);
 
-    checkNonNegative(genericRecord, "IN_BYTES", errors);
-    checkNonNegative(genericRecord, "OUT_BYTES", errors);
-    checkNonNegative(genericRecord, "IN_PKTS", errors);
-    checkNonNegative(genericRecord, "OUT_PKTS", errors);
+    verifyNonNegative(genericRecord, "IN_BYTES", errors);
+    verifyNonNegative(genericRecord, "OUT_BYTES", errors);
+    verifyNonNegative(genericRecord, "IN_PKTS", errors);
+    verifyNonNegative(genericRecord, "OUT_PKTS", errors);
 
-    checkNonNegative(genericRecord, FLOW_DURATION_MILLISECONDS, errors);
-    checkNonNegative(genericRecord, "DURATION_IN", errors);
-    checkNonNegative(genericRecord, "DURATION_OUT", errors);
+    verifyNonNegative(genericRecord, FLOW_DURATION_MILLISECONDS, errors);
+    verifyNonNegative(genericRecord, "DURATION_IN", errors);
+    verifyNonNegative(genericRecord, "DURATION_OUT", errors);
 
-    checkNonNegative(genericRecord, "LONGEST_FLOW_PKT", errors);
-    checkNonNegative(genericRecord, "SHORTEST_FLOW_PKT", errors);
+    verifyNonNegative(genericRecord, "LONGEST_FLOW_PKT", errors);
+    verifyNonNegative(genericRecord, "SHORTEST_FLOW_PKT", errors);
 
-    checkMinMax(genericRecord, "MIN_TTL", "MAX_TTL", errors);
-    checkMinMax(genericRecord, "SHORTEST_FLOW_PKT", "LONGEST_FLOW_PKT", errors);
-    checkMinMax(genericRecord, "MIN_IP_PKT_LEN", "MAX_IP_PKT_LEN", errors);
-    checkMinMax(genericRecord, "DURATION_OUT", FLOW_DURATION_MILLISECONDS, errors);
-    checkMinMax(genericRecord, "DURATION_IN", FLOW_DURATION_MILLISECONDS, errors);
+    verifyMinMax(genericRecord, "MIN_TTL", "MAX_TTL", errors);
+    verifyMinMax(genericRecord, "SHORTEST_FLOW_PKT", "LONGEST_FLOW_PKT", errors);
+    verifyMinMax(genericRecord, "MIN_IP_PKT_LEN", "MAX_IP_PKT_LEN", errors);
+    verifyMinMax(genericRecord, "DURATION_OUT", FLOW_DURATION_MILLISECONDS, errors);
+    verifyMinMax(genericRecord, "DURATION_IN", FLOW_DURATION_MILLISECONDS, errors);
 
-    checkFiniteNonNegativeDouble(genericRecord, "L7_PROTO", errors);
+    verifyFiniteNonNegativeDouble(genericRecord, "L7_PROTO", errors);
 
     if (errors.isEmpty()) {
       return ValidationResult.success();
@@ -60,16 +60,16 @@ public class NetflowValidationService {
     return ValidationResult.failure(errors.toString());
   }
 
-  private void checkNonNegative(GenericRecord genericRecord, String field, StringBuilder errors) {
-    Number value = number(genericRecord, field, errors);
+  private void verifyNonNegative(GenericRecord genericRecord, String field, StringBuilder errors) {
+    Number value = readNumber(genericRecord, field, errors);
 
     if (value != null && value.longValue() < 0) {
       addError(errors, field + " is negative: " + value);
     }
   }
 
-  private void checkRange(GenericRecord genericRecord, String field, long min, long max, StringBuilder errors) {
-    Number value = number(genericRecord, field, errors);
+  private void verifyRange(GenericRecord genericRecord, String field, long min, long max, StringBuilder errors) {
+    Number value = readNumber(genericRecord, field, errors);
 
     if (value == null) {
       return;
@@ -82,8 +82,8 @@ public class NetflowValidationService {
     }
   }
 
-  private void checkMinMax(GenericRecord record, String minField, String maxField, StringBuilder errors) {
-    if (!hasField(record, minField) || !hasField(record, maxField)) {
+  private void verifyMinMax(GenericRecord record, String minField, String maxField, StringBuilder errors) {
+    if (!containsField(record, minField) || !containsField(record, maxField)) {
       return;
     }
 
@@ -99,8 +99,8 @@ public class NetflowValidationService {
     }
   }
 
-  private void checkFiniteNonNegativeDouble(GenericRecord genericRecord, String field, StringBuilder errors) {
-    Number value = number(genericRecord, field, errors);
+  private void verifyFiniteNonNegativeDouble(GenericRecord genericRecord, String field, StringBuilder errors) {
+    Number value = readNumber(genericRecord, field, errors);
 
     if (value == null) {
       return;
@@ -115,8 +115,8 @@ public class NetflowValidationService {
     }
   }
 
-  private Number number(GenericRecord genericRecord, String field, StringBuilder errors) {
-    if (!hasField(genericRecord, field)) {
+  private Number readNumber(GenericRecord genericRecord, String field, StringBuilder errors) {
+    if (!containsField(genericRecord, field)) {
       return null;
     }
 
@@ -133,8 +133,8 @@ public class NetflowValidationService {
     return number;
   }
 
-  private void checkIpv4(GenericRecord record, String field, StringBuilder errors) {
-    if (!hasField(record, field)) {
+  private void verifyIpv4(GenericRecord record, String field, StringBuilder errors) {
+    if (!containsField(record, field)) {
       return;
     }
 
@@ -148,30 +148,30 @@ public class NetflowValidationService {
     String[] parts = ip.split("\\.", -1);
 
     if (parts.length != 4) {
-      addInvalidIpv4(errors, field, ip);
+      reportInvalidIpv4(errors, field, ip);
       return;
     }
 
     for (String part : parts) {
       if (part.isEmpty() || part.length() > 3 || !part.chars().allMatch(Character::isDigit)) {
-        addInvalidIpv4(errors, field, ip);
+        reportInvalidIpv4(errors, field, ip);
         return;
       }
 
       int number = Integer.parseInt(part);
 
       if (number > 255) {
-        addInvalidIpv4(errors, field, ip);
+        reportInvalidIpv4(errors, field, ip);
         return;
       }
     }
   }
 
-  private void addInvalidIpv4(StringBuilder errors, String field, String ip) {
+  private void reportInvalidIpv4(StringBuilder errors, String field, String ip) {
     addError(errors, field + " invalid IPv4: " + ip);
   }
 
-  private boolean hasField(GenericRecord genericRecord, String field) {
+  private boolean containsField(GenericRecord genericRecord, String field) {
     return AvroSchemaSupport.hasField(genericRecord, field);
   }
 
