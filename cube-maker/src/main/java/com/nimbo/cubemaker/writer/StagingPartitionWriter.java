@@ -89,9 +89,8 @@ final class StagingPartitionWriter implements Serializable {
 
   private void deletePreviousPartitionAttempt(Connection connection, int partitionId)
       throws Exception {
-    String sql =
-        "DELETE FROM " + table.stagingTable() + " WHERE batch_id = ? AND spark_partition_id = ?";
-    try (PreparedStatement statement = connection.prepareStatement(sql)) {
+    try (PreparedStatement statement =
+        connection.prepareStatement(table.deletePartitionAttemptSql())) {
       statement.setObject(1, batchId);
       statement.setInt(2, partitionId);
       statement.executeUpdate();

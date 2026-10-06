@@ -29,6 +29,7 @@ import org.apache.spark.sql.Row;
 enum StagingTable {
   TRAFFIC(
       "traffic_aggregates_staging",
+      "DELETE FROM traffic_aggregates_staging WHERE batch_id = ? AND spark_partition_id = ?",
       "COPY traffic_aggregates_staging (src_ip, window_start, window_end, in_bytes, out_bytes, "
           + "in_packets, out_packets, record_count, batch_id, ingested_at, spark_partition_id, "
           + "task_attempt_id) FROM STDIN BINARY",
@@ -63,6 +64,7 @@ enum StagingTable {
   },
   CONNECTION(
       "connection_aggregates_staging",
+      "DELETE FROM connection_aggregates_staging WHERE batch_id = ? AND spark_partition_id = ?",
       "COPY connection_aggregates_staging (id, src_ip, dst_ip, window_start, window_end, in_bytes, "
           + "out_bytes, in_packets, out_packets, batch_id, ingested_at, spark_partition_id, "
           + "task_attempt_id) FROM STDIN BINARY",
@@ -99,6 +101,7 @@ enum StagingTable {
   },
   BANDWIDTH(
       "ip_bandwidth_aggregates_staging",
+      "DELETE FROM ip_bandwidth_aggregates_staging WHERE batch_id = ? AND spark_partition_id = ?",
       "COPY ip_bandwidth_aggregates_staging (ip, window_start, window_end, inbound_bytes, "
           + "outbound_bytes, inbound_packets, outbound_packets, batch_id, ingested_at, "
           + "spark_partition_id, task_attempt_id) FROM STDIN BINARY",
@@ -133,12 +136,19 @@ enum StagingTable {
   private static final LocalDateTime POSTGRES_EPOCH = LocalDateTime.of(2000, 1, 1, 0, 0);
 
   private final String stagingTable;
+  private final String deletePartitionAttemptSql;
   private final String copySql;
   private final String mergeSql;
   private final int fieldCount;
 
-  StagingTable(String stagingTable, String copySql, String mergeSql, int fieldCount) {
+  StagingTable(
+      String stagingTable,
+      String deletePartitionAttemptSql,
+      String copySql,
+      String mergeSql,
+      int fieldCount) {
     this.stagingTable = stagingTable;
+    this.deletePartitionAttemptSql = deletePartitionAttemptSql;
     this.copySql = copySql;
     this.mergeSql = mergeSql;
     this.fieldCount = fieldCount;
@@ -146,6 +156,10 @@ enum StagingTable {
 
   String stagingTable() {
     return stagingTable;
+  }
+
+  String deletePartitionAttemptSql() {
+    return deletePartitionAttemptSql;
   }
 
   String copySql() {
