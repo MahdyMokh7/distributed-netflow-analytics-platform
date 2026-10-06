@@ -1,5 +1,6 @@
 package com.nimbo.storage.service;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -26,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -183,6 +185,108 @@ class NetFlowStorageTest {
 
     assertTrue(result.isEmpty());
     assertFalse(Files.exists(tempDirectory.resolve("parquet")));
+  }
+
+  @Test
+  void shouldHoldSkippedOffsetUntilEarlierBufferedRecordIsPersisted() {
+    TopicPartitionKey partition = new TopicPartitionKey("test-topic", 0);
+    storage.accept(createRecord(0, 100L));
+
+    Optional<Map<TopicPartitionKey, Long>> skipped =
+        storage.recordSkippedOffset("test-topic", 0, 102L);
+    Map<TopicPartitionKey, Long> committed = storage.flush();
+
+    assertTrue(skipped.isEmpty());
+    assertEquals(102L, committed.get(partition));
+  }
+
+  @Test
+  void shouldRotateAtHourBoundaryAndMergeBothCommittedBatches() throws Exception {
+    BatchPolicy sizePolicy = new BatchPolicy(100, 150, Duration.ofHours(1));
+    NetFlowStorage rotatingStorage = createStorage(sizePolicy, 2, List.of(sourceSchema));
+    GenericRecord first = new GenericData.Record(sourceSchema);
+    first.put("value", "first");
+    GenericRecord second = new GenericData.Record(sourceSchema);
+    second.put("value", "second");
+
+    rotatingStorage.accept(new IngestedRecord(first, "test-topic", 0, 100L, KAFKA_TIMESTAMP, 100));
+    Optional<Map<TopicPartitionKey, Long>> result =
+        rotatingStorage.accept(
+            new IngestedRecord(
+                second,
+                "test-topic",
+                0,
+                101L,
+                KAFKA_TIMESTAMP + Duration.ofHours(1).toMillis(),
+                200));
+
+    assertEquals(102L, result.orElseThrow().get(new TopicPartitionKey("test-topic", 0)));
+    assertEquals(2, parquetFileCount());
+  }
+
+  @Test
+  void shouldFlushRemainingBatchAfterItReachesMaximumAge() {
+    BatchPolicy agePolicy = new BatchPolicy(100, 1_000_000, Duration.ofMillis(200));
+    NetFlowStorage agingStorage = createStorage(agePolicy, 2, List.of(sourceSchema));
+    TopicPartitionKey partition = new TopicPartitionKey("test-topic", 0);
+    AtomicReference<Map<TopicPartitionKey, Long>> flushed = new AtomicReference<>();
+    agingStorage.accept(createRecord(0, 100L));
+
+    await()
+        .atMost(Duration.ofSeconds(2))
+        .until(
+            () -> {
+              Map<TopicPartitionKey, Long> offsets = agingStorage.flushRemaining();
+              if (offsets.isEmpty()) {
+                return false;
+              }
+              flushed.set(offsets);
+              return true;
+            });
+
+    assertEquals(101L, flushed.get().get(partition));
+  }
+
+  @Test
+  void shouldLeaveYoungRemainingBatchOpen() {
+    storage.accept(createRecord(0, 100L));
+
+    assertTrue(storage.flushRemaining().isEmpty());
+    assertEquals(101L, storage.flush().get(new TopicPartitionKey("test-topic", 0)));
+  }
+
+  @Test
+  void shouldExposeZeroAndOpenBatchAgeThroughGauge() {
+    var gauge = meterRegistry.get("ingester_open_batch_age_seconds").tag("instance", "1").gauge();
+
+    assertEquals(0.0, gauge.value());
+    storage.accept(createRecord(0, 100L));
+    assertTrue(gauge.value() >= 0.0);
+  }
+
+  @Test
+  void shouldRejectEmptyRegisteredSchemaHistory() {
+    assertThrows(IllegalArgumentException.class, () -> createStorage(batchPolicy, 2, List.of()));
+  }
+
+  @Test
+  void shouldRejectProducerSchemaWithReservedKafkaMetadata() {
+    Schema reservedSchema =
+        new Schema.Parser()
+            .parse(
+                """
+                {
+                  "type": "record",
+                  "name": "ReservedRecord",
+                  "fields": [{"name": "KAFKA_TOPIC", "type": "string"}]
+                }
+                """);
+    GenericRecord reservedRecord = new GenericData.Record(reservedSchema);
+    reservedRecord.put("KAFKA_TOPIC", "producer-topic");
+    NetFlowStorage reservedStorage = createStorage(batchPolicy, 2, List.of(reservedSchema));
+
+    assertThrows(
+        StorageException.class, () -> reservedStorage.accept(createRecord(reservedRecord, 100L)));
   }
 
   @Test
@@ -507,6 +611,20 @@ class NetFlowStorageTest {
                 metrics,
                 1,
                 null));
+  }
+
+  private NetFlowStorage createStorage(
+      BatchPolicy policy, int instanceId, List<Schema> registeredSchemas) {
+    metrics.registerInstance(instanceId);
+    return new NetFlowStorage(
+        policy,
+        parquetFileWriter,
+        fileStorage,
+        fileNameGenerator,
+        hdfsProperties,
+        metrics,
+        instanceId,
+        registeredSchemas);
   }
 
   private List<GenericRecord> readAllParquetRecords() throws Exception {

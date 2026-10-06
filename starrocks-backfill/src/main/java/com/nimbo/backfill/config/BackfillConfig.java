@@ -31,6 +31,15 @@ public record BackfillConfig(
     requireText(table, "BACKFILL_TABLE");
     requireText(hdfsBasePath, "BACKFILL_HDFS_BASE_PATH");
     requireText(hdfsUsername, "BACKFILL_HDFS_USERNAME");
+    if (mode == null) {
+      throw new BackfillException("BACKFILL_MODE must not be null");
+    }
+    if (from == null) {
+      throw new BackfillException("BACKFILL_FROM must not be null");
+    }
+    if (to == null) {
+      throw new BackfillException("BACKFILL_TO must not be null");
+    }
     if (!jdbcUrl.startsWith("jdbc:mysql://")) {
       throw new BackfillException("STARROCKS_JDBC_URL must start with jdbc:mysql://");
     }

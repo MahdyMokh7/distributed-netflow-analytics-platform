@@ -18,6 +18,13 @@ class BackfillProjectionBuilderTest {
   private final BackfillProjectionBuilder builder = new BackfillProjectionBuilder();
 
   @Test
+  void rejectsRequestWhenEveryHourlyPathIsEmpty() {
+    assertThatThrownBy(() -> builder.build(TABLE, starRocksColumns(), List.of(), List.of(PATH)))
+        .isInstanceOf(BackfillException.class)
+        .hasMessage("No Parquet files exist in the requested hourly paths");
+  }
+
+  @Test
   void rejectsParquetWithoutRequiredKafkaMetadata() {
     assertThatThrownBy(
             () -> builder.build(TABLE, starRocksColumns(), List.of(oldHdfsSchema()), List.of()))
@@ -123,6 +130,55 @@ class BackfillProjectionBuilderTest {
         .hasMessageContaining("Incompatible column types")
         .hasMessageContaining("VALUE is bigint")
         .hasMessageContaining("value is int");
+  }
+
+  @Test
+  void acceptsEquivalentIntegerStringTemporalAndParameterizedTypes() {
+    List<SchemaColumn> starRocksColumns =
+        List.of(
+            column("number", "int", false),
+            column("label", "varchar(255)", false),
+            column("event_time", "timestamp", false),
+            column("amount", "decimal(10,2)", false),
+            column("payload", "json", false));
+    HdfsSchema hdfsSchema =
+        new HdfsSchema(
+            PATH,
+            List.of(
+                column("NUMBER", "integer", true),
+                column("LABEL", "string", true),
+                column("EVENT_TIME", "date", true),
+                column("AMOUNT", "decimal(10,2)", true),
+                column("PAYLOAD", "JSON", true)));
+
+    BackfillProjection projection =
+        builder.build(TABLE, starRocksColumns, List.of(hdfsSchema), List.of("empty-path"));
+
+    assertThat(projection.hdfsColumnMappings().get(0).mappingSummary()).isEqualTo("5 matched");
+    assertThat(projection.skippedPaths()).containsExactly("empty-path");
+  }
+
+  @Test
+  void rejectsDifferentDecimalDefinitions() {
+    List<SchemaColumn> starRocksColumns = List.of(column("amount", "decimal(10,2)", false));
+    HdfsSchema hdfsSchema = new HdfsSchema(PATH, List.of(column("AMOUNT", "decimal(18,2)", true)));
+
+    assertThatThrownBy(() -> builder.build(TABLE, starRocksColumns, List.of(hdfsSchema), List.of()))
+        .isInstanceOf(BackfillException.class)
+        .hasMessageContaining("Incompatible column types");
+  }
+
+  @Test
+  void rejectsDuplicateColumnsIgnoringCase() {
+    List<SchemaColumn> duplicateStarRocksColumns =
+        List.of(column("value", "bigint", false), column("VALUE", "bigint", false));
+
+    assertThatThrownBy(
+            () ->
+                builder.build(
+                    TABLE, duplicateStarRocksColumns, List.of(oldHdfsSchema()), List.of()))
+        .isInstanceOf(BackfillException.class)
+        .hasMessage("StarRocks exposes duplicate column VALUE ignoring case");
   }
 
   private List<SchemaColumn> starRocksColumns() {

@@ -173,7 +173,10 @@ public final class BackfillProjectionBuilder {
       base = base.substring(0, parameters);
     }
     if (NUMBER_TYPES.contains(base)) {
-      return base.startsWith("decimal") ? normalizedType : base.equals("integer") ? "int" : base;
+      if (base.startsWith("decimal")) {
+        return normalizedType;
+      }
+      return base.equals("integer") ? "int" : base;
     }
     if (base.equals("char") || base.equals("varchar") || base.equals("string")) {
       return "string";

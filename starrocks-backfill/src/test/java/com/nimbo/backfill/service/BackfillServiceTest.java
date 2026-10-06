@@ -2,6 +2,7 @@ package com.nimbo.backfill.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.nimbo.backfill.exception.BackfillException;
 import com.nimbo.backfill.model.BackfillMetrics;
@@ -120,6 +121,43 @@ class BackfillServiceTest {
     assertThat(repository.validateCalls).isZero();
   }
 
+  @Test
+  void preservesCleanupFailureAsSuppressedOnOriginalFailure() {
+    FakeRepository repository = new FakeRepository();
+    repository.stagingIntervalMetrics = metrics(4, 10);
+    repository.dropFailure = new SQLException("cleanup failed");
+
+    Throwable failure =
+        catchThrowable(() -> new BackfillService(repository).run(plan(BackfillMode.EXECUTE)));
+
+    assertThat(failure)
+        .isInstanceOf(BackfillException.class)
+        .hasMessageContaining("metrics differ");
+    assertThat(failure.getSuppressed()).hasSize(1);
+    assertThat(failure.getSuppressed()[0])
+        .isInstanceOf(SQLException.class)
+        .hasMessage("cleanup failed");
+  }
+
+  @Test
+  void printsSkippedPathsAsPartOfPlanWithoutMutating() throws Exception {
+    FakeRepository repository = new FakeRepository();
+    repository.projection =
+        new BackfillProjection(
+            List.of("PROCESS_TIME"),
+            List.of(
+                new HdfsPathColumnMapping(
+                    "hdfs://team1/netflow/parquetFiles/2026-09-26/10/*.parquet",
+                    List.of("CAST(PROCESS_TIME AS BIGINT)"),
+                    "mapping")),
+            List.of("hdfs://team1/netflow/parquetFiles/2026-09-26/11/*.parquet"));
+
+    new BackfillService(repository).run(plan(BackfillMode.PLAN));
+
+    assertThat(repository.validateCalls).isEqualTo(1);
+    assertThat(repository.mutations()).isZero();
+  }
+
   private DailyBackfillPlan plan(BackfillMode mode) {
     Instant from = Instant.parse("2026-09-26T10:00:00Z");
     Instant to = Instant.parse("2026-09-26T12:00:00Z");
@@ -152,7 +190,8 @@ class BackfillServiceTest {
     private BackfillMetrics stagingIntervalMetrics = sourceIntervalMetrics;
     private boolean stagingPartitionExists;
     private SQLException publishFailure;
-    private final BackfillProjection projection =
+    private SQLException dropFailure;
+    private BackfillProjection projection =
         new BackfillProjection(
             List.of("PROCESS_TIME"),
             List.of(
@@ -207,8 +246,11 @@ class BackfillServiceTest {
     }
 
     @Override
-    public void dropStagingPartition(DailyBackfillPlan plan) {
+    public void dropStagingPartition(DailyBackfillPlan plan) throws SQLException {
       dropCalls++;
+      if (dropFailure != null) {
+        throw dropFailure;
+      }
     }
 
     @Override

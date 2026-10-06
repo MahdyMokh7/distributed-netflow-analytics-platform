@@ -3,6 +3,7 @@ package com.nimbo.storage.service.parquet;
 import com.nimbo.storage.config.ParquetProperties;
 import com.nimbo.storage.exception.ParquetWriteException;
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Objects;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -31,7 +32,8 @@ public final class ParquetFileWriter {
     Objects.requireNonNull(schema, "schema must not be null");
 
     CompressionCodecName codec =
-        CompressionCodecName.valueOf(parquetProperties.getCompressionCodec().toUpperCase());
+        CompressionCodecName.valueOf(
+            parquetProperties.getCompressionCodec().toUpperCase(Locale.ROOT));
 
     return buildWriter(targetPath, schema, codec);
   }

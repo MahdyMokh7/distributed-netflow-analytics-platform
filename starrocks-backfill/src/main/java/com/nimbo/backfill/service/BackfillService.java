@@ -73,7 +73,6 @@ public final class BackfillService {
       verifyMetrics(
           "HDFS and published StarRocks interval", sourceIntervalMetrics, publishedTargetMetrics);
       repository.dropStagingPartition(plan);
-      stagingPartitionCreated = false;
       return publishedTargetMetrics;
     } catch (BackfillException | SQLException exception) {
       if (targetDeleteStarted) {

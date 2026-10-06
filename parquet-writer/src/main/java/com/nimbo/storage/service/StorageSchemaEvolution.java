@@ -46,8 +46,8 @@ final class StorageSchemaEvolution {
     return merged.equals(current) ? current : merged;
   }
 
-  Object valueFor(GenericRecord record, Schema.Field storageField) {
-    Schema.Field sourceField = record.getSchema().getField(storageField.name());
+  Object valueFor(GenericRecord sourceRecord, Schema.Field storageField) {
+    Schema.Field sourceField = sourceRecord.getSchema().getField(storageField.name());
     if (sourceField == null) {
       if (allowsNull(storageField.schema())) {
         return null;
@@ -56,8 +56,15 @@ final class StorageSchemaEvolution {
           "Record is missing required field " + storageField.name());
     }
 
-    Object value = record.get(sourceField.pos());
-    if (value == null || GenericData.get().validate(storageField.schema(), value)) {
+    Object value = sourceRecord.get(sourceField.pos());
+    if (value == null) {
+      if (allowsNull(storageField.schema())) {
+        return null;
+      }
+      throw new UnsupportedSchemaException(
+          "Required field " + storageField.name() + " must not be null");
+    }
+    if (GenericData.get().validate(storageField.schema(), value)) {
       return value;
     }
 

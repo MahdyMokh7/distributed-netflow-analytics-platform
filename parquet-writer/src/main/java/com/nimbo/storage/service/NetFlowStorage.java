@@ -33,6 +33,11 @@ import org.apache.parquet.hadoop.ParquetWriter;
 @Slf4j
 public final class NetFlowStorage {
 
+  private static final String PROCESS_TIME = "PROCESS_TIME";
+  private static final String KAFKA_TOPIC = "KAFKA_TOPIC";
+  private static final String KAFKA_PARTITION = "KAFKA_PARTITION";
+  private static final String KAFKA_OFFSET = "KAFKA_OFFSET";
+
   private final ParquetFileWriter parquetFileWriter;
   private final FileStorage fileStorage;
   private final FileNameGenerator fileNameGenerator;
@@ -318,10 +323,10 @@ public final class NetFlowStorage {
 
     for (Schema.Field field : currentStorageSchema.getFields()) {
       Object value = switch (field.name()) {
-        case "PROCESS_TIME" -> ingestedRecord.kafkaTimestamp();
-        case "KAFKA_TOPIC" -> ingestedRecord.topic();
-        case "KAFKA_PARTITION" -> ingestedRecord.partition();
-        case "KAFKA_OFFSET" -> ingestedRecord.offset();
+        case PROCESS_TIME -> ingestedRecord.kafkaTimestamp();
+        case KAFKA_TOPIC -> ingestedRecord.topic();
+        case KAFKA_PARTITION -> ingestedRecord.partition();
+        case KAFKA_OFFSET -> ingestedRecord.offset();
         default -> schemaEvolution.valueFor(original, field);
       };
       enriched.put(field.name(), value);
@@ -334,8 +339,7 @@ public final class NetFlowStorage {
   }
 
   private Schema buildStorageSchema(Schema sourceSchema) {
-    List<String> reservedFields =
-        List.of("PROCESS_TIME", "KAFKA_TOPIC", "KAFKA_PARTITION", "KAFKA_OFFSET");
+    List<String> reservedFields = List.of(PROCESS_TIME, KAFKA_TOPIC, KAFKA_PARTITION, KAFKA_OFFSET);
     for (String field : reservedFields) {
       if (sourceSchema.getField(field) != null) {
         throw new StorageException("Producer schema must not contain reserved field " + field);
@@ -347,10 +351,10 @@ public final class NetFlowStorage {
 
     fields.add(
         storageField(
-            "PROCESS_TIME", Schema.Type.LONG, "Kafka record timestamp in UTC epoch milliseconds."));
-    fields.add(storageField("KAFKA_TOPIC", Schema.Type.STRING, "Kafka source topic."));
-    fields.add(storageField("KAFKA_PARTITION", Schema.Type.INT, "Kafka source partition."));
-    fields.add(storageField("KAFKA_OFFSET", Schema.Type.LONG, "Kafka source offset."));
+            PROCESS_TIME, Schema.Type.LONG, "Kafka record timestamp in UTC epoch milliseconds."));
+    fields.add(storageField(KAFKA_TOPIC, Schema.Type.STRING, "Kafka source topic."));
+    fields.add(storageField(KAFKA_PARTITION, Schema.Type.INT, "Kafka source partition."));
+    fields.add(storageField(KAFKA_OFFSET, Schema.Type.LONG, "Kafka source offset."));
 
     return Schema.createRecord(
         sourceSchema.getName(),
