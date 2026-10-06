@@ -11,8 +11,6 @@ import com.nimbo.cubemaker.metrics.CubeMakerMetrics;
 import com.nimbo.cubemaker.metrics.CubeMakerMetrics.Cube;
 import com.nimbo.cubemaker.metrics.CubeMakerMetrics.Stage;
 import io.micrometer.core.instrument.Timer;
-import java.io.Serial;
-import java.io.Serializable;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -26,9 +24,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Slf4j
-public class PostgresWriter implements Serializable {
-
-  @Serial private static final long serialVersionUID = 1L;
+public class PostgresWriter {
 
   private final TableRowMapper rowMapper;
   private final BatchExecutor batchExecutor;

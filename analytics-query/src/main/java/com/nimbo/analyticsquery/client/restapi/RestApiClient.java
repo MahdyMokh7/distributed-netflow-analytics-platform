@@ -21,6 +21,11 @@ import org.springframework.web.client.RestClientException;
 @Component
 public class RestApiClient {
 
+  private static final String START_TIME = "startTime";
+  private static final String END_TIME = "endTime";
+  private static final String SORT_BY = "sortBy";
+  private static final String SORT_DIRECTION = "sortDirection";
+
   private static final ParameterizedTypeReference<RestApiResponse<List<TrafficRow>>>
       TRAFFIC_RESPONSE = new ParameterizedTypeReference<>() {};
 
@@ -56,12 +61,12 @@ public class RestApiClient {
                 uriBuilder -> {
                   uriBuilder
                       .pathSegment("traffic")
-                      .queryParam("startTime", startTime)
-                      .queryParam("endTime", endTime)
+                      .queryParam(START_TIME, startTime)
+                      .queryParam(END_TIME, endTime)
                       .queryParam("page", pageRequest.page())
                       .queryParam("size", pageRequest.size())
-                      .queryParam("sortBy", pageRequest.sortBy().parameterValue())
-                      .queryParam("sortDirection", pageRequest.sortDirection());
+                      .queryParam(SORT_BY, pageRequest.sortBy().parameterValue())
+                      .queryParam(SORT_DIRECTION, pageRequest.sortDirection());
 
                   if (sourceIp != null) {
                     uriBuilder.queryParam("srcIp", sourceIp);
@@ -86,12 +91,12 @@ public class RestApiClient {
                 uriBuilder -> {
                   uriBuilder
                       .pathSegment("connections")
-                      .queryParam("startTime", startTime)
-                      .queryParam("endTime", endTime)
+                      .queryParam(START_TIME, startTime)
+                      .queryParam(END_TIME, endTime)
                       .queryParam("page", pageRequest.page())
                       .queryParam("size", pageRequest.size())
-                      .queryParam("sortBy", pageRequest.sortBy().parameterValue())
-                      .queryParam("sortDirection", pageRequest.sortDirection());
+                      .queryParam(SORT_BY, pageRequest.sortBy().parameterValue())
+                      .queryParam(SORT_DIRECTION, pageRequest.sortDirection());
 
                   if (sourceIp != null) {
                     uriBuilder.queryParam("srcIp", sourceIp);
@@ -119,12 +124,12 @@ public class RestApiClient {
                 uriBuilder ->
                     uriBuilder
                         .pathSegment("connections", ip)
-                        .queryParam("startTime", startTime)
-                        .queryParam("endTime", endTime)
+                        .queryParam(START_TIME, startTime)
+                        .queryParam(END_TIME, endTime)
                         .queryParam("page", pageRequest.page())
                         .queryParam("size", pageRequest.size())
-                        .queryParam("sortBy", pageRequest.sortBy().parameterValue())
-                        .queryParam("sortDirection", pageRequest.sortDirection())
+                        .queryParam(SORT_BY, pageRequest.sortBy().parameterValue())
+                        .queryParam(SORT_DIRECTION, pageRequest.sortDirection())
                         .build()),
         CONNECTION_RESPONSE);
   }
@@ -143,8 +148,8 @@ public class RestApiClient {
                 uriBuilder ->
                     uriBuilder
                         .pathSegment("bandwidth", "top")
-                        .queryParam("startTime", startTime)
-                        .queryParam("endTime", endTime)
+                        .queryParam(START_TIME, startTime)
+                        .queryParam(END_TIME, endTime)
                         .queryParam("limit", limit)
                         .build()),
         BANDWIDTH_RESPONSE);
@@ -160,8 +165,8 @@ public class RestApiClient {
                 uriBuilder ->
                     uriBuilder
                         .pathSegment("protocols")
-                        .queryParam("startTime", startTime)
-                        .queryParam("endTime", endTime)
+                        .queryParam(START_TIME, startTime)
+                        .queryParam(END_TIME, endTime)
                         .build()),
         PROTOCOL_RESPONSE);
   }

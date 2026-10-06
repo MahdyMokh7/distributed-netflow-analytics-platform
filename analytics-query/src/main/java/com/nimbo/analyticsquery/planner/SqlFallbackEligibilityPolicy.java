@@ -7,7 +7,7 @@ import com.nimbo.analyticsquery.schema.SemanticFieldNames;
 import com.nimbo.analyticsquery.schema.SemanticSchemaCatalog;
 import com.nimbo.analyticsquery.schema.SemanticTable;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +56,8 @@ public class SqlFallbackEligibilityPolicy {
   private boolean canSingleDataSourceSatisfy(
       Collection<SemanticTable> tables, QueryRequirements requirements) {
 
-    Map<AnalysisDataSource, Collection<SemanticTable>> tablesByDataSource = new HashMap<>();
+    Map<AnalysisDataSource, Collection<SemanticTable>> tablesByDataSource =
+        new EnumMap<>(AnalysisDataSource.class);
 
     for (SemanticTable table : tables) {
       tablesByDataSource

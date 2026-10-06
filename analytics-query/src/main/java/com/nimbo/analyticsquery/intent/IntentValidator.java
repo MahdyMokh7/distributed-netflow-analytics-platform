@@ -12,7 +12,6 @@ import jakarta.validation.Validator;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -399,13 +398,6 @@ public class IntentValidator {
         .find(name)
         .orElseThrow(
             () -> new InvalidIntentException("Unknown or unapproved semantic field: " + name));
-  }
-
-  private void validateUniqueFields(List<String> fields, String fieldName) {
-
-    if (new HashSet<>(fields).size() != fields.size()) {
-      throw new InvalidIntentException(fieldName + " contains duplicate fields");
-    }
   }
 
   private void validateIpv4(String value) {

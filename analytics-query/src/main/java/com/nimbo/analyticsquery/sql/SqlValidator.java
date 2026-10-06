@@ -286,11 +286,11 @@ public class SqlValidator {
     Long limit = null;
 
     if (select.getLimit() != null
-        && !select.getLimit().isLimitAll()
         && select.getLimit().getRowCount() instanceof LongValue rowCount) {
       limit = rowCount.getValue();
-    } else if (select.getFetch() != null) {
-      limit = select.getFetch().getRowCount();
+    } else if (select.getFetch() != null
+        && select.getFetch().getExpression() instanceof LongValue rowCount) {
+      limit = rowCount.getValue();
     }
 
     if (limit == null || limit < 1 || limit > SqlPolicyRules.maxResultRows()) {

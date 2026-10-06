@@ -27,6 +27,7 @@ public final class RestApiTestServerExtension
   private HttpServer server;
   private volatile int responseStatus;
   private volatile byte[] responseBody;
+  private volatile URI lastRequestUri;
   private volatile CountDownLatch responseRelease = new CountDownLatch(0);
 
   @Override
@@ -39,6 +40,7 @@ public final class RestApiTestServerExtension
     releaseResponse();
     responseRelease = new CountDownLatch(0);
     requestCount.set(0);
+    lastRequestUri = null;
     responses.clear();
     respondWith(
         500,
@@ -76,6 +78,10 @@ public final class RestApiTestServerExtension
     return requestCount.get();
   }
 
+  public URI lastRequestUri() {
+    return lastRequestUri;
+  }
+
   public void respondWith(int status, String body) {
     responseStatus = status;
     responseBody = body.getBytes(StandardCharsets.UTF_8);
@@ -98,6 +104,7 @@ public final class RestApiTestServerExtension
 
   private void respond(HttpExchange exchange) throws IOException {
     requestCount.incrementAndGet();
+    lastRequestUri = exchange.getRequestURI();
 
     try {
       responseRelease.await(5, TimeUnit.SECONDS);
