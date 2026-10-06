@@ -52,26 +52,7 @@ pipeline {
         stage('Run Sonar Analysis') {
             steps {
                 withSonarQubeEnv('sonarqube') {
-                    sh '''
-                        set -eu
-                        mkdir -p /tmp/sonar-cache
-
-                        CHANGE="${GERRIT_CHANGE_NUMBER:-manual-build}"
-                        PATCHSET="${GERRIT_PATCHSET_NUMBER:-0}"
-
-                        mvn \
-                          --settings jenkins/maven-settings.xml \
-                          --batch-mode \
-                          --no-transfer-progress \
-                          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-                          -Dsonar.projectKey=nimbo-nimbyte \
-                          -Dsonar.projectName=nimbo-nimbyte \
-                          -Dsonar.host.url="${SONAR_HOST_URL}" \
-                          -Dsonar.login="${SONAR_AUTH_TOKEN}" \
-                          -Dsonar.userHome=/tmp/sonar-cache \
-                          -Dsonar.pullrequest.key="${CHANGE}" \
-                          -Dsonar.pullrequest.branch="gerrit-${CHANGE}-${PATCHSET}" \
-                    '''
+                    sh 'bash jenkins/scripts/ci/sonar-analysis.sh'
                 }
             }
         }

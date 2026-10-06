@@ -162,7 +162,7 @@ pipeline {
             steps {
                 checkout scm
                 withSonarQubeEnv('sonarqube') {
-                    sh 'bash jenkins/scripts/sonar-analysis.sh'
+                    sh 'bash jenkins/scripts/cd/sonar-analysis.sh'
                 }
             }
         }
@@ -208,7 +208,7 @@ pipeline {
                             "MODULES_CSV=${modules.join(',')}",
                             "BUILDS_CUBE_MAKER=${modules.contains('cube-maker')}"
                     ]) {
-                        sh 'bash jenkins/scripts/build-and-push.sh'
+                        sh 'bash jenkins/scripts/cd/build-and-push.sh'
                     }
                 }
             }
@@ -235,7 +235,7 @@ pipeline {
                 script {
                     def deployArgs = buildHelmArgs(modulesToDeployList())
                     withEnv(["DEPLOY_ARGS=${deployArgs}"]) {
-                        sh 'bash jenkins/scripts/helm-deploy.sh dry-run'
+                        sh 'bash jenkins/scripts/cd/helm-deploy.sh dry-run'
                     }
                 }
             }
@@ -250,7 +250,7 @@ pipeline {
                     sh 'kubectl config current-context'
                     def deployArgs = buildHelmArgs(modulesToDeployList())
                     withEnv(["DEPLOY_ARGS=${deployArgs}"]) {
-                        sh 'bash jenkins/scripts/helm-deploy.sh apply'
+                        sh 'bash jenkins/scripts/cd/helm-deploy.sh apply'
                     }
                 }
             }

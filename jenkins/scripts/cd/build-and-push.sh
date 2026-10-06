@@ -23,7 +23,7 @@ mvn \
   -DskipTests
 
 if [ "${BUILDS_CUBE_MAKER}" = "true" ]; then
-    ./jenkins/scripts/validate-spark-jar.sh
+    ./jenkins/scripts/cd/validate-spark-jar.sh
 fi
 
 mvn \
