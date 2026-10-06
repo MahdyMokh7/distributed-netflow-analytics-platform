@@ -25,8 +25,7 @@ public final class RestApiTestServerExtension
   private final ConcurrentLinkedQueue<ConfiguredResponse> responses = new ConcurrentLinkedQueue<>();
 
   private HttpServer server;
-  private volatile int responseStatus;
-  private volatile byte[] responseBody;
+  private volatile ConfiguredResponse response;
   private volatile URI lastRequestUri;
   private volatile CountDownLatch responseRelease = new CountDownLatch(0);
 
@@ -83,8 +82,7 @@ public final class RestApiTestServerExtension
   }
 
   public void respondWith(int status, String body) {
-    responseStatus = status;
-    responseBody = body.getBytes(StandardCharsets.UTF_8);
+    response = new ConfiguredResponse(status, body.getBytes(StandardCharsets.UTF_8));
   }
 
   public void respondWithSequence(String... bodies) {
@@ -105,18 +103,22 @@ public final class RestApiTestServerExtension
   private void respond(HttpExchange exchange) throws IOException {
     requestCount.incrementAndGet();
     lastRequestUri = exchange.getRequestURI();
+    CountDownLatch release = responseRelease;
+    ConfiguredResponse configured = responses.poll();
+    if (configured == null) {
+      configured = response;
+    }
 
     try {
-      responseRelease.await(5, TimeUnit.SECONDS);
+      release.await(5, TimeUnit.SECONDS);
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       exchange.close();
       return;
     }
 
-    ConfiguredResponse configured = responses.poll();
-    int status = configured == null ? responseStatus : configured.status();
-    byte[] responseBytes = configured == null ? responseBody : configured.body();
+    int status = configured.status();
+    byte[] responseBytes = configured.body();
 
     exchange.getResponseHeaders().set("Content-Type", "application/json");
     exchange.sendResponseHeaders(status, responseBytes.length);

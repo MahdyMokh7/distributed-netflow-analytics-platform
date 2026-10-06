@@ -9,6 +9,7 @@ import com.nimbo.analyticsquery.client.restapi.dto.TrafficRow;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
@@ -191,7 +192,7 @@ public class RestApiClient {
     } catch (RestApiClientException exception) {
       throw exception;
 
-    } catch (ResourceAccessException exception) {
+    } catch (ResourceAccessException | CancellationException exception) {
       throw new RestApiClientException(
           RestApiClientException.Kind.UNAVAILABLE,
           null,
