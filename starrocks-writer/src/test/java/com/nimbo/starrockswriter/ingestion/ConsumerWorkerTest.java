@@ -155,6 +155,14 @@ class ConsumerWorkerTest {
     assertThat(Thread.currentThread().isInterrupted()).isTrue();
   }
 
+  @Test
+  void givenPartitionsRevoked_whenRebalancing_thenPendingLoadsAreCommittedFirst() {
+    worker.rebalanceListener().onPartitionsRevoked(List.of(PARTITION));
+
+    assertThat(batchProcessor.rebalancePreparations).isEqualTo(1);
+    assertThat(batchProcessor.rebalanceConsumer).isSameAs(consumer);
+  }
+
   private static RecordDeserializationException registryFailure(int status, int errorCode) {
     return new RecordDeserializationException(
         VALUE,
@@ -226,6 +234,8 @@ class ConsumerWorkerTest {
 
     private final List<SeekCall> skipped = new ArrayList<>();
     private int processedBatches;
+    private int rebalancePreparations;
+    private KafkaConsumer<byte[], GenericRecord> rebalanceConsumer;
 
     RecordingBatchProcessor() {
       super(WORKER_NUMBER, null, null, null, null, null, null, null, null);
@@ -257,6 +267,12 @@ class ConsumerWorkerTest {
     @Override
     public void skipDeserializationFailure(TopicPartition partition, long nextOffset) {
       skipped.add(new SeekCall(partition, nextOffset));
+    }
+
+    @Override
+    public void prepareForRebalance(KafkaConsumer<byte[], GenericRecord> kafkaConsumer) {
+      rebalancePreparations++;
+      rebalanceConsumer = kafkaConsumer;
     }
   }
 

@@ -1,5 +1,6 @@
 package com.nimbo.ingester.consumer;
 
+import com.nimbo.common.kafka.KafkaDlqPublisher.PublishException;
 import com.nimbo.common.validation.NetflowValidationService;
 import com.nimbo.common.validation.ValidationResult;
 import com.nimbo.ingester.config.KafkaProperties;
@@ -7,6 +8,7 @@ import com.nimbo.ingester.deserializer.AvroDeserializer;
 import com.nimbo.ingester.exception.DeserializationException;
 import com.nimbo.ingester.exception.KafkaConsumerException;
 import com.nimbo.ingester.exception.SchemaRegistryException;
+import com.nimbo.ingester.model.DlqReason;
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.ingester.service.DataProcessingService;
 import com.nimbo.ingester.service.DlqService;
@@ -28,6 +30,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
@@ -144,9 +147,35 @@ public class NetflowConsumer {
       throw new KafkaConsumerException(
           "Kafka polling failed for consumer instance #" + instanceId, e);
 
-    } catch (StorageException | IllegalStateException e) {
+    } catch (StorageException e) {
+      log.error("Instance #{}: Error while processing or flushing consumed records", instanceId, e);
+      rewindToCommittedOffsets();
+    } catch (IllegalStateException e) {
       log.error("Instance #{}: Error while processing or flushing consumed records", instanceId, e);
     }
+  }
+
+  private void rewindToCommittedOffsets() {
+    Set<TopicPartition> partitions = kafkaConsumer.assignment();
+    if (partitions.isEmpty()) {
+      return;
+    }
+
+    Map<TopicPartition, OffsetAndMetadata> committedOffsets = kafkaConsumer.committed(partitions);
+    Set<TopicPartition> partitionsWithoutCommit = new HashSet<>();
+    for (TopicPartition partition : partitions) {
+      OffsetAndMetadata committedOffset = committedOffsets.get(partition);
+      if (committedOffset == null) {
+        partitionsWithoutCommit.add(partition);
+      } else {
+        kafkaConsumer.seek(partition, committedOffset.offset());
+      }
+    }
+    if (!partitionsWithoutCommit.isEmpty()) {
+      kafkaConsumer.seekToBeginning(partitionsWithoutCommit);
+    }
+
+    log.warn("Instance #{}: Rewound assigned partitions after storage failure", instanceId);
   }
 
   private void handleEmptyPoll() {
@@ -178,12 +207,12 @@ public class NetflowConsumer {
                     offsets.forEach(
                         (key, offset) -> offsetsToCommit.merge(key, offset, Math::max)));
 
-      } catch (SchemaRegistryException exception) {
+      } catch (SchemaRegistryException | PublishException exception) {
 
         blockedPartitions.add(topicPartition);
         kafkaConsumer.seek(topicPartition, consumerRecord.offset());
         log.error(
-            "Instance #{}: Schema Registry lookup failed for topic={}, partition={}, offset={}; "
+            "Instance #{}: Retryable dependency failed for topic={}, partition={}, offset={}; "
                 + "the record will be retried",
             instanceId,
             consumerRecord.topic(),
@@ -199,14 +228,22 @@ public class NetflowConsumer {
   private Optional<Map<TopicPartitionKey, Long>> processRecord(
       ConsumerRecord<byte[], byte[]> consumerRecord) {
     long nextOffset = consumerRecord.offset() + 1;
+
+    if (!dataProcessingService.isWithinAllowedWindow(consumerRecord.timestamp())) {
+      metrics.invalidRecord(instanceId, DlqReason.LATE_RECORD);
+      dlqService.publishLate(consumerRecord);
+      return dataProcessingService.recordSkippedOffset(
+          consumerRecord.topic(), consumerRecord.partition(), nextOffset);
+    }
+
     try {
       var genericRecord =
           avroDeserializer.deserialize(consumerRecord.topic(), consumerRecord.value());
       ValidationResult result = validationService.validate(genericRecord);
 
       if (!result.valid()) {
-        metrics.invalidRecord(instanceId, "VALIDATION_ERROR");
-        dlqService.publish(consumerRecord, "VALIDATION_ERROR", result.reason());
+        metrics.invalidRecord(instanceId, DlqReason.VALIDATION_ERROR);
+        dlqService.publish(consumerRecord, DlqReason.VALIDATION_ERROR, result.reason());
         return dataProcessingService.recordSkippedOffset(
             consumerRecord.topic(), consumerRecord.partition(), nextOffset);
       }
@@ -223,23 +260,16 @@ public class NetflowConsumer {
       return dataProcessingService.processRecord(ingestedRecord);
 
     } catch (DeserializationException | UnsupportedSchemaException e) {
-      String reason =
-          e instanceof DeserializationException ? "DESERIALIZATION_ERROR" : "UNSUPPORTED_SCHEMA";
+      DlqReason reason =
+          e instanceof DeserializationException
+              ? DlqReason.DESERIALIZATION_ERROR
+              : DlqReason.UNSUPPORTED_SCHEMA;
       metrics.invalidRecord(instanceId, reason);
       dlqService.publish(consumerRecord, reason, e.getMessage());
 
       return dataProcessingService.recordSkippedOffset(
           consumerRecord.topic(), consumerRecord.partition(), nextOffset);
 
-    } catch (StorageException e) {
-      log.error(
-          "Instance #{}: Error processing record: topic={}, partition={}, offset={}",
-          instanceId,
-          consumerRecord.topic(),
-          consumerRecord.partition(),
-          consumerRecord.offset(),
-          e);
-      return Optional.empty();
     }
   }
 

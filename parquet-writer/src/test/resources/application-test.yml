@@ -12,6 +12,8 @@ ingester:
   kafka:
     bootstrap-servers: localhost:9092
     topic: test-netflow
+    dlq-topic: test-netflow-dlq
+    late-topic: test-netflow-late
     consumer-group: test-consumer-group
     enable-auto-commit: false
     poll-timeout-ms: 100
@@ -42,3 +44,5 @@ rolling:
   max-record-count: 10
   max-size-bytes: 1048576
   max-age: 1m
+  allowed-lateness-hours: 1
+  late-routing-enabled: true

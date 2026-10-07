@@ -7,6 +7,7 @@ pipeline {
             args '''
                 --network host
                 --add-host sonarqube.inside.sahab.ir:192.168.12.53
+                --add-host host.docker.internal:host-gateway
                 -v /var/run/docker.sock:/var/run/docker.sock
                 --group-add 999
                 -v /home/team1/.m2:/home/team1/.m2

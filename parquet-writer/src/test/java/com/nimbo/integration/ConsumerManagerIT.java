@@ -13,6 +13,7 @@ import com.nimbo.ingester.service.DlqService;
 import com.nimbo.metrics.ParquetWriterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.config.ParquetProperties;
+import com.nimbo.storage.service.HourWindowPolicy;
 import com.nimbo.storage.service.batching.BatchPolicy;
 import com.nimbo.storage.service.hdfs.HdfsFileSystemFactory;
 import com.nimbo.storage.service.naming.FileNameGenerator;
@@ -22,6 +23,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -61,6 +63,7 @@ class ConsumerManagerIT {
               new NetflowValidationService(),
               new DlqService(dlqProducer, kafkaProperties),
               new BatchPolicy(5, 1024 * 1024, Duration.ofMinutes(2)),
+              new HourWindowPolicy(1, true, Clock.systemUTC()),
               parquetProperties,
               new FileNameGenerator(),
               hdfsProperties,
@@ -97,6 +100,7 @@ class ConsumerManagerIT {
     properties.setBootstrapServers(KAFKA.bootstrapServers());
     properties.setTopic(topic);
     properties.setDlqTopic(dlqTopic);
+    properties.setLateTopic(dlqTopic + "-late");
     properties.setConsumerGroup("manager-consumer-group");
     properties.setEnableAutoCommit(false);
     properties.setAutoOffsetReset("earliest");

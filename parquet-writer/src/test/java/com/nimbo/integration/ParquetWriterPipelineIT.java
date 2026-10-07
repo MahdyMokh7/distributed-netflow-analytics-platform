@@ -14,6 +14,7 @@ import com.nimbo.ingester.service.DlqService;
 import com.nimbo.metrics.ParquetWriterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.config.ParquetProperties;
+import com.nimbo.storage.service.HourWindowPolicy;
 import com.nimbo.storage.service.NetFlowStorage;
 import com.nimbo.storage.service.batching.BatchPolicy;
 import com.nimbo.storage.service.hdfs.HdfsFileStorage;
@@ -27,8 +28,10 @@ import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -66,7 +69,7 @@ class ParquetWriterPipelineIT {
     String group = "pipeline-valid-group";
     String basePath = storageRoot.resolve("netflow/pipeline-valid").toString();
     KAFKA.createTopics(topic, dlqTopic);
-    try (PipelineFixture pipeline = pipeline(topic, dlqTopic, group, basePath, 3);
+    try (PipelineFixture pipeline = pipeline(topic, dlqTopic, group, basePath, 3, Clock.systemUTC(), true);
         KafkaProducer<byte[], byte[]> producer = KAFKA.producer()) {
       pipeline.start();
       producer
@@ -142,7 +145,8 @@ class ParquetWriterPipelineIT {
     long firstHourMillis = Instant.parse("2026-09-18T10:45:00.000Z").toEpochMilli();
     long secondHourMillis = Instant.parse("2026-09-18T11:15:00.000Z").toEpochMilli();
 
-    try (PipelineFixture pipeline = pipeline(topic, dlqTopic, group, basePath, 10);
+    Clock clock = Clock.fixed(Instant.parse("2026-09-18T11:30:00Z"), ZoneOffset.UTC);
+    try (PipelineFixture pipeline = pipeline(topic, dlqTopic, group, basePath, 2, clock, true);
         KafkaProducer<byte[], byte[]> producer = KAFKA.producer()) {
       pipeline.start();
       producer
@@ -167,9 +171,9 @@ class ParquetWriterPipelineIT {
           .get();
 
       await()
-          .atMost(Duration.ofMinutes(1))
+          .atMost(Duration.ofSeconds(10))
           .pollInterval(Duration.ofMillis(100))
-          .until(() -> finalizedFiles(pipeline.fileSystem(), basePath).size() == 1);
+          .until(() -> finalizedFiles(pipeline.fileSystem(), basePath).size() == 2);
     }
 
     await()
@@ -208,7 +212,8 @@ class ParquetWriterPipelineIT {
     long lastHourOfDay = Instant.parse("2026-09-18T23:45:00.000Z").toEpochMilli();
     long firstHourOfNextDay = Instant.parse("2026-09-19T00:15:00.000Z").toEpochMilli();
 
-    try (PipelineFixture pipeline = pipeline(topic, dlqTopic, group, basePath, 10);
+    Clock clock = Clock.fixed(Instant.parse("2026-09-19T00:30:00Z"), ZoneOffset.UTC);
+    try (PipelineFixture pipeline = pipeline(topic, dlqTopic, group, basePath, 2, clock, true);
         KafkaProducer<byte[], byte[]> producer = KAFKA.producer()) {
       pipeline.start();
       producer
@@ -233,9 +238,9 @@ class ParquetWriterPipelineIT {
           .get();
 
       await()
-          .atMost(Duration.ofMinutes(1))
+          .atMost(Duration.ofSeconds(10))
           .pollInterval(Duration.ofMillis(100))
-          .until(() -> finalizedFiles(pipeline.fileSystem(), basePath).size() == 1);
+          .until(() -> finalizedFiles(pipeline.fileSystem(), basePath).size() == 2);
     }
 
     await()
@@ -261,6 +266,87 @@ class ParquetWriterPipelineIT {
   }
 
   @Test
+  void givenRecordOutsideAllowedHourWindow_whenConsumed_thenItIsDurablyPublishedAndCommitted()
+      throws Exception {
+    String topic = "pipeline-late-topic";
+    String dlqTopic = "pipeline-late-dlq";
+    String lateTopic = dlqTopic + "-late";
+    String group = "pipeline-late-group";
+    String basePath = storageRoot.resolve("netflow/pipeline-late").toString();
+    Instant now = Instant.parse("2026-09-18T11:30:00Z");
+    long lateTimestamp = now.minus(Duration.ofHours(2)).toEpochMilli();
+    KAFKA.createTopics(topic, dlqTopic, lateTopic);
+
+    try (PipelineFixture pipeline =
+            pipeline(topic, dlqTopic, group, basePath, 5, Clock.fixed(now, ZoneOffset.UTC), true);
+        KafkaProducer<byte[], byte[]> producer = KAFKA.producer();
+        var lateReader = KAFKA.consumer("pipeline-late-reader")) {
+      lateReader.subscribe(Collections.singletonList(lateTopic));
+      pipeline.start();
+      byte[] key = {7};
+      byte[] payload =
+          pipeline.serialize(
+              topic, testData.validRecord("192.168.30.1", "10.0.0.1", 1_000L));
+      producer.send(new ProducerRecord<>(topic, null, lateTimestamp, key, payload)).get();
+
+      ConsumerRecord<byte[], byte[]> lateRecord = pollOne(lateReader);
+      await()
+          .atMost(Duration.ofSeconds(10))
+          .until(() -> Long.valueOf(1L).equals(KAFKA.committedOffset(group, topic, 0)));
+
+      assertThat(lateRecord.key()).containsExactly(key);
+      assertThat(lateRecord.value()).containsExactly(payload);
+      assertThat(lateRecord.timestamp()).isEqualTo(lateTimestamp);
+      assertThat(header(lateRecord, "error-type")).isEqualTo("LATE_RECORD");
+      assertThat(header(lateRecord, "original-topic")).isEqualTo(topic);
+      assertThat(finalizedFiles(pipeline.fileSystem(), basePath)).isEmpty();
+      assertThat(KAFKA.committedOffset(group, topic, 0)).isEqualTo(1L);
+    }
+  }
+
+  @Test
+  void givenHistoricalRecordAndLateRoutingDisabled_whenConsumed_thenItIsWrittenToParquet()
+      throws Exception {
+    String topic = "pipeline-backfill-topic";
+    String dlqTopic = "pipeline-backfill-dlq";
+    String group = "pipeline-backfill-group";
+    String basePath = storageRoot.resolve("netflow/pipeline-backfill").toString();
+    Instant now = Instant.parse("2026-10-07T11:30:00Z");
+    long historicalTimestamp = Instant.parse("2026-10-03T08:15:00Z").toEpochMilli();
+    KAFKA.createTopics(topic, dlqTopic, dlqTopic + "-late");
+
+    try (PipelineFixture pipeline =
+            pipeline(topic, dlqTopic, group, basePath, 1, Clock.fixed(now, ZoneOffset.UTC), false);
+        KafkaProducer<byte[], byte[]> producer = KAFKA.producer()) {
+      pipeline.start();
+      producer
+          .send(
+              new ProducerRecord<>(
+                  topic,
+                  null,
+                  historicalTimestamp,
+                  null,
+                  pipeline.serialize(
+                      topic, testData.validRecord("192.168.40.1", "10.0.0.1", 1_000L))))
+          .get();
+
+      await()
+          .atMost(Duration.ofSeconds(10))
+          .pollInterval(Duration.ofMillis(100))
+          .until(() -> finalizedFiles(pipeline.fileSystem(), basePath).size() == 1);
+      await()
+          .atMost(Duration.ofSeconds(10))
+          .until(() -> Long.valueOf(1L).equals(KAFKA.committedOffset(group, topic, 0)));
+
+      org.apache.hadoop.fs.Path file = finalizedFiles(pipeline.fileSystem(), basePath).get(0);
+      assertThat(file.getParent().getName()).isEqualTo("08");
+      assertThat(file.getParent().getParent().getName()).isEqualTo("2026-10-03");
+      assertThat(readRecords(localConfiguration(), file)).hasSize(1);
+      assertThat(KAFKA.committedOffset(group, topic, 0)).isEqualTo(1L);
+    }
+  }
+
+  @Test
   void givenInvalidNetFlow_whenConsumed_thenRecordIsSentToDlqAndExcludedFromHdfs()
       throws Exception {
     String topic = "pipeline-validation-topic";
@@ -268,7 +354,7 @@ class ParquetWriterPipelineIT {
     String basePath = "/netflow/pipeline-validation";
     KAFKA.createTopics(topic, dlqTopic);
     try (PipelineFixture pipeline =
-            pipeline(topic, dlqTopic, "pipeline-validation-group", basePath, 5);
+            pipeline(topic, dlqTopic, "pipeline-validation-group", basePath, 5, Clock.systemUTC(), true);
         KafkaProducer<byte[], byte[]> producer = KAFKA.producer();
         var dlqReader = KAFKA.consumer("pipeline-validation-dlq-reader")) {
       dlqReader.subscribe(Collections.singletonList(dlqTopic));
@@ -306,7 +392,7 @@ class ParquetWriterPipelineIT {
     String basePath = "/netflow/pipeline-malformed";
     KAFKA.createTopics(topic, dlqTopic);
     try (PipelineFixture pipeline =
-            pipeline(topic, dlqTopic, "pipeline-malformed-group", basePath, 5);
+            pipeline(topic, dlqTopic, "pipeline-malformed-group", basePath, 5, Clock.systemUTC(), true);
         KafkaProducer<byte[], byte[]> producer = KAFKA.producer();
         var dlqReader = KAFKA.consumer("pipeline-malformed-dlq-reader")) {
       dlqReader.subscribe(Collections.singletonList(dlqTopic));
@@ -322,9 +408,8 @@ class ParquetWriterPipelineIT {
     }
   }
 
-  private PipelineFixture pipeline(
-      String topic, String dlqTopic, String group, String basePath, long batchSize)
-      throws Exception {
+  private PipelineFixture pipeline(String topic, String dlqTopic, String group, String basePath, long batchSize,
+      Clock clock, boolean lateRoutingEnabled) throws Exception {
     Configuration configuration = localConfiguration();
     FileSystem fileSystem = FileSystem.newInstance(configuration);
     org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(basePath);
@@ -336,6 +421,7 @@ class ParquetWriterPipelineIT {
     kafkaProperties.setBootstrapServers(KAFKA.bootstrapServers());
     kafkaProperties.setTopic(topic);
     kafkaProperties.setDlqTopic(dlqTopic);
+    kafkaProperties.setLateTopic(dlqTopic + "-late");
     kafkaProperties.setConsumerGroup(group);
     kafkaProperties.setEnableAutoCommit(false);
     kafkaProperties.setAutoOffsetReset("earliest");
@@ -365,6 +451,7 @@ class ParquetWriterPipelineIT {
             new HdfsFileStorage(fileSystem),
             new FileNameGenerator(),
             hdfsProperties,
+            new HourWindowPolicy(1, lateRoutingEnabled, clock),
             metrics,
             1,
             List.of(testData.sourceSchema()));
@@ -421,26 +508,27 @@ class ParquetWriterPipelineIT {
       return List.of();
     }
 
-    RuntimeException lastError = null;
-    for (int attempt = 0; attempt < 5; attempt++) {
-      try {
-        List<org.apache.hadoop.fs.Path> files = new ArrayList<>();
-        var iterator = fileSystem.listFiles(root, true);
-        while (iterator.hasNext()) {
-          LocatedFileStatus file = iterator.next();
-          String name = file.getPath().getName();
-          if (!name.startsWith(".") && name.endsWith(".parquet")) {
-            files.add(file.getPath());
-          }
-        }
-        files.sort(java.util.Comparator.comparing(org.apache.hadoop.fs.Path::toString));
-        return files;
-      } catch (RuntimeException e) {
-        lastError = e;
-        Thread.sleep(50);
-      }
-    }
-    throw lastError;
+    AtomicReference<List<org.apache.hadoop.fs.Path>> finalizedFiles = new AtomicReference<>();
+    await()
+        .atMost(Duration.ofMillis(300))
+        .pollInterval(Duration.ofMillis(50))
+        .ignoreException(RuntimeException.class)
+        .until(
+            () -> {
+              List<org.apache.hadoop.fs.Path> files = new ArrayList<>();
+              var iterator = fileSystem.listFiles(root, true);
+              while (iterator.hasNext()) {
+                LocatedFileStatus file = iterator.next();
+                String name = file.getPath().getName();
+                if (!name.startsWith(".") && name.endsWith(".parquet")) {
+                  files.add(file.getPath());
+                }
+              }
+              files.sort(java.util.Comparator.comparing(org.apache.hadoop.fs.Path::toString));
+              finalizedFiles.set(files);
+              return true;
+            });
+    return finalizedFiles.get();
   }
 
   private List<GenericRecord> readRecords(
@@ -475,8 +563,8 @@ class ParquetWriterPipelineIT {
       consumer.start();
     }
 
-    byte[] serialize(String topic, GenericRecord record) {
-      return avroSerializer.serialize(topic, record);
+    byte[] serialize(String topic, GenericRecord genericRecord) {
+      return avroSerializer.serialize(topic, genericRecord);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.nimbo.metrics;
 
+import com.nimbo.ingester.model.DlqReason;
 import com.nimbo.storage.service.batching.BatchPolicy;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -8,17 +9,18 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics;
-import java.util.List;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.ToDoubleFunction;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.springframework.stereotype.Component;
 
-@Slf4j
 @Component
 public class ParquetWriterMetrics {
 
@@ -26,10 +28,8 @@ public class ParquetWriterMetrics {
   private final Map<Integer, InstanceState> instances = new ConcurrentHashMap<>();
   private static final String INSTANCE_TAG = "instance";
   private static final String REASON_TAG = "reason";
-  private static final List<String> ROLLOVER_REASONS =
-      List.of("record_count", "size", "age", "time_bucket_boundary", "schema_change", "lifecycle");
-  private static final List<String> DLQ_REASONS =
-      List.of("VALIDATION_ERROR", "DESERIALIZATION_ERROR", "UNSUPPORTED_SCHEMA");
+  private static final Set<BatchPolicy.FlushReason> ROLLOVER_REASONS =
+      EnumSet.complementOf(EnumSet.of(BatchPolicy.FlushReason.NONE));
 
   public ParquetWriterMetrics(MeterRegistry registry) {
     this.registry = registry;
@@ -42,17 +42,17 @@ public class ParquetWriterMetrics {
           InstanceState s = new InstanceState(registry, id);
           String instance = String.valueOf(id);
 
-          for (String reason : ROLLOVER_REASONS) {
+          for (BatchPolicy.FlushReason reason : ROLLOVER_REASONS) {
+            String reasonTag = reason.name().toLowerCase(Locale.ROOT);
             s.rolloverCounters.put(
                 reason,
                 registry.counter(
-                    "ingester_rollover_total", INSTANCE_TAG, instance, REASON_TAG, reason));
+                    "ingester_rollover_total", INSTANCE_TAG, instance, REASON_TAG, reasonTag));
           }
-          for (String reason : DLQ_REASONS) {
+          for (DlqReason reason : DlqReason.values()) {
             s.dlqCounters.put(
                 reason,
-                registry.counter(
-                    "ingester_dlq_records_total", INSTANCE_TAG, instance, REASON_TAG, reason));
+                registry.counter("ingester_dlq_records_total", INSTANCE_TAG, instance, REASON_TAG, reason.name()));
           }
           return s;
         });
@@ -98,51 +98,14 @@ public class ParquetWriterMetrics {
     state(instanceId).writeFailures.increment();
   }
 
-  public void invalidRecord(int instanceId, String reason) {
-    InstanceState s = state(instanceId);
-    Counter c = s.dlqCounters.get(reason);
-    if (c != null) {
-      c.increment();
-    } else {
-      log.warn(
-          "Unrecognized DLQ reason '{}' for instance {} — falling back to dynamic counter lookup",
-          reason,
-          instanceId);
-
-      registry
-          .counter(
-              "ingester_dlq_records_total",
-              INSTANCE_TAG,
-              String.valueOf(instanceId),
-              REASON_TAG,
-              reason)
-          .increment();
-    }
+  public void invalidRecord(int instanceId, DlqReason reason) {
+    state(instanceId).dlqCounters.get(reason).increment();
   }
 
   public void rollover(
       int instanceId, BatchPolicy.FlushReason reason, long recordCount, long sizeBytes) {
     InstanceState s = state(instanceId);
-    String reasonKey = reason.name().toLowerCase();
-    Counter c = s.rolloverCounters.get(reasonKey);
-    if (c != null) {
-      c.increment();
-    } else {
-      log.warn(
-          "Unrecognized rollover reason '{}' for instance {} — falling back to dynamic counter"
-              + " lookup",
-          reasonKey,
-          instanceId);
-
-      registry
-          .counter(
-              "ingester_rollover_total",
-              INSTANCE_TAG,
-              String.valueOf(instanceId),
-              REASON_TAG,
-              reasonKey)
-          .increment();
-    }
+    s.rolloverCounters.get(reason).increment();
     s.batchRecordCount.record(recordCount);
     s.batchSizeBytes.record(sizeBytes);
     s.lastBatchRecordCount.set(recordCount);
@@ -169,8 +132,9 @@ public class ParquetWriterMetrics {
     final AtomicLong lastSuccessfulRollover = new AtomicLong(0);
     final AtomicLong lastBatchRecordCount = new AtomicLong(0);
     final AtomicLong lastBatchSizeBytes = new AtomicLong(0);
-    final Map<String, Counter> rolloverCounters = new ConcurrentHashMap<>();
-    final Map<String, Counter> dlqCounters = new ConcurrentHashMap<>();
+    final Map<BatchPolicy.FlushReason, Counter> rolloverCounters =
+        new EnumMap<>(BatchPolicy.FlushReason.class);
+    final Map<DlqReason, Counter> dlqCounters = new EnumMap<>(DlqReason.class);
 
     InstanceState(MeterRegistry registry, int instanceId) {
       Tags tags = Tags.of(INSTANCE_TAG, String.valueOf(instanceId));

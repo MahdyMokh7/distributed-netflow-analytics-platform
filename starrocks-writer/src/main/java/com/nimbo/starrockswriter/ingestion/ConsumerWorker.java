@@ -13,6 +13,7 @@ import java.net.NoRouteToHostException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
@@ -23,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaException;
@@ -62,7 +64,7 @@ public class ConsumerWorker implements Runnable {
   @Override
   public void run() {
     try {
-      consumer.subscribe(List.of(kafkaProperties.getTopic()));
+      consumer.subscribe(List.of(kafkaProperties.getTopic()), rebalanceListener());
       metrics.workerStarted(workerNumber);
       log.info("StarRocks consumer worker {} started", workerNumber);
 
@@ -80,6 +82,21 @@ public class ConsumerWorker implements Runnable {
     } finally {
       closeConsumer();
     }
+  }
+
+  ConsumerRebalanceListener rebalanceListener() {
+    return new ConsumerRebalanceListener() {
+      @Override
+      public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        log.info("Worker {} preparing to revoke partitions {}", workerNumber, partitions);
+        batchProcessor.prepareForRebalance(consumer);
+      }
+
+      @Override
+      public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        // No assignment-specific state to initialize.
+      }
+    };
   }
 
   void processIteration() {

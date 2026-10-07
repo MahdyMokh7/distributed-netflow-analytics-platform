@@ -19,6 +19,10 @@ public class DataProcessingService {
     return netFlowStorage.accept(ingestedRecord);
   }
 
+  public boolean isWithinAllowedWindow(long kafkaTimestamp) {
+    return netFlowStorage.isWithinAllowedWindow(kafkaTimestamp);
+  }
+
   // rebalance/shutdown
   public Map<TopicPartitionKey, Long> flush() {
     return netFlowStorage.flush();

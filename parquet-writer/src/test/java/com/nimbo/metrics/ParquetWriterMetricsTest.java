@@ -2,6 +2,7 @@ package com.nimbo.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.nimbo.ingester.model.DlqReason;
 import com.nimbo.storage.service.batching.BatchPolicy;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -79,11 +80,12 @@ class ParquetWriterMetricsTest {
     // Given: one registered instance and the supported failure classifications
     metrics.registerInstance(4);
 
-    // When: validation, deserialization, and unsupported-schema failures are recorded
-    metrics.invalidRecord(4, "VALIDATION_ERROR");
-    metrics.invalidRecord(4, "VALIDATION_ERROR");
-    metrics.invalidRecord(4, "DESERIALIZATION_ERROR");
-    metrics.invalidRecord(4, "UNSUPPORTED_SCHEMA");
+    // When: validation, deserialization, unsupported-schema, and late failures are recorded
+    metrics.invalidRecord(4, DlqReason.VALIDATION_ERROR);
+    metrics.invalidRecord(4, DlqReason.VALIDATION_ERROR);
+    metrics.invalidRecord(4, DlqReason.DESERIALIZATION_ERROR);
+    metrics.invalidRecord(4, DlqReason.UNSUPPORTED_SCHEMA);
+    metrics.invalidRecord(4, DlqReason.LATE_RECORD);
 
     // Then: each bounded reason has its exact independent count
     assertThat(
@@ -104,6 +106,13 @@ class ParquetWriterMetricsTest {
             registry
                 .get("ingester_dlq_records_total")
                 .tags("instance", "4", "reason", "UNSUPPORTED_SCHEMA")
+                .counter()
+                .count())
+        .isEqualTo(1.0);
+    assertThat(
+            registry
+                .get("ingester_dlq_records_total")
+                .tags("instance", "4", "reason", "LATE_RECORD")
                 .counter()
                 .count())
         .isEqualTo(1.0);

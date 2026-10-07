@@ -18,6 +18,10 @@ public class KafkaConsumerFactory {
   }
 
   public KafkaConsumer<byte[], byte[]> createConsumer(int instanceId) {
+    if (kafkaProperties.isEnableAutoCommit()) {
+      throw new IllegalArgumentException("Kafka auto-commit must be disabled for durable processing");
+    }
+
     Map<String, Object> configs = new HashMap<>();
     configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProperties.getBootstrapServers());
     configs.put(ConsumerConfig.GROUP_ID_CONFIG, kafkaProperties.getConsumerGroup());
@@ -25,7 +29,6 @@ public class KafkaConsumerFactory {
         ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
     configs.put(
         ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-    configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, kafkaProperties.isEnableAutoCommit());
     configs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, kafkaProperties.getAutoOffsetReset());
     configs.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, kafkaProperties.getMaxPollRecords());
     configs.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, kafkaProperties.getSessionTimeoutMs());
@@ -39,6 +42,7 @@ public class KafkaConsumerFactory {
     if (kafkaProperties.getAdditionalConfigs() != null) {
       configs.putAll(kafkaProperties.getAdditionalConfigs());
     }
+    configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
     return new KafkaConsumer<>(configs);
   }

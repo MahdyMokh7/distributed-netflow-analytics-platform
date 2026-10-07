@@ -77,6 +77,7 @@ public class BatchBuffer {
   public enum FlushReason {
     SIZE,
     TIME,
+    REBALANCE,
     SHUTDOWN,
     DESERIALIZATION_ERROR
   }

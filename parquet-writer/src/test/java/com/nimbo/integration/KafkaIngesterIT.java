@@ -6,6 +6,7 @@ import static org.awaitility.Awaitility.await;
 import com.nimbo.ingester.config.KafkaProperties;
 import com.nimbo.ingester.consumer.KafkaConsumerFactory;
 import com.nimbo.ingester.consumer.KafkaOffsetCommitter;
+import com.nimbo.ingester.model.DlqReason;
 import com.nimbo.ingester.service.DlqService;
 import com.nimbo.storage.model.TopicPartitionKey;
 import com.nimbo.support.KafkaContainerExtension;
@@ -94,7 +95,7 @@ class KafkaIngesterIT {
           new ConsumerRecord<>(sourceTopic, 0, 17L, new byte[] {9}, new byte[] {1, 2, 3});
 
       // When: the production DLQ service publishes the validation failure
-      service.publish(original, "VALIDATION_ERROR", "IPV4_SRC_ADDR invalid IPv4: 999.1.1.1");
+      service.publish(original, DlqReason.VALIDATION_ERROR, "IPV4_SRC_ADDR invalid IPv4: 999.1.1.1");
       AtomicReference<ConsumerRecord<byte[], byte[]>> received = new AtomicReference<>();
       await()
           .atMost(Duration.ofSeconds(10))
@@ -125,6 +126,7 @@ class KafkaIngesterIT {
     properties.setBootstrapServers(KAFKA.bootstrapServers());
     properties.setTopic(topic);
     properties.setDlqTopic(dlqTopic);
+    properties.setLateTopic(dlqTopic + "-late");
     properties.setConsumerGroup(group);
     properties.setPollTimeoutMs(100);
     properties.setMaxPollRecords(500);

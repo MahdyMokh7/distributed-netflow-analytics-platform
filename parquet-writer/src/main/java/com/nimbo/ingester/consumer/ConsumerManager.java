@@ -10,6 +10,7 @@ import com.nimbo.ingester.service.DlqService;
 import com.nimbo.metrics.ParquetWriterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
 import com.nimbo.storage.config.ParquetProperties;
+import com.nimbo.storage.service.HourWindowPolicy;
 import com.nimbo.storage.service.NetFlowStorage;
 import com.nimbo.storage.service.batching.BatchPolicy;
 import com.nimbo.storage.service.hdfs.HdfsFileStorage;
@@ -47,6 +48,7 @@ public class ConsumerManager {
   private final NetflowValidationService validationService;
   private final DlqService dlqService;
   private final BatchPolicy batchPolicy;
+  private final HourWindowPolicy hourWindowPolicy;
   private final ParquetProperties parquetProperties;
   private final FileNameGenerator fileNameGenerator;
   private final HdfsProperties hdfsProperties;
@@ -65,6 +67,7 @@ public class ConsumerManager {
       NetflowValidationService validationService,
       DlqService dlqService,
       BatchPolicy batchPolicy,
+      HourWindowPolicy hourWindowPolicy,
       ParquetProperties parquetProperties,
       FileNameGenerator fileNameGenerator,
       HdfsProperties hdfsProperties,
@@ -78,6 +81,7 @@ public class ConsumerManager {
     this.validationService = validationService;
     this.dlqService = dlqService;
     this.batchPolicy = batchPolicy;
+    this.hourWindowPolicy = hourWindowPolicy;
     this.parquetProperties = parquetProperties;
     this.fileNameGenerator = fileNameGenerator;
     this.hdfsProperties = hdfsProperties;
@@ -123,6 +127,7 @@ public class ConsumerManager {
                 fileStorage,
                 fileNameGenerator,
                 hdfsProperties,
+                hourWindowPolicy,
                 metrics,
                 instanceId,
                 registeredSchemas);
