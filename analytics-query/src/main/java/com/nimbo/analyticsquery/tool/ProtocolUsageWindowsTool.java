@@ -39,7 +39,6 @@ public class ProtocolUsageWindowsTool implements AnalyticsTool {
           "outPackets",
           "totalPackets",
           "connectionCount",
-          "batchId",
           "ingestedAt");
 
   private final RestApiClient restApiClient;
@@ -152,7 +151,6 @@ public class ProtocolUsageWindowsTool implements AnalyticsTool {
         row.outPackets(),
         row.totalPackets(),
         row.connectionCount(),
-        row.batchId(),
         row.ingestedAt());
   }
 }

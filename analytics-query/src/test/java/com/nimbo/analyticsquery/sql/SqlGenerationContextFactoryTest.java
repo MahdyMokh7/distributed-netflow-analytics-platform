@@ -49,6 +49,7 @@ class SqlGenerationContextFactoryTest {
     assertThat(table.timeSemantics().column()).isEqualTo("window_start");
     assertThat(table.timeSemantics().timeZone()).isEqualTo(ZoneOffset.UTC);
     assertThat(table.timeSemantics().resolution()).isEqualTo(Duration.ofHours(1));
+    assertThat(table.grain()).isEqualTo("source IP x processing-time window");
     assertThat(table.semanticExpressions())
         .contains(
             new SqlGenerationContext.SemanticExpression(
@@ -58,7 +59,14 @@ class SqlGenerationContextFactoryTest {
     assertThat(context.queryRestrictions())
         .contains(
             "Do not reference another datasource.",
-            "Always use a literal LIMIT between 1 and " + QueryRequirements.MAX_LIMIT + " rows.");
+            "Always use a literal LIMIT between 1 and " + QueryRequirements.MAX_LIMIT + " rows.")
+        .anySatisfy(
+            restriction ->
+                assertThat(restriction)
+                    .contains(
+                        "batch fragments",
+                        "Never expose or group by batch_id",
+                        "Sum additive metrics"));
   }
 
   @Test
@@ -119,6 +127,8 @@ class SqlGenerationContextFactoryTest {
                   .asString()
                   .contains("epoch milliseconds");
             });
+    assertThat(context.queryRestrictions())
+        .noneSatisfy(restriction -> assertThat(restriction).contains("batch fragments"));
   }
 
   private static SemanticColumn column(

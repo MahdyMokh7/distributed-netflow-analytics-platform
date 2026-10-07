@@ -55,7 +55,6 @@ public class ConnectionWindowsTool implements AnalyticsTool {
           "inPackets",
           "outPackets",
           "totalPackets",
-          "batchId",
           "ingestedAt");
 
   private final RestApiClient restApiClient;
@@ -311,7 +310,6 @@ public class ConnectionWindowsTool implements AnalyticsTool {
         row.inPackets(),
         row.outPackets(),
         row.totalPackets(),
-        row.batchId(),
         row.ingestedAt());
   }
 

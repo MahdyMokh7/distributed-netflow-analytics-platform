@@ -787,7 +787,6 @@ class AnalyticsControllerIT {
                  "outPackets": 2,
                  "totalPackets": 3,
                  "recordCount": 4,
-                 "batchId": "11111111-1111-1111-1111-111111111111",
                  "ingestedAt": "2026-10-01T09:00:00Z"
                }
              ],

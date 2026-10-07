@@ -14,14 +14,12 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class AnalyticsToolContractTest {
 
   private static final Instant START = Instant.parse("2026-10-01T08:00:00Z");
   private static final Instant END = Instant.parse("2026-10-01T09:00:00Z");
-  private static final UUID BATCH_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
   @Test
   void givenTrafficWindowRequirementsWhenCheckedThenTrafficToolSupportsThem() {
@@ -166,7 +164,6 @@ class AnalyticsToolContractTest {
             number(2),
             number(3),
             number(4),
-            BATCH_ID,
             END);
 
     // When: the traffic tool normalizes the downstream response
@@ -186,7 +183,6 @@ class AnalyticsToolContractTest {
                 Map.entry("outPackets", number(2)),
                 Map.entry("totalPackets", number(3)),
                 Map.entry("recordCount", number(4)),
-                Map.entry("batchId", BATCH_ID),
                 Map.entry("ingestedAt", END)));
     assertThat(result.columns()).containsExactlyElementsOf(result.rows().get(0).keySet());
   }
@@ -207,7 +203,6 @@ class AnalyticsToolContractTest {
             number(1),
             number(2),
             number(3),
-            BATCH_ID,
             END);
 
     // When: the connection tool normalizes the downstream response
@@ -237,7 +232,6 @@ class AnalyticsToolContractTest {
             number(2),
             number(3),
             4L,
-            BATCH_ID,
             END);
 
     // When: the protocol tool normalizes the downstream response
@@ -265,7 +259,6 @@ class AnalyticsToolContractTest {
             number(1),
             number(2),
             number(3),
-            BATCH_ID,
             END);
 
     // When: the bandwidth tool normalizes the downstream response

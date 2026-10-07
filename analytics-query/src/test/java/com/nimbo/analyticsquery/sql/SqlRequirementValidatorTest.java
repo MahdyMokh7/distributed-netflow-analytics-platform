@@ -57,6 +57,26 @@ class SqlRequirementValidatorTest {
     validation.isInstanceOf(SqlValidationException.class).hasMessageContaining("IP value");
   }
 
+  @Test
+  void givenUnsummedPostgresMetricWhenRequirementsAreValidatedThenSqlIsRejected() {
+    // Given: SQL returns a physical cube fragment without the required aggregation
+    QueryRequirements requirements = requirements();
+    ParsedSql sql =
+        parse(
+            "SELECT src_ip, in_bytes + out_bytes FROM traffic_aggregates "
+                + "WHERE window_start >= '2026-10-05T10:00:00Z' "
+                + "AND window_start < '2026-10-05T11:00:00Z' "
+                + "AND src_ip = '10.0.0.1' GROUP BY src_ip LIMIT 10");
+
+    // When: semantic conformance is validated
+    var validation = assertThatThrownBy(() -> validator.validate(sql, requirements, context));
+
+    // Then: batch-fragment metrics cannot bypass the requested SUM
+    validation
+        .isInstanceOf(SqlValidationException.class)
+        .hasMessageContaining("metric aggregation");
+  }
+
   private ParsedSql parse(String sql) {
     return parser.parse(new GeneratedSqlCandidate(AnalysisDataSource.POSTGRESQL, sql));
   }

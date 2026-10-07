@@ -234,7 +234,6 @@ inPackets
 outPackets
 totalPackets
 recordCount
-batchId
 ingestedAt
 ```
 
@@ -252,7 +251,6 @@ totalBytes
 inPackets
 outPackets
 totalPackets
-batchId
 ingestedAt
 ```
 
@@ -271,12 +269,11 @@ totalBytes
 inboundPackets
 outboundPackets
 totalPackets
-batchId
 ingestedAt
 ```
 
 For `/bandwidth/top`, only IP and aggregated byte/packet totals are populated;
-window, batch, and ingestion fields are null.
+window and ingestion fields are null.
 
 ### Protocol row
 
@@ -291,13 +288,12 @@ inPackets
 outPackets
 totalPackets
 connectionCount
-batchId
 ingestedAt
 ```
 
-The PostgreSQL endpoints expose persisted rows including `batchId`; traffic,
-connection, bandwidth-by-IP, and protocol window endpoints do not merge equal
-semantic windows across different batch IDs.
+Traffic, connection, bandwidth-by-IP, and protocol endpoints merge equal
+logical windows across batch IDs. Additive counters are summed and
+`ingestedAt` is the latest contributing ingestion timestamp.
 
 ## Error behavior
 

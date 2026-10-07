@@ -35,7 +35,7 @@ public class PostgresSemanticCatalogSource implements SemanticCatalogSource {
         "traffic_aggregates",
         AnalysisDataSource.POSTGRESQL,
         "Traffic volume aggregated from NetFlow records by source IP and processing-time window.",
-        "source IP x processing-time window x batch",
+        "source IP x processing-time window",
         "window_start",
         Duration.ofHours(1),
         List.of(
@@ -80,7 +80,7 @@ public class PostgresSemanticCatalogSource implements SemanticCatalogSource {
         "connection_aggregates",
         AnalysisDataSource.POSTGRESQL,
         "Traffic aggregated between source and destination IP pairs.",
-        "source IP x destination IP x processing-time window x batch",
+        "connection ID x source IP x destination IP x processing-time window",
         "window_start",
         Duration.ofHours(1),
         List.of(
@@ -131,7 +131,7 @@ public class PostgresSemanticCatalogSource implements SemanticCatalogSource {
         "ip_bandwidth_aggregates",
         AnalysisDataSource.POSTGRESQL,
         "IP-centric bandwidth statistics combining source and destination perspectives.",
-        "IP address x processing-time window x batch",
+        "IP address x processing-time window",
         "window_start",
         Duration.ofHours(1),
         List.of(
@@ -187,7 +187,7 @@ public class PostgresSemanticCatalogSource implements SemanticCatalogSource {
         "protocol_usage_aggregates",
         AnalysisDataSource.POSTGRESQL,
         "Layer-7 protocol usage aggregated by processing-time window.",
-        "layer-7 protocol x processing-time window x batch",
+        "layer-7 protocol x processing-time window",
         "window_start",
         Duration.ofHours(1),
         List.of(

@@ -1,5 +1,6 @@
 package com.nimbo.analyticsquery.sql;
 
+import com.nimbo.analyticsquery.model.AnalysisDataSource;
 import com.nimbo.analyticsquery.routing.DataSourceRoute;
 import com.nimbo.analyticsquery.schema.SemanticColumn;
 import com.nimbo.analyticsquery.schema.SemanticTable;
@@ -7,6 +8,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -22,6 +24,12 @@ public class SqlGenerationContextFactory {
           "Use only relationships explicitly listed in the context.",
           "Always use a literal LIMIT between 1 and " + SqlPolicyRules.maxResultRows() + " rows.");
 
+  private static final String POSTGRESQL_BATCH_AGGREGATION_RESTRICTION =
+      "PostgreSQL cube rows may contain batch fragments for the same logical result. "
+          + "Never expose or group by batch_id. Sum additive metrics across all fragments at the "
+          + "requested output grain; for per-window results, group by the table's complete logical "
+          + "window grain.";
+
   private static final Set<SemanticColumn.Role> EXPOSED_ROLES =
       Set.of(SemanticColumn.Role.DIMENSION, SemanticColumn.Role.METRIC, SemanticColumn.Role.TIME);
 
@@ -30,7 +38,18 @@ public class SqlGenerationContextFactory {
 
     SemanticTable table = route.table();
 
-    return new SqlGenerationContext(route.dataSource(), List.of(table(table)), QUERY_RESTRICTIONS);
+    return new SqlGenerationContext(
+        route.dataSource(), List.of(table(table)), queryRestrictions(route.dataSource()));
+  }
+
+  private List<String> queryRestrictions(AnalysisDataSource dataSource) {
+    if (dataSource != AnalysisDataSource.POSTGRESQL) {
+      return QUERY_RESTRICTIONS;
+    }
+
+    return Stream.concat(
+            QUERY_RESTRICTIONS.stream(), Stream.of(POSTGRESQL_BATCH_AGGREGATION_RESTRICTION))
+        .toList();
   }
 
   private SqlGenerationContext.Table table(SemanticTable table) {

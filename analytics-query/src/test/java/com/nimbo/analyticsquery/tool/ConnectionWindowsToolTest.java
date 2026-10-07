@@ -141,7 +141,6 @@ class ConnectionWindowsToolTest {
             "inPackets": 1,
             "outPackets": 2,
             "totalPackets": 3,
-            "batchId": "11111111-1111-1111-1111-111111111111",
             "ingestedAt": "2026-10-01T09:00:00Z"
           }],
           "pagination": {
