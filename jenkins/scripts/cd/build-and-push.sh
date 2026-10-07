@@ -19,7 +19,7 @@ mvn \
   --batch-mode \
   --no-transfer-progress \
   -pl "${MODULES_CSV}" -am \
-  clean package \
+  clean install \
   -DskipTests
 
 if [ "${BUILDS_CUBE_MAKER}" = "true" ]; then
