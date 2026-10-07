@@ -171,6 +171,13 @@ public class BatchProcessor {
     kafkaPaused = false;
   }
 
+  public void prepareForRebalance(KafkaConsumer<byte[], GenericRecord> consumer) {
+    if (!batchBuffer.isEmpty()) {
+      submitBatch(BatchBuffer.FlushReason.REBALANCE);
+    }
+    inFlightLoadManager.awaitAndDrain(consumer);
+  }
+
   public void shutdown(KafkaConsumer<byte[], GenericRecord> consumer) {
     if (!batchBuffer.isEmpty()) {
       submitBatch(BatchBuffer.FlushReason.SHUTDOWN);

@@ -22,6 +22,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +56,7 @@ class NetFlowStorageTest {
   private FileStorage fileStorage;
   private FileNameGenerator fileNameGenerator;
   private HdfsProperties hdfsProperties;
+  private HourWindowPolicy hourWindowPolicy;
 
   private Schema sourceSchema;
 
@@ -82,6 +84,7 @@ class NetFlowStorageTest {
     fileNameGenerator = new FileNameGenerator();
     hdfsProperties = new HdfsProperties();
     hdfsProperties.setBasePath(tempDirectory.resolve("parquet").toUri().toString());
+    hourWindowPolicy = new HourWindowPolicy(1, true, Clock.systemUTC());
     batchPolicy = new BatchPolicy(100, 1_000_000, Duration.ofMinutes(5));
 
     sourceSchema =
@@ -111,6 +114,7 @@ class NetFlowStorageTest {
             fileStorage,
             fileNameGenerator,
             hdfsProperties,
+            hourWindowPolicy,
             metrics,
             1,
             List.of(sourceSchema));
@@ -131,6 +135,12 @@ class NetFlowStorageTest {
 
   private IngestedRecord createRecord(GenericRecord record, long offset) {
     return new IngestedRecord(record, "test-topic", 0, offset, KAFKA_TIMESTAMP, 100);
+  }
+
+  private IngestedRecord createRecordAt(long offset, long timestamp, String value) {
+    GenericRecord record = new GenericData.Record(sourceSchema);
+    record.put("value", value);
+    return new IngestedRecord(record, "test-topic", 0, offset, timestamp, 100);
   }
 
   @Test
@@ -201,27 +211,27 @@ class NetFlowStorageTest {
   }
 
   @Test
-  void shouldRotateAtHourBoundaryAndMergeBothCommittedBatches() throws Exception {
-    BatchPolicy sizePolicy = new BatchPolicy(100, 150, Duration.ofHours(1));
-    NetFlowStorage rotatingStorage = createStorage(sizePolicy, 2, List.of(sourceSchema));
-    GenericRecord first = new GenericData.Record(sourceSchema);
-    first.put("value", "first");
-    GenericRecord second = new GenericData.Record(sourceSchema);
-    second.put("value", "second");
+  void shouldKeepTwoHourWritersOpenForInterleavedRecords() throws Exception {
+    NetFlowStorage interleavingStorage = createStorage(batchPolicy, 2, List.of(sourceSchema));
+    long nextHour = KAFKA_TIMESTAMP + Duration.ofHours(1).toMillis();
 
-    rotatingStorage.accept(new IngestedRecord(first, "test-topic", 0, 100L, KAFKA_TIMESTAMP, 100));
-    Optional<Map<TopicPartitionKey, Long>> result =
-        rotatingStorage.accept(
-            new IngestedRecord(
-                second,
-                "test-topic",
-                0,
-                101L,
-                KAFKA_TIMESTAMP + Duration.ofHours(1).toMillis(),
-                200));
+    interleavingStorage.accept(createRecordAt(100L, KAFKA_TIMESTAMP, "first-current"));
+    interleavingStorage.accept(createRecordAt(101L, nextHour, "first-next"));
+    interleavingStorage.accept(createRecordAt(102L, KAFKA_TIMESTAMP, "second-current"));
+    interleavingStorage.accept(createRecordAt(103L, nextHour, "second-next"));
+    Map<TopicPartitionKey, Long> offsets = interleavingStorage.flush();
 
-    assertEquals(102L, result.orElseThrow().get(new TopicPartitionKey("test-topic", 0)));
+    assertEquals(104L, offsets.get(new TopicPartitionKey("test-topic", 0)));
     assertEquals(2, parquetFileCount());
+    assertEquals(4, readAllParquetRecords().size());
+  }
+
+  @Test
+  void shouldReturnSkippedOffsetImmediatelyWhenNoParquetWriterIsOpen() {
+    Optional<Map<TopicPartitionKey, Long>> offset =
+        storage.recordSkippedOffset("test-topic", 0, 101L);
+
+    assertEquals(101L, offset.orElseThrow().get(new TopicPartitionKey("test-topic", 0)));
   }
 
   @Test
@@ -364,6 +374,7 @@ class NetFlowStorageTest {
             fileStorage,
             fileNameGenerator,
             hdfsProperties,
+            hourWindowPolicy,
             metrics,
             2,
             registeredSchemas);
@@ -378,6 +389,7 @@ class NetFlowStorageTest {
             fileStorage,
             fileNameGenerator,
             hdfsProperties,
+            hourWindowPolicy,
             metrics,
             3,
             registeredSchemas);
@@ -469,6 +481,7 @@ class NetFlowStorageTest {
             fileStorage,
             fileNameGenerator,
             hdfsProperties,
+            hourWindowPolicy,
             metrics,
             2,
             List.of(sourceSchema));
@@ -510,6 +523,7 @@ class NetFlowStorageTest {
                 fileStorage,
                 fileNameGenerator,
                 hdfsProperties,
+                hourWindowPolicy,
                 metrics,
                 1,
                 List.of(sourceSchema)));
@@ -523,6 +537,7 @@ class NetFlowStorageTest {
                 fileStorage,
                 fileNameGenerator,
                 hdfsProperties,
+                hourWindowPolicy,
                 metrics,
                 1,
                 List.of(sourceSchema)));
@@ -536,6 +551,7 @@ class NetFlowStorageTest {
                 null,
                 fileNameGenerator,
                 hdfsProperties,
+                hourWindowPolicy,
                 metrics,
                 1,
                 List.of(sourceSchema)));
@@ -549,6 +565,7 @@ class NetFlowStorageTest {
                 fileStorage,
                 null,
                 hdfsProperties,
+                hourWindowPolicy,
                 metrics,
                 1,
                 List.of(sourceSchema)));
@@ -562,6 +579,7 @@ class NetFlowStorageTest {
                 fileStorage,
                 fileNameGenerator,
                 null,
+                hourWindowPolicy,
                 metrics,
                 1,
                 List.of(sourceSchema)));
@@ -576,6 +594,7 @@ class NetFlowStorageTest {
                 fileNameGenerator,
                 hdfsProperties,
                 null,
+                metrics,
                 1,
                 List.of(sourceSchema)));
 
@@ -588,6 +607,21 @@ class NetFlowStorageTest {
                 fileStorage,
                 fileNameGenerator,
                 hdfsProperties,
+                hourWindowPolicy,
+                null,
+                1,
+                List.of(sourceSchema)));
+
+    assertThrows(
+        NullPointerException.class,
+        () ->
+            new NetFlowStorage(
+                batchPolicy,
+                parquetFileWriter,
+                fileStorage,
+                fileNameGenerator,
+                hdfsProperties,
+                hourWindowPolicy,
                 metrics,
                 1,
                 null));
@@ -602,6 +636,7 @@ class NetFlowStorageTest {
         fileStorage,
         fileNameGenerator,
         hdfsProperties,
+        hourWindowPolicy,
         metrics,
         instanceId,
         registeredSchemas);

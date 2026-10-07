@@ -21,6 +21,8 @@ public class KafkaProperties {
 
   @NotBlank private String dlqTopic;
 
+  @NotBlank private String lateTopic;
+
   @NotBlank private String consumerGroup;
 
   private boolean enableAutoCommit = false;

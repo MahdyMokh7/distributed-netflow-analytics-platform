@@ -48,6 +48,7 @@ ingester:
     bootstrap-servers: 10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092
     topic: multi-version-netflow
     dlq-topic: netflow-dlq
+    late-topic: netflow-late
     consumer-group: netflow-consumer-deploy-final
     consumer-instances: 3
     enable-auto-commit: false
@@ -75,3 +76,5 @@ rolling:
   max-record-count: 3100000
   max-size-bytes: 311673700
   max-age: 20m
+  allowed-lateness-hours: 1
+  late-routing-enabled: ${LATE_ROUTING_ENABLED:false}

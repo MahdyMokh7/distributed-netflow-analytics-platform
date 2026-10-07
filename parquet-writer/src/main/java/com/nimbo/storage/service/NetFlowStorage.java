@@ -15,7 +15,6 @@ import com.nimbo.storage.service.parquet.ParquetFileWriter;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,20 +37,15 @@ public final class NetFlowStorage {
   private final FileStorage fileStorage;
   private final FileNameGenerator fileNameGenerator;
   private final HdfsProperties hdfsProperties;
+  private final HourWindowPolicy hourWindowPolicy;
   private final StorageSchemaEvolution schemaEvolution = new StorageSchemaEvolution();
 
   private final BatchAccumulator batchAccumulator;
-
-  private ParquetWriter<GenericRecord> currentWriter;
-  private Path currentTempPath;
-  private Path currentFinalPath;
-  private boolean writerOpen = false;
+  private final Map<Instant, WriterState> writers = new HashMap<>();
 
   private final ParquetWriterMetrics metrics;
   private final int instanceId;
-  private Instant currentBucketHour;
   private Schema knownSourceSchema;
-  private Schema currentStorageSchema;
   private final Set<Schema> knownSchemas = new HashSet<>();
 
   public NetFlowStorage(
@@ -60,6 +54,7 @@ public final class NetFlowStorage {
       FileStorage fileStorage,
       FileNameGenerator fileNameGenerator,
       HdfsProperties hdfsProperties,
+      HourWindowPolicy hourWindowPolicy,
       ParquetWriterMetrics metrics,
       int instanceId,
       List<Schema> registeredSchemas) {
@@ -67,6 +62,7 @@ public final class NetFlowStorage {
     this.fileStorage = Objects.requireNonNull(fileStorage);
     this.fileNameGenerator = Objects.requireNonNull(fileNameGenerator);
     this.hdfsProperties = Objects.requireNonNull(hdfsProperties);
+    this.hourWindowPolicy = Objects.requireNonNull(hourWindowPolicy);
     this.batchAccumulator = new BatchAccumulator(batchPolicy);
     this.metrics = Objects.requireNonNull(metrics);
     this.instanceId = instanceId;
@@ -102,15 +98,11 @@ public final class NetFlowStorage {
   }
 
   private double currentBatchAgeSeconds() {
-    if (!writerOpen) {
+    if (writers.isEmpty()) {
       return 0;
     }
     Instant firstRecordAt = batchAccumulator.getFirstRecordAt();
     return firstRecordAt == null ? 0 : Duration.between(firstRecordAt, Instant.now()).getSeconds();
-  }
-
-  private static Instant hourBucket(long kafkaTimestampMillis) {
-    return Instant.ofEpochMilli(kafkaTimestampMillis).truncatedTo(ChronoUnit.HOURS);
   }
 
   public Optional<Map<TopicPartitionKey, Long>> accept(IngestedRecord ingestedRecord) {
@@ -118,7 +110,7 @@ public final class NetFlowStorage {
     Objects.requireNonNull(ingestedRecord, "ingestedRecord must not be null");
 
     try {
-      Instant recordBucket = hourBucket(ingestedRecord.kafkaTimestamp());
+      Instant recordBucket = HourWindowPolicy.hourOf(ingestedRecord.kafkaTimestamp());
       Map<TopicPartitionKey, Long> boundaryOffsets = Map.of();
       Schema recordSchema = ingestedRecord.record().getSchema();
       boolean unseenSchema = !knownSchemas.contains(recordSchema);
@@ -130,21 +122,17 @@ public final class NetFlowStorage {
         schemaChanged = knownSourceSchema != null && !mergedSchema.equals(knownSourceSchema);
       }
 
-      if (writerOpen && shouldRotateWriter(recordBucket, schemaChanged)) {
-        BatchPolicy.FlushReason reason =
-            schemaChanged
-                ? BatchPolicy.FlushReason.SCHEMA_CHANGE
-                : BatchPolicy.FlushReason.TIME_BUCKET_BOUNDARY;
-
+      if (!writers.isEmpty() && schemaChanged) {
         log.info(
             "Batch flush triggered: reason={}, recordCount={},"
                 + " accumulatedSizeBytes={}, firstRecordAt={}",
-            reason,
+            BatchPolicy.FlushReason.SCHEMA_CHANGE,
             batchAccumulator.getRecordCount(),
             batchAccumulator.getAccumulatedSizeBytes(),
             batchAccumulator.getFirstRecordAt());
-
-        boundaryOffsets = commitCurrentBatch(reason);
+        boundaryOffsets =
+            mergeOffsets(
+                boundaryOffsets, commitOpenWriters(BatchPolicy.FlushReason.SCHEMA_CHANGE));
       }
 
       knownSourceSchema = mergedSchema;
@@ -152,19 +140,27 @@ public final class NetFlowStorage {
         knownSchemas.add(recordSchema);
       }
 
-      if (!writerOpen) {
-        openWriter(ingestedRecord);
-        currentBucketHour = recordBucket;
+      WriterState writerState = writers.get(recordBucket);
+      if (writerState == null) {
+        if (writers.size() >= hourWindowPolicy.maxOpenWriters()) {
+          boundaryOffsets =
+              mergeOffsets(
+                  boundaryOffsets,
+                  commitOpenWriters(BatchPolicy.FlushReason.TIME_BUCKET_BOUNDARY));
+        }
+        writerState = openWriter(ingestedRecord);
+        writers.put(recordBucket, writerState);
       }
 
-      GenericRecord enrichedRecord = enrichWithKafkaMetadata(ingestedRecord);
+      GenericRecord enrichedRecord =
+          enrichWithKafkaMetadata(ingestedRecord, writerState.storageSchema);
 
-      parquetFileWriter.write(currentWriter, enrichedRecord);
+      parquetFileWriter.write(writerState.writer, enrichedRecord);
       metrics.recordWritten(instanceId);
       batchAccumulator.add(ingestedRecord);
 
       if (batchAccumulator.shouldFlush()) {
-        Map<TopicPartitionKey, Long> offsets = commitCurrentBatch(batchAccumulator.flushReason());
+        Map<TopicPartitionKey, Long> offsets = commitOpenWriters(batchAccumulator.flushReason());
         return Optional.of(mergeOffsets(boundaryOffsets, offsets));
       }
 
@@ -196,7 +192,7 @@ public final class NetFlowStorage {
   }
 
   public Map<TopicPartitionKey, Long> flush() {
-    if (batchAccumulator.isEmpty()) {
+    if (writers.isEmpty()) {
       log.debug("Flush requested but accumulator is empty");
       return Map.of();
     }
@@ -204,7 +200,7 @@ public final class NetFlowStorage {
     log.info("Executing lifecycle flush for {} records", batchAccumulator.getRecordCount());
 
     try {
-      return commitCurrentBatch(BatchPolicy.FlushReason.LIFECYCLE);
+      return commitOpenWriters(BatchPolicy.FlushReason.LIFECYCLE);
     } catch (StorageException e) {
       handleWriteFailure();
       throw e;
@@ -212,7 +208,7 @@ public final class NetFlowStorage {
   }
 
   public Map<TopicPartitionKey, Long> flushRemaining() {
-    if (batchAccumulator.isEmpty()) {
+    if (writers.isEmpty()) {
       return Map.of();
     }
 
@@ -226,7 +222,7 @@ public final class NetFlowStorage {
         batchAccumulator.getAccumulatedSizeBytes());
 
     try {
-      return commitCurrentBatch(batchAccumulator.flushReason());
+      return commitOpenWriters(batchAccumulator.flushReason());
     } catch (StorageException e) {
       handleWriteFailure();
       throw e;
@@ -235,10 +231,17 @@ public final class NetFlowStorage {
 
   public Optional<Map<TopicPartitionKey, Long>> recordSkippedOffset(
       String topic, int partition, long nextOffset) {
+    if (writers.isEmpty()) {
+      return Optional.of(Map.of(new TopicPartitionKey(topic, partition), nextOffset));
+    }
     return batchAccumulator.recordSkippedOffset(topic, partition, nextOffset);
   }
 
-  private void openWriter(IngestedRecord firstRecord) {
+  public boolean isWithinAllowedWindow(long kafkaTimestampMillis) {
+    return hourWindowPolicy.includes(kafkaTimestampMillis);
+  }
+
+  private WriterState openWriter(IngestedRecord firstRecord) {
     int primaryPartition = firstRecord.partition();
 
     String finalFileName =
@@ -246,19 +249,23 @@ public final class NetFlowStorage {
     String tempFileName = fileNameGenerator.generateTempFileName(finalFileName);
 
     Path basePath = new Path(hdfsProperties.getBasePath());
-    currentFinalPath = new Path(basePath, finalFileName);
-    currentTempPath = new Path(basePath, tempFileName);
-    currentStorageSchema = buildStorageSchema(knownSourceSchema);
+    Path finalPath = new Path(basePath, finalFileName);
+    Path tempPath = new Path(basePath, tempFileName);
+    Schema storageSchema = buildStorageSchema(knownSourceSchema);
 
-    fileStorage.ensureDirectoryExists(currentFinalPath.getParent());
-    currentWriter = parquetFileWriter.createWriter(currentTempPath, currentStorageSchema);
-    writerOpen = true;
-
-    log.debug("Opened streaming writer for partition {} at {}", primaryPartition, currentTempPath);
+    try {
+      fileStorage.ensureDirectoryExists(finalPath.getParent());
+      ParquetWriter<GenericRecord> writer = parquetFileWriter.createWriter(tempPath, storageSchema);
+      log.debug("Opened streaming writer for partition {} at {}", primaryPartition, tempPath);
+      return new WriterState(writer, tempPath, finalPath, storageSchema);
+    } catch (StorageException exception) {
+      fileStorage.cleanupTempFile(tempPath);
+      throw exception;
+    }
   }
 
-  private Map<TopicPartitionKey, Long> commitCurrentBatch(BatchPolicy.FlushReason reason) {
-    if (!writerOpen) {
+  private Map<TopicPartitionKey, Long> commitOpenWriters(BatchPolicy.FlushReason reason) {
+    if (writers.isEmpty()) {
       return Map.of();
     }
 
@@ -267,12 +274,13 @@ public final class NetFlowStorage {
 
     Timer.Sample sample = metrics.startRolloverTimer();
 
-    log.info("Closing parquet writer for {}", currentTempPath);
-    parquetFileWriter.closeWriter(currentWriter);
-    writerOpen = false;
-
-    fileStorage.commitAtomic(currentTempPath, currentFinalPath);
-    log.info("Committed parquet file {}", currentFinalPath);
+    for (WriterState writerState : writers.values()) {
+      closeWriter(writerState);
+    }
+    for (WriterState writerState : writers.values()) {
+      fileStorage.commitAtomic(writerState.tempPath, writerState.finalPath);
+      log.info("Committed parquet file {}", writerState.finalPath);
+    }
 
     metrics.stopRolloverTimer(instanceId, sample);
     metrics.rollover(instanceId, reason, recordCount, sizeBytes);
@@ -280,44 +288,42 @@ public final class NetFlowStorage {
     Map<TopicPartitionKey, Long> offsets = batchAccumulator.getPendingOffsets();
 
     batchAccumulator.clear();
-
-    currentWriter = null;
-    currentTempPath = null;
-    currentFinalPath = null;
-    currentStorageSchema = null;
+    writers.clear();
 
     return offsets;
   }
 
+  private void closeWriter(WriterState writerState) {
+    if (writerState.closed) {
+      return;
+    }
+    log.info("Closing parquet writer for {}", writerState.tempPath);
+    parquetFileWriter.closeWriter(writerState.writer);
+    writerState.closed = true;
+  }
+
   private void handleWriteFailure() {
     metrics.writeFailure(instanceId);
-    if (writerOpen) {
+    for (WriterState writerState : writers.values()) {
       try {
-        parquetFileWriter.closeWriter(currentWriter);
+        closeWriter(writerState);
       } catch (ParquetWriteException closeException) {
         log.warn("Failed closing writer during error handling", closeException);
       }
-      writerOpen = false;
-    }
-
-    if (currentTempPath != null) {
-      fileStorage.cleanupTempFile(currentTempPath);
+      fileStorage.cleanupTempFile(writerState.tempPath);
     }
 
     batchAccumulator.clear();
-
-    currentWriter = null;
-    currentTempPath = null;
-    currentFinalPath = null;
-    currentStorageSchema = null;
+    writers.clear();
   }
 
-  private GenericRecord enrichWithKafkaMetadata(IngestedRecord ingestedRecord) {
+  private GenericRecord enrichWithKafkaMetadata(
+      IngestedRecord ingestedRecord, Schema storageSchema) {
 
-    GenericRecord enriched = new GenericData.Record(currentStorageSchema);
+    GenericRecord enriched = new GenericData.Record(storageSchema);
     GenericRecord original = ingestedRecord.record();
 
-    for (Schema.Field field : currentStorageSchema.getFields()) {
+    for (Schema.Field field : storageSchema.getFields()) {
       Object value = switch (field.name()) {
         case NetflowMetadata.PROCESS_TIME -> ingestedRecord.kafkaTimestamp();
         case NetflowMetadata.KAFKA_TOPIC -> ingestedRecord.topic();
@@ -328,10 +334,6 @@ public final class NetFlowStorage {
       enriched.put(field.name(), value);
     }
     return enriched;
-  }
-
-  private boolean shouldRotateWriter(Instant recordBucket, boolean schemaChanged) {
-    return !recordBucket.equals(currentBucketHour) || schemaChanged;
   }
 
   private Schema buildStorageSchema(Schema sourceSchema) {
@@ -379,5 +381,25 @@ public final class NetFlowStorage {
         Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(type)),
         doc,
         (Object) null);
+  }
+
+  private static final class WriterState {
+
+    private final ParquetWriter<GenericRecord> writer;
+    private final Path tempPath;
+    private final Path finalPath;
+    private final Schema storageSchema;
+    private boolean closed;
+
+    private WriterState(
+        ParquetWriter<GenericRecord> writer,
+        Path tempPath,
+        Path finalPath,
+        Schema storageSchema) {
+      this.writer = writer;
+      this.tempPath = tempPath;
+      this.finalPath = finalPath;
+      this.storageSchema = storageSchema;
+    }
   }
 }

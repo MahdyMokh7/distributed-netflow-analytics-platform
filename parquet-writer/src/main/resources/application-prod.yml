@@ -17,6 +17,7 @@ ingester:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
     topic: ${KAFKA_TOPIC:multi-version-netflow}
     dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
+    late-topic: ${KAFKA_LATE_TOPIC:netflow-late}
     consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-consumer-batch-deploy}
     consumer-instances: ${CONSUMER_INSTANCES:3}
     enable-auto-commit: false
@@ -26,6 +27,10 @@ ingester:
     heartbeat-interval-ms: ${KAFKA_HEARTBEAT_INTERVAL_MS:3000}
     max-poll-interval-ms: ${KAFKA_MAX_POLL_INTERVAL_MS:300000}
     auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+
+rolling:
+  allowed-lateness-hours: ${ALLOWED_LATENESS_HOURS:1}
+  late-routing-enabled: ${LATE_ROUTING_ENABLED:false}
 
 storage:
   hdfs:

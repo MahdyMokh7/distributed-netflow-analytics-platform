@@ -40,6 +40,7 @@ class KafkaPropertiesTest {
     properties.setBootstrapServers(" ");
     properties.setTopic("");
     properties.setDlqTopic(" ");
+    properties.setLateTopic(" ");
     properties.setConsumerGroup("");
 
     // When: Jakarta validation evaluates required text fields
@@ -48,7 +49,8 @@ class KafkaPropertiesTest {
     // Then: each missing required property produces one violation
     assertThat(violations)
         .extracting(violation -> violation.getPropertyPath().toString())
-        .containsExactlyInAnyOrder("bootstrapServers", "topic", "dlqTopic", "consumerGroup");
+        .containsExactlyInAnyOrder(
+            "bootstrapServers", "topic", "dlqTopic", "lateTopic", "consumerGroup");
   }
 
   @Test
@@ -160,6 +162,7 @@ class KafkaPropertiesTest {
     properties.setBootstrapServers("kafka-1:9092,kafka-2:9092");
     properties.setTopic("netflow-v2");
     properties.setDlqTopic("netflow-v2-dlq");
+    properties.setLateTopic("netflow-v2-late");
     properties.setConsumerGroup("parquet-writer");
     return properties;
   }

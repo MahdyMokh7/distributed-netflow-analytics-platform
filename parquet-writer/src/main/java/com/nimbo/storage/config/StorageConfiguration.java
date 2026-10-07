@@ -1,6 +1,8 @@
 package com.nimbo.storage.config;
 
+import com.nimbo.storage.service.HourWindowPolicy;
 import com.nimbo.storage.service.batching.BatchPolicy;
+import java.time.Clock;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,5 +19,13 @@ public class StorageConfiguration {
   public BatchPolicy batchPolicy(RollingProperties properties) {
     return new BatchPolicy(
         properties.getMaxRecordCount(), properties.getMaxSizeBytes(), properties.getMaxAge());
+  }
+
+  @Bean
+  public HourWindowPolicy hourWindowPolicy(RollingProperties properties) {
+    return new HourWindowPolicy(
+        properties.getAllowedLatenessHours(),
+        properties.isLateRoutingEnabled(),
+        Clock.systemUTC());
   }
 }

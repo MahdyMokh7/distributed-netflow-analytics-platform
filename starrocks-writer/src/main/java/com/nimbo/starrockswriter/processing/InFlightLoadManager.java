@@ -40,10 +40,18 @@ public class InFlightLoadManager {
   }
 
   public void drain(KafkaConsumer<?, ?> consumer) {
+    drain(consumer, false);
+  }
+
+  public void awaitAndDrain(KafkaConsumer<?, ?> consumer) {
+    drain(consumer, true);
+  }
+
+  private void drain(KafkaConsumer<?, ?> consumer, boolean awaitCompletion) {
     while (!pendingLoads.isEmpty()) {
       PendingLoad pendingLoad = pendingLoads.peekFirst();
 
-      if (!pendingLoad.future().isDone()) {
+      if (!awaitCompletion && !pendingLoad.future().isDone()) {
         return;
       }
       try {
