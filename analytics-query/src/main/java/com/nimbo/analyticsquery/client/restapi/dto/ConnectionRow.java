@@ -3,7 +3,6 @@ package com.nimbo.analyticsquery.client.restapi.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.math.BigInteger;
 import java.time.Instant;
-import java.util.UUID;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ConnectionRow(
@@ -18,5 +17,4 @@ public record ConnectionRow(
     BigInteger inPackets,
     BigInteger outPackets,
     BigInteger totalPackets,
-    UUID batchId,
     Instant ingestedAt) {}

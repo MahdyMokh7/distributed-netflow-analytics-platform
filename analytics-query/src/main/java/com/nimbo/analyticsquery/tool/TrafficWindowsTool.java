@@ -54,7 +54,6 @@ public class TrafficWindowsTool implements AnalyticsTool {
           "outPackets",
           "totalPackets",
           "recordCount",
-          "batchId",
           "ingestedAt");
 
   private final RestApiClient restApiClient;
@@ -261,7 +260,6 @@ public class TrafficWindowsTool implements AnalyticsTool {
         row.outPackets(),
         row.totalPackets(),
         row.recordCount(),
-        row.batchId(),
         row.ingestedAt());
   }
 
