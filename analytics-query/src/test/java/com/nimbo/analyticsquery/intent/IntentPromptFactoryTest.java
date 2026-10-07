@@ -67,6 +67,32 @@ class IntentPromptFactoryTest {
   }
 
   @Test
+  void givenClarificationContractWhenPromptIsCreatedThenMissingFieldsAreExplicit() {
+    // Given: the exact clarification enum values accepted by the response contract
+    String expectedMissingFields =
+        """
+        Allowed clarification missing fields:
+        TIME_RANGE
+        DIMENSION
+        METRIC
+        FILTER_VALUE
+        IP_ADDRESS
+        IP_ROLE
+        TRAFFIC_DIRECTION
+        GROUPING
+        SORTING
+        LIMIT
+        QUERY_MEANING
+        """;
+
+    // When: the intent system prompt is created
+    String prompt = promptFactory.createSystemPrompt();
+
+    // Then: the model is given the exact values Jackson can deserialize
+    assertThat(prompt).contains(expectedMissingFields);
+  }
+
+  @Test
   void givenDefaultPolicyWhenPromptIsCreatedThenOnlyApprovedDefaultsAreAllowed() {
     // Given: the explicit intent default policy
     String safeDefault = "a top or bottom request without a limit uses 10";

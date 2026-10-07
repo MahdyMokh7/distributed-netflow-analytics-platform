@@ -66,6 +66,19 @@ public class IntentPromptFactory {
            OUT_OF_SCOPE
            REJECTED
 
+           Allowed clarification missing fields:
+           TIME_RANGE
+           DIMENSION
+           METRIC
+           FILTER_VALUE
+           IP_ADDRESS
+           IP_ROLE
+           TRAFFIC_DIRECTION
+           GROUPING
+           SORTING
+           LIMIT
+           QUERY_MEANING
+
            Status meanings:
 
            SUCCESS:
