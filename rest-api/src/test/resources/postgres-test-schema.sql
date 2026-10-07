@@ -1,10 +1,3 @@
-CREATE TABLE protocol_dim (
-    id INTEGER PRIMARY KEY,
-    name VARCHAR(50) NOT NULL,
-    description VARCHAR(200),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS traffic_aggregates (
     src_ip INET NOT NULL,
     window_start TIMESTAMP NOT NULL,
@@ -58,6 +51,5 @@ CREATE TABLE IF NOT EXISTS ip_bandwidth_aggregates (
     outbound_packets BIGINT NOT NULL CHECK (outbound_packets >= 0),
     batch_id UUID NOT NULL,
     ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (ip, window_start),
     PRIMARY KEY (ip, window_start, batch_id)
 );

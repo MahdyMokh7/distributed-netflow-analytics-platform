@@ -4,8 +4,8 @@ import com.nimbo.restapi.dto.request.ConnectionQueryRequestDto;
 import com.nimbo.restapi.dto.response.ConnectionResponseDto;
 import com.nimbo.restapi.exception.InvalidTimeRangeException;
 import com.nimbo.restapi.exception.ResourceNotFoundException;
-import com.nimbo.restapi.model.ConnectionAggregate;
 import com.nimbo.restapi.repository.ConnectionRepository;
+import com.nimbo.restapi.repository.projection.ConnectionWindowProjection;
 import com.nimbo.restapi.service.ConnectionQueryService;
 import com.nimbo.restapi.util.QueryMetrics;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -65,7 +65,7 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
 
       Pageable pageable = createPageable(request);
 
-      Page<ConnectionAggregate> aggregates;
+      Page<ConnectionWindowProjection> aggregates;
 
       if (request.getSrcIp() != null && request.getDstIp() != null) {
         aggregates =
@@ -125,7 +125,7 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
 
       Pageable pageable = createPageable(request);
 
-      Page<ConnectionAggregate> aggregates =
+      Page<ConnectionWindowProjection> aggregates =
           connectionRepository.findByIpAndTimeRange(
               ip, request.getStartTime(), request.getEndTime(), pageable);
 
@@ -163,7 +163,7 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
     }
   }
 
-  private ConnectionResponseDto toResponse(ConnectionAggregate aggregate) {
+  private ConnectionResponseDto toResponse(ConnectionWindowProjection aggregate) {
     return ConnectionResponseDto.builder()
         .id(HexFormat.of().formatHex(aggregate.getId()))
         .srcIp(aggregate.getSrcIp())
@@ -176,7 +176,6 @@ public class ConnectionQueryServiceImpl implements ConnectionQueryService {
         .inPackets(aggregate.getInPackets())
         .outPackets(aggregate.getOutPackets())
         .totalPackets(aggregate.getInPackets().add(aggregate.getOutPackets()))
-        .batchId(aggregate.getBatchId())
         .ingestedAt(aggregate.getIngestedAt())
         .build();
   }

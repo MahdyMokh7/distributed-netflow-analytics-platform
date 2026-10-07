@@ -4,8 +4,8 @@ import com.nimbo.restapi.dto.request.TrafficQueryRequestDto;
 import com.nimbo.restapi.dto.response.TrafficResponseDto;
 import com.nimbo.restapi.exception.InvalidTimeRangeException;
 import com.nimbo.restapi.exception.ResourceNotFoundException;
-import com.nimbo.restapi.model.TrafficAggregate;
 import com.nimbo.restapi.repository.TrafficRepository;
+import com.nimbo.restapi.repository.projection.TrafficWindowProjection;
 import com.nimbo.restapi.service.TrafficQueryService;
 import com.nimbo.restapi.util.QueryMetrics;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -62,7 +62,7 @@ public class TrafficQueryServiceImpl implements TrafficQueryService {
 
       Pageable pageable = createPageable(request);
 
-      Page<TrafficAggregate> aggregates;
+      Page<TrafficWindowProjection> aggregates;
 
       if (request.getSrcIp() != null) {
         aggregates =
@@ -123,7 +123,7 @@ public class TrafficQueryServiceImpl implements TrafficQueryService {
     }
   }
 
-  private TrafficResponseDto toResponse(TrafficAggregate aggregate) {
+  private TrafficResponseDto toResponse(TrafficWindowProjection aggregate) {
     return TrafficResponseDto.builder()
         .srcIp(aggregate.getSrcIp())
         .windowStart(aggregate.getWindowStart())
@@ -135,7 +135,6 @@ public class TrafficQueryServiceImpl implements TrafficQueryService {
         .outPackets(aggregate.getOutPackets())
         .totalPackets(aggregate.getInPackets().add(aggregate.getOutPackets()))
         .recordCount(aggregate.getRecordCount())
-        .batchId(aggregate.getBatchId())
         .ingestedAt(aggregate.getIngestedAt())
         .build();
   }

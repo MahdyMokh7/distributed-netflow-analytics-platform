@@ -2,7 +2,6 @@ package com.nimbo.restapi.dto.response;
 
 import java.math.BigInteger;
 import java.time.Instant;
-import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,8 +32,6 @@ public class TrafficResponseDto {
   private BigInteger totalPackets;
 
   private BigInteger recordCount;
-
-  private UUID batchId;
 
   private Instant ingestedAt;
 }

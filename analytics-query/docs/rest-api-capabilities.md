@@ -107,6 +107,9 @@ response to trigger SQL fallback.
 - Ports and protocol filters are not supported.
 - Response rows contain no port or protocol fields.
 - Results are stored aggregate-window rows, not a whole-range regrouping.
+- Connection rows and pagination totals use the same logical window key:
+  `id`, `srcIp`, `dstIp`, `windowStart`, and `windowEnd`. Contributions from
+  different batches are combined only when this complete key matches.
 
 ### Bandwidth details
 

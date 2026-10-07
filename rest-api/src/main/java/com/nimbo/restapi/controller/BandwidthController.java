@@ -105,7 +105,6 @@ public class BandwidthController {
 
     BandwidthQueryRequestDto request =
         BandwidthQueryRequestDto.builder()
-            .ip(ip)
             .startTime(timeRange.getStartTime())
             .endTime(timeRange.getEndTime())
             .build();

@@ -4,8 +4,8 @@ import com.nimbo.restapi.dto.request.ProtocolQueryRequestDto;
 import com.nimbo.restapi.dto.response.ProtocolResponseDto;
 import com.nimbo.restapi.exception.InvalidTimeRangeException;
 import com.nimbo.restapi.exception.ResourceNotFoundException;
-import com.nimbo.restapi.model.ProtocolUsage;
 import com.nimbo.restapi.repository.ProtocolRepository;
+import com.nimbo.restapi.repository.projection.ProtocolWindowProjection;
 import com.nimbo.restapi.service.ProtocolQueryService;
 import com.nimbo.restapi.util.QueryMetrics;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -43,7 +43,7 @@ public class ProtocolQueryServiceImpl implements ProtocolQueryService {
     try {
       validateTimeRange(request.getStartTime(), request.getEndTime());
 
-      List<ProtocolUsage> usages;
+      List<ProtocolWindowProjection> usages;
 
       if (request.getL7Protocol() != null) {
         usages =
@@ -104,7 +104,7 @@ public class ProtocolQueryServiceImpl implements ProtocolQueryService {
     }
   }
 
-  private ProtocolResponseDto toResponse(ProtocolUsage usage) {
+  private ProtocolResponseDto toResponse(ProtocolWindowProjection usage) {
     return ProtocolResponseDto.builder()
         .l7Protocol(usage.getL7Protocol())
         .windowStart(usage.getWindowStart())
@@ -116,7 +116,6 @@ public class ProtocolQueryServiceImpl implements ProtocolQueryService {
         .outPackets(usage.getOutPackets())
         .totalPackets(usage.getInPackets().add(usage.getOutPackets()))
         .connectionCount(usage.getConnectionCount())
-        .batchId(usage.getBatchId())
         .ingestedAt(usage.getIngestedAt())
         .build();
   }

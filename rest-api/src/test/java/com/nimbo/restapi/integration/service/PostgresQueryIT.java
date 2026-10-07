@@ -246,6 +246,159 @@ class PostgresQueryIT {
   }
 
   @Test
+  void givenTrafficContributionsFromDifferentBatchesWhenQueriedThenLogicalWindowsAreCombined() {
+    // Given: two batches contribute to one window and another window remains independent
+    Instant sharedWindow = RANGE_START.plusSeconds(60);
+    trafficRepository.save(traffic("10.0.0.1", sharedWindow, 100, 40, 10, 4, BATCH_ONE));
+    trafficRepository.save(traffic("10.0.0.1", sharedWindow, 300, 20, 30, 2, BATCH_TWO));
+    trafficRepository.save(
+        traffic("10.0.0.1", RANGE_START.plusSeconds(600), 50, 10, 5, 1, BATCH_ONE));
+
+    // When: traffic windows are queried with logical-window pagination
+    var result =
+        new TrafficQueryServiceImpl(trafficRepository, metrics)
+            .queryTraffic(
+                TrafficQueryRequestDto.builder()
+                    .srcIp("10.0.0.1")
+                    .startTime(RANGE_START)
+                    .endTime(RANGE_END)
+                    .pagination(pagination("windowStart", "ASC", 0, 10))
+                    .build());
+
+    // Then: batch rows are summed once and pagination counts two logical windows
+    assertThat(result).hasSize(2);
+    assertThat(result.getTotalElements()).isEqualTo(2);
+    assertThat(result.getContent().get(0).getInBytes()).isEqualTo(number(400));
+    assertThat(result.getContent().get(0).getOutBytes()).isEqualTo(number(60));
+    assertThat(result.getContent().get(0).getRecordCount()).isEqualTo(number(2));
+  }
+
+  @Test
+  void givenConnectionContributionsFromDifferentBatchesWhenQueriedThenTheyAreCombined() {
+    // Given: two batches contain contributions for the same connection window
+    String id = "a1".repeat(32);
+    Instant windowStart = RANGE_START.plusSeconds(60);
+    connectionRepository.save(
+        connection(id, "10.0.0.1", "10.0.0.2", windowStart, 120, 40, BATCH_ONE));
+    connectionRepository.save(
+        connection(id, "10.0.0.1", "10.0.0.2", windowStart, 80, 20, BATCH_TWO));
+
+    // When: the connection window is requested
+    var result =
+        new ConnectionQueryServiceImpl(connectionRepository, metrics)
+            .queryConnections(
+                ConnectionQueryRequestDto.builder()
+                    .srcIp("10.0.0.1")
+                    .dstIp("10.0.0.2")
+                    .startTime(RANGE_START)
+                    .endTime(RANGE_END)
+                    .pagination(pagination("windowStart", "ASC", 0, 10))
+                    .build());
+
+    // Then: one logical connection contains the sum of both batches
+    assertThat(result)
+        .singleElement()
+        .satisfies(
+            response -> {
+              assertThat(response.getId()).isEqualTo(id);
+              assertThat(response.getInBytes()).isEqualTo(number(200));
+              assertThat(response.getOutBytes()).isEqualTo(number(50));
+              assertThat(response.getInPackets()).isEqualTo(number(60));
+              assertThat(response.getOutPackets()).isEqualTo(number(15));
+            });
+    assertThat(result.getTotalElements()).isOne();
+  }
+
+  @Test
+  void givenSameConnectionIdWithDifferentWindowEndsWhenPagedThenBothGroupsAreCounted() {
+    // Given: one connection identity has two distinct persisted window ends
+    String id = "b1".repeat(32);
+    Instant windowStart = RANGE_START.plusSeconds(60);
+    ConnectionAggregate first =
+        connection(id, "10.0.0.1", "10.0.0.2", windowStart, 120, 40, BATCH_ONE);
+    ConnectionAggregate second =
+        connection(id, "10.0.0.1", "10.0.0.2", windowStart, 80, 20, BATCH_TWO);
+    second.setWindowEnd(windowStart.plusSeconds(600));
+    connectionRepository.save(first);
+    connectionRepository.save(second);
+
+    // When: the second logical group is requested with a page size of one
+    var result =
+        new ConnectionQueryServiceImpl(connectionRepository, metrics)
+            .queryConnections(
+                ConnectionQueryRequestDto.builder()
+                    .srcIp("10.0.0.1")
+                    .dstIp("10.0.0.2")
+                    .startTime(RANGE_START)
+                    .endTime(RANGE_END)
+                    .pagination(pagination("windowEnd", "ASC", 1, 1))
+                    .build());
+
+    // Then: pagination counts both grouped tuples and keeps page two reachable
+    assertThat(result.getTotalElements()).isEqualTo(2);
+    assertThat(result.getTotalPages()).isEqualTo(2);
+    assertThat(result.getContent()).singleElement();
+    assertThat(result.getContent().get(0).getWindowEnd())
+        .isEqualTo(windowStart.plusSeconds(600));
+  }
+
+  @Test
+  void givenBandwidthContributionsAcrossWindowsWhenQueriedThenLatestCombinedWindowIsReturned() {
+    // Given: two batches contribute to the latest window after an older window
+    bandwidthRepository.save(
+        bandwidth("10.0.0.1", RANGE_START.plusSeconds(60), 50, 10, 5, 1, BATCH_ONE));
+    Instant latestWindow = RANGE_START.plusSeconds(600);
+    bandwidthRepository.save(
+        bandwidth("10.0.0.1", latestWindow, 100, 40, 10, 4, BATCH_ONE));
+    bandwidthRepository.save(
+        bandwidth("10.0.0.1", latestWindow, 300, 20, 30, 2, BATCH_TWO));
+
+    // When: bandwidth for the IP is requested
+    var result =
+        new BandwidthQueryServiceImpl(bandwidthRepository, metrics)
+            .queryBandwidthByIp(
+                "10.0.0.1",
+                BandwidthQueryRequestDto.builder()
+                    .startTime(RANGE_START)
+                    .endTime(RANGE_END)
+                    .build());
+
+    // Then: the newest logical window includes both batch contributions
+    assertThat(result.getWindowStart()).isEqualTo(latestWindow);
+    assertThat(result.getInboundBytes()).isEqualTo(number(400));
+    assertThat(result.getOutboundBytes()).isEqualTo(number(60));
+    assertThat(result.getTotalPackets()).isEqualTo(number(46));
+  }
+
+  @Test
+  void givenProtocolContributionsAcrossWindowsWhenQueriedThenLatestCombinedWindowIsReturned() {
+    // Given: two batches contribute to the latest window for one protocol
+    protocolRepository.save(
+        protocol(6.0, RANGE_START.plusSeconds(60), 50, 10, 5, 1, 2, BATCH_ONE));
+    Instant latestWindow = RANGE_START.plusSeconds(600);
+    protocolRepository.save(
+        protocol(6.0, latestWindow, 100, 40, 10, 4, 3, BATCH_ONE));
+    protocolRepository.save(
+        protocol(6.0, latestWindow, 300, 20, 30, 2, 7, BATCH_TWO));
+
+    // When: usage for the protocol is requested
+    var result =
+        new ProtocolQueryServiceImpl(protocolRepository, metrics)
+            .queryProtocolUsageByProtocol(
+                6.0,
+                ProtocolQueryRequestDto.builder()
+                    .startTime(RANGE_START)
+                    .endTime(RANGE_END)
+                    .build());
+
+    // Then: the newest logical window contains all batch contributions
+    assertThat(result.getWindowStart()).isEqualTo(latestWindow);
+    assertThat(result.getInBytes()).isEqualTo(number(400));
+    assertThat(result.getOutBytes()).isEqualTo(number(60));
+    assertThat(result.getConnectionCount()).isEqualTo(10);
+  }
+
+  @Test
   void givenNoMatchingTrafficWhenQueriedThenNotFoundIsReported() {
     // Given: an empty traffic table
     TrafficQueryRequestDto request =

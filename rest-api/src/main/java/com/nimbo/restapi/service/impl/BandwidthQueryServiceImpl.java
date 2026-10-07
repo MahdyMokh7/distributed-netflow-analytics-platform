@@ -4,8 +4,9 @@ import com.nimbo.restapi.dto.request.BandwidthQueryRequestDto;
 import com.nimbo.restapi.dto.response.BandwidthResponseDto;
 import com.nimbo.restapi.exception.InvalidTimeRangeException;
 import com.nimbo.restapi.exception.ResourceNotFoundException;
-import com.nimbo.restapi.model.IpBandwidthAggregate;
 import com.nimbo.restapi.repository.BandwidthRepository;
+import com.nimbo.restapi.repository.projection.BandwidthSummaryProjection;
+import com.nimbo.restapi.repository.projection.BandwidthWindowProjection;
 import com.nimbo.restapi.service.BandwidthQueryService;
 import com.nimbo.restapi.util.QueryMetrics;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -18,7 +19,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -55,7 +55,7 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
               : DEFAULT_TOP_LIMIT;
 
       Pageable pageable = PageRequest.of(0, limit);
-      Page<Object[]> topBandwidth =
+      List<BandwidthSummaryProjection> topBandwidth =
           bandwidthRepository.findTopBandwidthIps(
               request.getStartTime(), request.getEndTime(), pageable);
 
@@ -64,7 +64,7 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
       }
 
       List<BandwidthResponseDto> responses =
-          topBandwidth.getContent().stream().map(this::toTopResponse).collect(Collectors.toList());
+          topBandwidth.stream().map(this::toTopResponse).collect(Collectors.toList());
 
       long duration = System.currentTimeMillis() - startTime;
       metrics.recordQuery("bandwidth_top", duration);
@@ -88,7 +88,7 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
     try {
       validateTimeRange(request.getStartTime(), request.getEndTime());
 
-      List<IpBandwidthAggregate> aggregates =
+      List<BandwidthWindowProjection> aggregates =
           bandwidthRepository.findByIpAndTimeRange(
               ip, request.getStartTime(), request.getEndTime());
 
@@ -96,7 +96,7 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
         throw new ResourceNotFoundException("No bandwidth data found for IP: " + ip);
       }
 
-      IpBandwidthAggregate aggregate = aggregates.get(0);
+      BandwidthWindowProjection aggregate = aggregates.get(0);
 
       long duration = System.currentTimeMillis() - startTime;
       metrics.recordQuery("bandwidth_by_ip", duration);
@@ -126,28 +126,21 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
     }
   }
 
-  private BandwidthResponseDto toTopResponse(Object[] row) {
-    BigInteger inboundPackets = toBigInteger(row[3]);
-    BigInteger outboundPackets = toBigInteger(row[4]);
+  private BandwidthResponseDto toTopResponse(BandwidthSummaryProjection row) {
+    BigInteger inboundPackets = row.getInboundPackets();
+    BigInteger outboundPackets = row.getOutboundPackets();
     return BandwidthResponseDto.builder()
-        .ip((String) row[0])
-        .inboundBytes(toBigInteger(row[1]))
-        .outboundBytes(toBigInteger(row[2]))
+        .ip(row.getIp())
+        .inboundBytes(row.getInboundBytes())
+        .outboundBytes(row.getOutboundBytes())
         .inboundPackets(inboundPackets)
         .outboundPackets(outboundPackets)
         .totalPackets(inboundPackets.add(outboundPackets))
-        .totalBytes(toBigInteger(row[5]))
+        .totalBytes(row.getTotalBytes())
         .build();
   }
 
-  private BigInteger toBigInteger(Object value) {
-    if (value instanceof BigInteger bigInteger) {
-      return bigInteger;
-    }
-    return BigInteger.valueOf(((Number) value).longValue());
-  }
-
-  private BandwidthResponseDto toResponse(IpBandwidthAggregate aggregate) {
+  private BandwidthResponseDto toResponse(BandwidthWindowProjection aggregate) {
     return BandwidthResponseDto.builder()
         .ip(aggregate.getIp())
         .windowStart(aggregate.getWindowStart())
@@ -158,7 +151,6 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
         .inboundPackets(aggregate.getInboundPackets())
         .outboundPackets(aggregate.getOutboundPackets())
         .totalPackets(aggregate.getInboundPackets().add(aggregate.getOutboundPackets()))
-        .batchId(aggregate.getBatchId())
         .ingestedAt(aggregate.getIngestedAt())
         .build();
   }
