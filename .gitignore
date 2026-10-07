@@ -115,8 +115,10 @@ temp.txt
 **/logs/
 *.log
 
+# AI
 .codex
 .agents
 *.kilo
+
 *.ansible
 **/charts/nimbo-platform/charts/

@@ -35,7 +35,8 @@ public class BatchProcessor {
   private final StreamLoadLabelGenerator labelGenerator;
   private final StarRocksWriterMetrics metrics;
 
-  @Getter private boolean kafkaPaused;
+  @Getter
+  private boolean kafkaPaused;
 
   public void processRecords(ConsumerRecords<byte[], GenericRecord> records) {
 
@@ -182,12 +183,14 @@ public class BatchProcessor {
   }
 
   private static final class AccountedProcessingException extends RuntimeException {
+
     private AccountedProcessingException(RuntimeException cause) {
       super(cause);
     }
   }
 
   private static final class NonSkippableProcessingException extends RuntimeException {
+
     private NonSkippableProcessingException(RuntimeException cause) {
       super(cause);
     }

@@ -128,7 +128,7 @@ public final class TestStarRocks {
           .until(
               () -> {
                 try (Connection connection =
-                        DriverManager.getConnection(adminJdbcUrl(), "root", "");
+                    DriverManager.getConnection(adminJdbcUrl(), "root", "");
                     Statement statement = connection.createStatement()) {
                   statement.execute("DROP DATABASE IF EXISTS " + DATABASE);
                   statement.execute("CREATE DATABASE " + DATABASE);
@@ -164,6 +164,7 @@ public final class TestStarRocks {
 
   @FunctionalInterface
   public interface SqlConsumer {
+
     void accept(Connection connection) throws SQLException;
   }
 }

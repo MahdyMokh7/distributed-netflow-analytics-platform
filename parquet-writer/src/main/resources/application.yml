@@ -54,6 +54,7 @@ ingester:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092,10.10.61.53:9092,10.10.61.54:9092}
     topic: ${KAFKA_TOPIC:multi-version-netflow}
     dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
+    dlq-publish-timeout-ms: ${KAFKA_DLQ_PUBLISH_TIMEOUT_MS:10000}
     consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-java-consumer-scalled}
     auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
     enable-auto-commit: false

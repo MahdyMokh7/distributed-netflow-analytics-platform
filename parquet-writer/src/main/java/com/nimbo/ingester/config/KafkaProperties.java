@@ -46,6 +46,9 @@ public class KafkaProperties {
   @Min(1)
   private int consumerInstances = 1;
 
+  @Min(100)
+  private long dlqPublishTimeoutMs = 10000;
+
   @AssertTrue(message = "heartbeatIntervalMs must be less than sessionTimeoutMs")
   public boolean isHeartbeatIntervalBelowSessionTimeout() {
     return heartbeatIntervalMs < sessionTimeoutMs;

@@ -1,5 +1,6 @@
 package com.nimbo.storage.service;
 
+import com.nimbo.common.netflow.NetflowMetadata;
 import com.nimbo.ingester.model.IngestedRecord;
 import com.nimbo.metrics.ParquetWriterMetrics;
 import com.nimbo.storage.config.HdfsProperties;
@@ -32,11 +33,6 @@ import org.apache.parquet.hadoop.ParquetWriter;
 
 @Slf4j
 public final class NetFlowStorage {
-
-  private static final String PROCESS_TIME = "PROCESS_TIME";
-  private static final String KAFKA_TOPIC = "KAFKA_TOPIC";
-  private static final String KAFKA_PARTITION = "KAFKA_PARTITION";
-  private static final String KAFKA_OFFSET = "KAFKA_OFFSET";
 
   private final ParquetFileWriter parquetFileWriter;
   private final FileStorage fileStorage;
@@ -323,10 +319,10 @@ public final class NetFlowStorage {
 
     for (Schema.Field field : currentStorageSchema.getFields()) {
       Object value = switch (field.name()) {
-        case PROCESS_TIME -> ingestedRecord.kafkaTimestamp();
-        case KAFKA_TOPIC -> ingestedRecord.topic();
-        case KAFKA_PARTITION -> ingestedRecord.partition();
-        case KAFKA_OFFSET -> ingestedRecord.offset();
+        case NetflowMetadata.PROCESS_TIME -> ingestedRecord.kafkaTimestamp();
+        case NetflowMetadata.KAFKA_TOPIC -> ingestedRecord.topic();
+        case NetflowMetadata.KAFKA_PARTITION -> ingestedRecord.partition();
+        case NetflowMetadata.KAFKA_OFFSET -> ingestedRecord.offset();
         default -> schemaEvolution.valueFor(original, field);
       };
       enriched.put(field.name(), value);
@@ -339,8 +335,7 @@ public final class NetFlowStorage {
   }
 
   private Schema buildStorageSchema(Schema sourceSchema) {
-    List<String> reservedFields = List.of(PROCESS_TIME, KAFKA_TOPIC, KAFKA_PARTITION, KAFKA_OFFSET);
-    for (String field : reservedFields) {
+    for (String field : NetflowMetadata.RESERVED_FIELDS) {
       if (sourceSchema.getField(field) != null) {
         throw new StorageException("Producer schema must not contain reserved field " + field);
       }
@@ -351,10 +346,24 @@ public final class NetFlowStorage {
 
     fields.add(
         storageField(
-            PROCESS_TIME, Schema.Type.LONG, "Kafka record timestamp in UTC epoch milliseconds."));
-    fields.add(storageField(KAFKA_TOPIC, Schema.Type.STRING, "Kafka source topic."));
-    fields.add(storageField(KAFKA_PARTITION, Schema.Type.INT, "Kafka source partition."));
-    fields.add(storageField(KAFKA_OFFSET, Schema.Type.LONG, "Kafka source offset."));
+            NetflowMetadata.PROCESS_TIME,
+            Schema.Type.LONG,
+            NetflowMetadata.PROCESS_TIME_DOC));
+    fields.add(
+        storageField(
+            NetflowMetadata.KAFKA_TOPIC,
+            Schema.Type.STRING,
+            NetflowMetadata.KAFKA_TOPIC_DOC));
+    fields.add(
+        storageField(
+            NetflowMetadata.KAFKA_PARTITION,
+            Schema.Type.INT,
+            NetflowMetadata.KAFKA_PARTITION_DOC));
+    fields.add(
+        storageField(
+            NetflowMetadata.KAFKA_OFFSET,
+            Schema.Type.LONG,
+            NetflowMetadata.KAFKA_OFFSET_DOC));
 
     return Schema.createRecord(
         sourceSchema.getName(),

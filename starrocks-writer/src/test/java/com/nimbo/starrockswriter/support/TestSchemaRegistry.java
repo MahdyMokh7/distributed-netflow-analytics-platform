@@ -13,17 +13,17 @@ public final class TestSchemaRegistry implements AutoCloseable {
 
   private static final String SCHEMA_JSON =
       """
-      {
-        "type":"record",
-        "name":"TestNetFlowRecord",
-        "namespace":"com.nimbo.netflow",
-        "fields":[
-          {"name":"IPV4_SRC_ADDR","type":"string"},
-          {"name":"IPV4_DST_ADDR","type":"string"},
-          {"name":"IN_BYTES","type":"long"}
-        ]
-      }
-      """;
+          {
+           "type":"record",
+           "name":"TestNetFlowRecord",
+           "namespace":"com.nimbo.netflow",
+           "fields":[
+            {"name":"IPV4_SRC_ADDR","type":"string"},
+            {"name":"IPV4_DST_ADDR","type":"string"},
+            {"name":"IN_BYTES","type":"long"}
+           ]
+          }
+          """;
 
   private HttpServer server;
 

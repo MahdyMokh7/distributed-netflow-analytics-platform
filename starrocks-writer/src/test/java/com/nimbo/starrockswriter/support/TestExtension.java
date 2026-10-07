@@ -13,6 +13,10 @@ public final class TestExtension implements BeforeAllCallback, ParameterResolver
       ExtensionContext.Namespace.create(TestExtension.class);
   private static final Infrastructure INFRASTRUCTURE = new Infrastructure();
 
+  static Infrastructure infrastructure() {
+    return INFRASTRUCTURE;
+  }
+
   @Override
   public void beforeAll(ExtensionContext context) {
     context
@@ -51,10 +55,6 @@ public final class TestExtension implements BeforeAllCallback, ParameterResolver
 
   public TestSchemaRegistry schemaRegistry() {
     return INFRASTRUCTURE.schemaRegistry();
-  }
-
-  static Infrastructure infrastructure() {
-    return INFRASTRUCTURE;
   }
 
   static final class Infrastructure implements ExtensionContext.Store.CloseableResource {

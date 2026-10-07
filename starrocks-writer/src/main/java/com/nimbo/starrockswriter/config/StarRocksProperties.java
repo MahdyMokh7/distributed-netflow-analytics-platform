@@ -16,15 +16,20 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "starrockswriter.starrocks")
 public class StarRocksProperties {
 
-  @NotEmpty private List<@NotBlank String> streamLoadBackends;
+  @NotEmpty
+  private List<@NotBlank String> streamLoadBackends;
 
-  @NotBlank private String database;
+  @NotBlank
+  private String database;
 
-  @NotBlank private String table;
+  @NotBlank
+  private String table;
 
-  @NotBlank private String username;
+  @NotBlank
+  private String username;
 
-  @NotNull private String password;
+  @NotNull
+  private String password;
 
   @Min(100)
   private long retryBackoffMs;

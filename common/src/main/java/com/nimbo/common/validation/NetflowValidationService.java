@@ -1,5 +1,6 @@
 package com.nimbo.common.validation;
 
+import com.nimbo.common.avro.AvroSchemaSupport;
 import org.apache.avro.generic.GenericRecord;
 
 public class NetflowValidationService {
@@ -59,17 +60,16 @@ public class NetflowValidationService {
     return ValidationResult.failure(errors.toString());
   }
 
-  private void checkNonNegative(GenericRecord record, String field, StringBuilder errors) {
-    Number value = number(record, field, errors);
+  private void checkNonNegative(GenericRecord genericRecord, String field, StringBuilder errors) {
+    Number value = number(genericRecord, field, errors);
 
     if (value != null && value.longValue() < 0) {
       addError(errors, field + " is negative: " + value);
     }
   }
 
-  private void checkRange(
-      GenericRecord record, String field, long min, long max, StringBuilder errors) {
-    Number value = number(record, field, errors);
+  private void checkRange(GenericRecord genericRecord, String field, long min, long max, StringBuilder errors) {
+    Number value = number(genericRecord, field, errors);
 
     if (value == null) {
       return;
@@ -82,8 +82,7 @@ public class NetflowValidationService {
     }
   }
 
-  private void checkMinMax(
-      GenericRecord record, String minField, String maxField, StringBuilder errors) {
+  private void checkMinMax(GenericRecord record, String minField, String maxField, StringBuilder errors) {
     if (!hasField(record, minField) || !hasField(record, maxField)) {
       return;
     }
@@ -100,9 +99,8 @@ public class NetflowValidationService {
     }
   }
 
-  private void checkFiniteNonNegativeDouble(
-      GenericRecord record, String field, StringBuilder errors) {
-    Number value = number(record, field, errors);
+  private void checkFiniteNonNegativeDouble(GenericRecord genericRecord, String field, StringBuilder errors) {
+    Number value = number(genericRecord, field, errors);
 
     if (value == null) {
       return;
@@ -117,12 +115,12 @@ public class NetflowValidationService {
     }
   }
 
-  private Number number(GenericRecord record, String field, StringBuilder errors) {
-    if (!hasField(record, field)) {
+  private Number number(GenericRecord genericRecord, String field, StringBuilder errors) {
+    if (!hasField(genericRecord, field)) {
       return null;
     }
 
-    Object value = record.get(field);
+    Object value = genericRecord.get(field);
     if (value == null) {
       addError(errors, field + " is null");
       return null;
@@ -173,8 +171,8 @@ public class NetflowValidationService {
     addError(errors, field + " invalid IPv4: " + ip);
   }
 
-  private boolean hasField(GenericRecord record, String field) {
-    return record.getSchema().getField(field) != null;
+  private boolean hasField(GenericRecord genericRecord, String field) {
+    return AvroSchemaSupport.hasField(genericRecord, field);
   }
 
   private void addError(StringBuilder errors, String error) {

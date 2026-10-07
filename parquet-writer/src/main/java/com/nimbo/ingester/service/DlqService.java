@@ -1,12 +1,13 @@
 package com.nimbo.ingester.service;
 
+import com.nimbo.common.kafka.KafkaDlqPublisher;
 import com.nimbo.ingester.config.KafkaProperties;
-import com.nimbo.ingester.exception.DlqPublishException;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,45 +16,51 @@ public class DlqService {
   private final KafkaProducer<byte[], byte[]> kafkaProducer;
   private final KafkaProperties kafkaProperties;
 
-  public DlqService(KafkaProducer<byte[], byte[]> kafkaProducer, KafkaProperties kafkaProperties) {
+  public DlqService(
+      KafkaProducer<byte[], byte[]> kafkaProducer,
+      KafkaProperties kafkaProperties) {
     this.kafkaProducer = kafkaProducer;
     this.kafkaProperties = kafkaProperties;
   }
 
   public void publish(
-      ConsumerRecord<byte[], byte[]> originalRecord, String errorType, String errorMessage) {
+      ConsumerRecord<byte[], byte[]> originalRecord,
+      String errorType,
+      String errorMessage) {
+    ProducerRecord<byte[], byte[]> dlqRecord = createDlqRecord(
+        originalRecord, errorType, errorMessage);
 
-    ProducerRecord<byte[], byte[]> dlqRecord =
-        new ProducerRecord<>(
-            kafkaProperties.getDlqTopic(), originalRecord.key(), originalRecord.value());
-
-    addHeader(dlqRecord, "original-topic", originalRecord.topic());
-    addHeader(dlqRecord, "original-partition", String.valueOf(originalRecord.partition()));
-    addHeader(dlqRecord, "original-offset", String.valueOf(originalRecord.offset()));
-    addHeader(dlqRecord, "error-type", errorType);
-    addHeader(dlqRecord, "error-message", errorMessage);
-
-    try {
-      kafkaProducer.send(dlqRecord).get();
-
-    } catch (InterruptedException e) {
-
-      Thread.currentThread().interrupt();
-
-      throw new DlqPublishException("Interrupted while publishing record to DLQ", e);
-
-    } catch (ExecutionException e) {
-
-      throw new DlqPublishException("Failed to publish record to DLQ", e);
-    }
+    KafkaDlqPublisher.publish(
+        kafkaProducer,
+        dlqRecord,
+        kafkaProperties.getDlqPublishTimeoutMs());
   }
 
-  private void addHeader(ProducerRecord<byte[], byte[]> dlqRecord, String key, String value) {
+  private ProducerRecord<byte[], byte[]> createDlqRecord(
+      ConsumerRecord<byte[], byte[]> originalRecord,
+      String errorType,
+      String errorMessage) {
+    Headers headers = new RecordHeaders(originalRecord.headers());
+    addHeader(headers, "original-topic", originalRecord.topic());
+    addHeader(headers, "original-partition", String.valueOf(originalRecord.partition()));
+    addHeader(headers, "original-offset", String.valueOf(originalRecord.offset()));
+    addHeader(headers, "original-timestamp", String.valueOf(originalRecord.timestamp()));
+    addHeader(headers, "error-type", errorType);
+    addHeader(headers, "error-message", errorMessage);
 
-    if (value == null) {
-      return;
+    Long timestamp = originalRecord.timestamp() >= 0 ? originalRecord.timestamp() : null;
+    return new ProducerRecord<>(
+        kafkaProperties.getDlqTopic(),
+        null,
+        timestamp,
+        originalRecord.key(),
+        originalRecord.value(),
+        headers);
+  }
+
+  private void addHeader(Headers headers, String name, String value) {
+    if (value != null) {
+      headers.add(name, value.getBytes(StandardCharsets.UTF_8));
     }
-
-    dlqRecord.headers().add(key, value.getBytes(StandardCharsets.UTF_8));
   }
 }

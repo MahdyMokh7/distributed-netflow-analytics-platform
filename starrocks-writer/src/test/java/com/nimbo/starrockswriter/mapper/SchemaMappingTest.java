@@ -15,17 +15,17 @@ class SchemaMappingTest {
     return new Schema.Parser()
         .parse(
             """
-            {
-              "type":"record",
-              "name":"TestRecord",
-              "fields":[
-                {"name":"SRC_IP","type":"string"},
-                {"name":"PACKETS","type":"long"},
-                {"name":"RATIO","type":"double"},
-                {"name":"COUNT","type":"int"}
-              ]
-            }
-            """);
+                {
+                 "type":"record",
+                 "name":"TestRecord",
+                 "fields":[
+                  {"name":"SRC_IP","type":"string"},
+                  {"name":"PACKETS","type":"long"},
+                  {"name":"RATIO","type":"double"},
+                  {"name":"COUNT","type":"int"}
+                 ]
+                }
+                """);
   }
 
   @Test

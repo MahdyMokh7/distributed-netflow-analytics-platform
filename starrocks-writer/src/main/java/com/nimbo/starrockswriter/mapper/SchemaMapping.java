@@ -1,5 +1,7 @@
 package com.nimbo.starrockswriter.mapper;
 
+import com.nimbo.common.avro.AvroSchemaSupport;
+import com.nimbo.common.netflow.NetflowMetadata;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -11,8 +13,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class SchemaMapping {
 
-  public static final List<String> KAFKA_COLUMNS =
-      List.of("kafka_topic", "kafka_partition", "kafka_offset", "PROCESS_TIME");
+  public static final List<String> KAFKA_COLUMNS = List.of(
+      NetflowMetadata.KAFKA_TOPIC.toLowerCase(Locale.ROOT),
+      NetflowMetadata.KAFKA_PARTITION.toLowerCase(Locale.ROOT),
+      NetflowMetadata.KAFKA_OFFSET.toLowerCase(Locale.ROOT),
+      NetflowMetadata.PROCESS_TIME
+  );
 
   public String starRocksColumns(List<String> netFlowColumns) {
     return String.join(",", concatColumns(netFlowColumns));
@@ -33,7 +39,7 @@ public class SchemaMapping {
   }
 
   public String starRocksType(Schema schema) {
-    Schema effective = unwrapNullable(schema);
+    Schema effective = AvroSchemaSupport.unwrapNullable(schema);
     return switch (effective.getType()) {
       case STRING, ENUM -> "VARCHAR(65533)";
       case INT -> "INT";
@@ -41,10 +47,9 @@ public class SchemaMapping {
       case FLOAT -> "FLOAT";
       case DOUBLE -> "DOUBLE";
       case BOOLEAN -> "BOOLEAN";
-      default ->
-          throw new IllegalArgumentException(
-              "Unsupported Avro field type for automatic StarRocks schema evolution: "
-                  + effective.getType());
+      default -> throw new IllegalArgumentException(
+          "Unsupported Avro field type for automatic StarRocks schema evolution: " + effective.getType()
+      );
     };
   }
 
@@ -106,7 +111,7 @@ public class SchemaMapping {
       return null;
     }
 
-    Schema effective = unwrapNullable(fieldSchema);
+    Schema effective = AvroSchemaSupport.unwrapNullable(fieldSchema);
     return switch (effective.getType()) {
       case STRING, ENUM -> value.toString();
       case INT -> ((Number) value).intValue();
@@ -114,25 +119,10 @@ public class SchemaMapping {
       case DOUBLE -> ((Number) value).doubleValue();
       case FLOAT -> ((Number) value).floatValue();
       case BOOLEAN -> (Boolean) value;
-      default ->
-          throw new IllegalArgumentException(
-              "Unsupported Avro field type for StarRocks mapping: " + effective.getType());
+      default -> throw new IllegalArgumentException(
+          "Unsupported Avro field type for StarRocks mapping: " + effective.getType()
+      );
     };
-  }
-
-  private Schema unwrapNullable(Schema schema) {
-    if (schema.getType() != Schema.Type.UNION) {
-      return schema;
-    }
-
-    List<Schema> nonNullTypes =
-        schema.getTypes().stream().filter(type -> type.getType() != Schema.Type.NULL).toList();
-
-    if (nonNullTypes.size() != 1) {
-      throw new IllegalArgumentException(
-          "Only nullable unions with exactly one non-null Avro type are supported: " + schema);
-    }
-    return nonNullTypes.get(0);
   }
 
   public enum TypeEvolution {
