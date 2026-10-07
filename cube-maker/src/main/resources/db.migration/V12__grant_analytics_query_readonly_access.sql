@@ -1,17 +1,6 @@
--- =====================================================================
--- Grant minimum read-only access for analytics-query generated SQL
--- =====================================================================
-
-DO $$
-BEGIN
-    EXECUTE format(
-        'GRANT CONNECT ON DATABASE %I TO analytics_query_reader',
-        current_database());
-END
-$$;
-
-GRANT USAGE ON SCHEMA public
-    TO analytics_query_reader;
+-- The PostgreSQL bootstrap creates the login/group roles and grants database
+-- CONNECT and schema USAGE. Flyway runs as the table owner, so it grants only
+-- the table privilege that it is authorized to grant.
 
 GRANT SELECT ON TABLE
     public.traffic_aggregates,

@@ -68,8 +68,8 @@ sqlGeneration:
 queryPlanSafety:
   explainTimeout: 5s
   maxExplainSize: 256KB
-  maxEstimatedRows: 10000000
-  postgresMaxTotalCost: 1000000
+  maxEstimatedRows: "10000000"
+  postgresMaxTotalCost: "1000000"
 
 sqlExecution:
   statementTimeout: 30s
@@ -108,13 +108,6 @@ probes:
     periodSeconds: 10
 
 secret:
-  # Create this Secret outside Helm. Its keys must match the environment
-  # variables referenced by config/application-prod.yaml:
-  # ANALYTICS_QUERY_LLM_API_KEY
-  # ANALYTICS_QUERY_POSTGRESQL_USERNAME / ANALYTICS_QUERY_POSTGRESQL_PASSWORD
-  # ANALYTICS_QUERY_STARROCKS_USERNAME / ANALYTICS_QUERY_STARROCKS_PASSWORD
-  # ANALYTICS_QUERY_STARROCKS_EXECUTION_USERNAME / ANALYTICS_QUERY_STARROCKS_EXECUTION_PASSWORD
-  # A future ANALYTICS_QUERY_REST_API_TOKEN can be added without changing this chart.
   existingName: analytics-query-secret
 
 extraEnv: []

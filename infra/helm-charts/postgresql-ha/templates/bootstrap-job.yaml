@@ -24,31 +24,93 @@ spec:
             - name: APP_DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.appDatabase.existingSecretName }}
-                  key: {{ .Values.appDatabase.usernameKey }}
+                  name: {{ .Values.appDatabase.existingSecretName | quote }}
+                  key: {{ .Values.appDatabase.usernameKey | quote }}
             - name: APP_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.appDatabase.existingSecretName }}
-                  key: {{ .Values.appDatabase.passwordKey }}
+                  name: {{ .Values.appDatabase.existingSecretName | quote }}
+                  key: {{ .Values.appDatabase.passwordKey | quote }}
+            - name: ANALYTICS_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.analyticsDatabase.existingSecretName | quote }}
+                  key: {{ .Values.analyticsDatabase.usernameKey | quote }}
+            - name: ANALYTICS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.analyticsDatabase.existingSecretName | quote }}
+                  key: {{ .Values.analyticsDatabase.passwordKey | quote }}
           command:
             - /bin/sh
             - -c
             - |
               set -eu
-              psql -h {{ include "postgresql.fullname" . }}-master -U postgres -v ON_ERROR_STOP=1 <<SQL
-              SELECT 'CREATE DATABASE {{ .Values.appDatabase.databaseName }}'
-              WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{{ .Values.appDatabase.databaseName }}')\gexec
+              psql -h {{ include "postgresql.fullname" . }}-master -U postgres \
+                --set=ON_ERROR_STOP=1 \
+                --set=app_db_user="${APP_DB_USER}" \
+                --set=app_db_password="${APP_DB_PASSWORD}" \
+                --set=analytics_db_user="${ANALYTICS_DB_USER}" \
+                --set=analytics_db_password="${ANALYTICS_DB_PASSWORD}" \
+                --set=analytics_reader_role={{ .Values.analyticsDatabase.readerRole | quote }} <<'SQL'
+              SELECT format('CREATE DATABASE %I', '{{ .Values.appDatabase.databaseName }}')
+              WHERE NOT EXISTS (
+                SELECT FROM pg_database
+                WHERE datname = '{{ .Values.appDatabase.databaseName }}'
+              )\gexec
 
-              DO \$\$
-              BEGIN
-                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${APP_DB_USER}') THEN
-                  EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', '${APP_DB_USER}', '${APP_DB_PASSWORD}');
-                END IF;
-              END
-              \$\$;
+              SELECT format('CREATE ROLE %I LOGIN', :'app_db_user')
+              WHERE NOT EXISTS (
+                SELECT FROM pg_roles
+                WHERE rolname = :'app_db_user'
+              )\gexec
+              SELECT format(
+                'ALTER ROLE %I LOGIN PASSWORD %L',
+                :'app_db_user',
+                :'app_db_password'
+              )\gexec
 
-              GRANT ALL PRIVILEGES ON DATABASE {{ .Values.appDatabase.databaseName }} TO "${APP_DB_USER}";
+              SELECT format('CREATE ROLE %I NOLOGIN', :'analytics_reader_role')
+              WHERE NOT EXISTS (
+                SELECT FROM pg_roles
+                WHERE rolname = :'analytics_reader_role'
+              )\gexec
+              SELECT format('ALTER ROLE %I NOLOGIN', :'analytics_reader_role')\gexec
+
+              SELECT format('CREATE ROLE %I LOGIN INHERIT', :'analytics_db_user')
+              WHERE NOT EXISTS (
+                SELECT FROM pg_roles
+                WHERE rolname = :'analytics_db_user'
+              )\gexec
+              SELECT format(
+                'ALTER ROLE %I LOGIN INHERIT PASSWORD %L',
+                :'analytics_db_user',
+                :'analytics_db_password'
+              )\gexec
+
+              SELECT format(
+                'GRANT ALL PRIVILEGES ON DATABASE %I TO %I',
+                '{{ .Values.appDatabase.databaseName }}',
+                :'app_db_user'
+              )\gexec
+              SELECT format(
+                'GRANT CONNECT ON DATABASE %I TO %I',
+                '{{ .Values.appDatabase.databaseName }}',
+                :'analytics_reader_role'
+              )\gexec
+              SELECT format(
+                'GRANT %I TO %I',
+                :'analytics_reader_role',
+                :'analytics_db_user'
+              )\gexec
+
               \connect {{ .Values.appDatabase.databaseName }}
-              GRANT USAGE, CREATE ON SCHEMA public TO "${APP_DB_USER}";
+              SELECT format(
+                'GRANT USAGE, CREATE ON SCHEMA public TO %I',
+                :'app_db_user'
+              )\gexec
+              SELECT format(
+                'GRANT USAGE ON SCHEMA public TO %I',
+                :'analytics_reader_role'
+              )\gexec
               SQL

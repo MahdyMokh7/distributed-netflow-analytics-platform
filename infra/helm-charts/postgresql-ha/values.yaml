@@ -18,6 +18,12 @@ appDatabase:
   usernameKey: "DB_USERNAME"
   passwordKey: "DB_PASSWORD"
 
+analyticsDatabase:
+  existingSecretName: "analytics-query-secret"
+  usernameKey: "ANALYTICS_QUERY_POSTGRESQL_USERNAME"
+  passwordKey: "ANALYTICS_QUERY_POSTGRESQL_PASSWORD"
+  readerRole: "analytics_query_reader"
+
 storage:
   className: "disk1"
   size: "150Gi"
