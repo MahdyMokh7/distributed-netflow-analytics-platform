@@ -1,5 +1,8 @@
 package com.nimbo.restapi.controller;
 
+import static com.nimbo.restapi.controller.PostgresOpenApiExamples.END_TIME;
+import static com.nimbo.restapi.controller.PostgresOpenApiExamples.START_TIME;
+
 import com.nimbo.restapi.dto.request.PaginationRequestDto;
 import com.nimbo.restapi.dto.request.TimeRangeRequestDto;
 import com.nimbo.restapi.dto.request.TrafficQueryRequestDto;
@@ -43,13 +46,13 @@ public class TrafficController {
         description = "Start of the query time range",
         required = true,
         in = ParameterIn.QUERY,
-        example = "2026-09-07T04:47:15.772Z"),
+        example = START_TIME),
       @Parameter(
         name = "endTime",
         description = "End of the query time range",
         required = true,
         in = ParameterIn.QUERY,
-        example = "2026-09-09T04:47:15.772Z"),
+        example = END_TIME),
       @Parameter(
         name = "page",
         description = "Zero-based page number",
@@ -113,13 +116,13 @@ public class TrafficController {
         description = "Start of the query time range",
         required = true,
         in = ParameterIn.QUERY,
-        example = "2026-09-07T04:47:15.772Z"),
+        example = START_TIME),
       @Parameter(
         name = "endTime",
         description = "End of the query time range",
         required = true,
         in = ParameterIn.QUERY,
-        example = "2026-09-09T04:47:15.772Z"),
+        example = END_TIME),
       @Parameter(
         name = "page",
         description = "Zero-based page number",

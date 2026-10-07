@@ -8,8 +8,8 @@ http://10.10.61.75:18083/api/swagger-ui/index.html#
 ```text
 limit = 10
 {
-  "startTime": "2026-09-07T04:47:15.772Z",
-  "endTime": "2026-09-09T04:47:15.772Z"
+  "startTime": "2026-10-07T10:00:00Z",
+  "endTime": "2026-10-07T12:00:00Z"
 }
 ```
 Valid limit: `1–100`.
@@ -20,8 +20,8 @@ Valid limit: `1–100`.
 ```text
 ip = 192.168.1.152
 {
-  "startTime": "2026-09-07T04:47:15.772Z",
-  "endTime": "2026-09-09T04:47:15.772Z"
+  "startTime": "2026-10-07T10:00:00Z",
+  "endTime": "2026-10-07T12:00:00Z"
 }
 ```
 
@@ -31,8 +31,8 @@ ip = 192.168.1.152
 ```text
 ip = 172.31.69.23
 {
-  "startTime": "2026-09-07T04:47:15.772Z",
-  "endTime": "2026-09-09T04:47:15.772Z"
+  "startTime": "2026-10-07T10:00:00Z",
+  "endTime": "2026-10-07T12:00:00Z"
 }
 {
   "page": 0,
@@ -50,8 +50,8 @@ The IP can match either `src_ip` or `dst_ip`.
 srcIp = 172.31.69.23
 dstIp = 18.219.211.138
 {
-  "startTime": "2026-09-07T04:47:15.772Z",
-  "endTime": "2026-09-09T04:47:15.772Z"
+  "startTime": "2026-10-07T10:00:00Z",
+  "endTime": "2026-10-07T12:00:00Z"
 }
 {
   "page": 0,
@@ -67,8 +67,8 @@ Either IP filter can be left empty.
 
 ```text
 {
-  "startTime": "2026-09-07T04:47:15.772Z",
-  "endTime": "2026-09-09T04:47:15.772Z"
+  "startTime": "2026-10-07T10:00:00Z",
+  "endTime": "2026-10-07T12:00:00Z"
 }
 ```
 
@@ -78,11 +78,11 @@ Either IP filter can be left empty.
 ```text
 l7Protocol = 5.0
 {
-  "startTime": "2026-09-07T04:47:15.772Z",
-  "endTime": "2026-09-09T04:47:15.772Z"
+  "startTime": "2026-10-07T10:00:00Z",
+  "endTime": "2026-10-07T12:00:00Z"
 }
 ```
-TCP would be `6.0` and UDP woudl be `5.0`.
+TCP would be `6.0` and UDP would be `5.0`.
 
 
 ### `GET /traffic/{srcIp}`
@@ -90,8 +90,8 @@ TCP would be `6.0` and UDP woudl be `5.0`.
 ```text
 srcIp = 70.192.246.222
 {
-  "startTime": "2026-09-07T04:47:15.772Z",
-  "endTime": "2026-09-09T04:47:15.772Z"
+  "startTime": "2026-10-07T10:00:00Z",
+  "endTime": "2026-10-07T12:00:00Z"
 }
 {
   "page": 0,
@@ -107,8 +107,8 @@ srcIp = 70.192.246.222
 ```text
 srcIp = 70.192.246.222
 {
-  "startTime": "2026-09-07T04:47:15.772Z",
-  "endTime": "2026-09-09T04:47:15.772Z"
+  "startTime": "2026-10-07T10:00:00Z",
+  "endTime": "2026-10-07T12:00:00Z"
 }
 {
   "page": 0,

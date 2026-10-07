@@ -1,5 +1,8 @@
 package com.nimbo.restapi.controller;
 
+import static com.nimbo.restapi.controller.PostgresOpenApiExamples.END_TIME;
+import static com.nimbo.restapi.controller.PostgresOpenApiExamples.START_TIME;
+
 import com.nimbo.restapi.dto.request.BandwidthQueryRequestDto;
 import com.nimbo.restapi.dto.request.TimeRangeRequestDto;
 import com.nimbo.restapi.dto.response.ApiResponseDto;
@@ -40,13 +43,13 @@ public class BandwidthController {
         description = "Start of the query time range",
         required = true,
         in = ParameterIn.QUERY,
-        example = "2026-09-07T04:47:15.772Z"),
+        example = START_TIME),
       @Parameter(
         name = "endTime",
         description = "End of the query time range",
         required = true,
         in = ParameterIn.QUERY,
-        example = "2026-09-09T04:47:15.772Z")
+        example = END_TIME)
   })
   public ResponseEntity<ApiResponseDto<List<BandwidthResponseDto>>> getTopBandwidthIps(
       @Parameter(description = "Limit results (default: 10, valid range: 1-100)", example = "10")
@@ -83,13 +86,13 @@ public class BandwidthController {
         description = "Start of the query time range",
         required = true,
         in = ParameterIn.QUERY,
-        example = "2026-09-07T04:47:15.772Z"),
+        example = START_TIME),
       @Parameter(
         name = "endTime",
         description = "End of the query time range",
         required = true,
         in = ParameterIn.QUERY,
-        example = "2026-09-09T04:47:15.772Z")
+        example = END_TIME)
   })
   public ResponseEntity<ApiResponseDto<BandwidthResponseDto>> getBandwidthByIp(
       @Parameter(description = "IP address", required = true, example = "192.168.1.152")

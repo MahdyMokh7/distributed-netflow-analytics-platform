@@ -92,6 +92,22 @@ response to trigger SQL fallback.
 | `GET /api/protocols` | Protocol aggregate windows | time range | all matching protocol/window rows |
 | `GET /api/protocols/{l7Protocol}` | Latest matching window for one L7 protocol | numeric L7 protocol and time range | one newest window, not a whole-range total |
 
+### Executable examples
+
+These examples query the UTC interval from 10:00 through 12:00 on
+October 7, 2026:
+
+```text
+GET /api/traffic/70.192.246.222?startTime=2026-10-07T10:00:00Z&endTime=2026-10-07T12:00:00Z&page=0&size=10&sortBy=inBytes&sortDirection=DESC
+GET /api/traffic?srcIp=70.192.246.222&startTime=2026-10-07T10:00:00Z&endTime=2026-10-07T12:00:00Z&page=0&size=10&sortBy=inBytes&sortDirection=DESC
+GET /api/connections/172.31.69.23?startTime=2026-10-07T10:00:00Z&endTime=2026-10-07T12:00:00Z&page=0&size=10&sortBy=inBytes&sortDirection=DESC
+GET /api/connections?srcIp=172.31.69.23&dstIp=18.219.211.138&startTime=2026-10-07T10:00:00Z&endTime=2026-10-07T12:00:00Z&page=0&size=10&sortBy=inBytes&sortDirection=DESC
+GET /api/bandwidth/top?startTime=2026-10-07T10:00:00Z&endTime=2026-10-07T12:00:00Z&limit=10
+GET /api/bandwidth/192.168.1.152?startTime=2026-10-07T10:00:00Z&endTime=2026-10-07T12:00:00Z
+GET /api/protocols?startTime=2026-10-07T10:00:00Z&endTime=2026-10-07T12:00:00Z
+GET /api/protocols/5.0?startTime=2026-10-07T10:00:00Z&endTime=2026-10-07T12:00:00Z
+```
+
 ### Traffic limitations
 
 - Only source-IP filtering exists.
