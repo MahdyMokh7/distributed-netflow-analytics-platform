@@ -8,7 +8,8 @@
     </appender>
 
     <!-- Log levels -->
-    <logger name="com.nimbo.ingester" level="DEBUG"/>
+    <logger name="com.nimbo.application" level="DEBUG"/>
+    <logger name="com.nimbo.ingestion" level="DEBUG"/>
     <logger name="org.apache.kafka" level="WARN"/>
     <logger name="org.apache.hadoop" level="WARN"/>
     <logger name="org.apache.parquet" level="WARN"/>

@@ -2,8 +2,8 @@ package com.nimbo.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.nimbo.ingester.model.DlqReason;
-import com.nimbo.storage.service.batching.BatchPolicy;
+import com.nimbo.ingestion.DlqReason;
+import com.nimbo.storage.batching.BatchPolicy;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;

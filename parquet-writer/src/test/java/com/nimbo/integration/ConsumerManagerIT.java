@@ -3,20 +3,22 @@ package com.nimbo.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import com.nimbo.application.ConsumerInstanceFactory;
+import com.nimbo.application.ConsumerManager;
+import com.nimbo.application.RegisteredSchemaLoader;
 import com.nimbo.common.validation.NetflowValidationService;
-import com.nimbo.ingester.config.KafkaProperties;
-import com.nimbo.ingester.config.SchemaRegistryProperties;
-import com.nimbo.ingester.consumer.ConsumerManager;
-import com.nimbo.ingester.consumer.KafkaConsumerFactory;
-import com.nimbo.ingester.consumer.KafkaOffsetCommitter;
-import com.nimbo.ingester.service.DlqService;
+import com.nimbo.config.HdfsProperties;
+import com.nimbo.config.KafkaProperties;
+import com.nimbo.config.ParquetProperties;
+import com.nimbo.config.SchemaRegistryProperties;
+import com.nimbo.ingestion.DlqService;
+import com.nimbo.ingestion.KafkaConsumerFactory;
+import com.nimbo.ingestion.KafkaOffsetCommitter;
 import com.nimbo.metrics.ParquetWriterMetrics;
-import com.nimbo.storage.config.HdfsProperties;
-import com.nimbo.storage.config.ParquetProperties;
-import com.nimbo.storage.service.HourWindowPolicy;
-import com.nimbo.storage.service.batching.BatchPolicy;
-import com.nimbo.storage.service.hdfs.HdfsFileSystemFactory;
-import com.nimbo.storage.service.naming.FileNameGenerator;
+import com.nimbo.storage.HourWindowPolicy;
+import com.nimbo.storage.batching.BatchPolicy;
+import com.nimbo.storage.hdfs.HdfsFileSystemFactory;
+import com.nimbo.storage.naming.FileNameGenerator;
 import com.nimbo.support.KafkaContainerExtension;
 import com.nimbo.support.NetFlowTestData;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -59,19 +61,21 @@ class ConsumerManagerIT {
       ConsumerManager manager =
           new ConsumerManager(
               kafkaProperties,
-              schemaRegistryProperties,
-              new NetflowValidationService(),
-              new DlqService(dlqProducer, kafkaProperties),
-              new BatchPolicy(5, 1024 * 1024, Duration.ofMinutes(2)),
-              new HourWindowPolicy(1, true, Clock.systemUTC()),
-              parquetProperties,
-              new FileNameGenerator(),
-              hdfsProperties,
-              new KafkaConsumerFactory(kafkaProperties),
-              new HdfsFileSystemFactory(),
-              new KafkaOffsetCommitter(),
-              metrics,
-              schemaRegistryClient);
+              new RegisteredSchemaLoader(schemaRegistryProperties, schemaRegistryClient),
+              new ConsumerInstanceFactory(
+                  kafkaProperties,
+                  schemaRegistryProperties,
+                  new NetflowValidationService(),
+                  new DlqService(dlqProducer, kafkaProperties),
+                  new BatchPolicy(5, 1024 * 1024, Duration.ofMinutes(2)),
+                  new HourWindowPolicy(1, true, Clock.systemUTC()),
+                  parquetProperties,
+                  new FileNameGenerator(),
+                  hdfsProperties,
+                  new KafkaConsumerFactory(kafkaProperties),
+                  new HdfsFileSystemFactory(),
+                  new KafkaOffsetCommitter(),
+                  metrics));
 
       // When: the manager starts and then shuts down every configured instance
       manager.start();

@@ -12,7 +12,8 @@ hdfs:
 
 logging:
   level:
-    com.nimbo.ingester: DEBUG
+    com.nimbo.application: DEBUG
+    com.nimbo.ingestion: DEBUG
 
 storage:
   hdfs:

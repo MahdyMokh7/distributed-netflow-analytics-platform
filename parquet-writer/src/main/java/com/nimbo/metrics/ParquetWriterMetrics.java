@@ -1,7 +1,7 @@
 package com.nimbo.metrics;
 
-import com.nimbo.ingester.model.DlqReason;
-import com.nimbo.storage.service.batching.BatchPolicy;
+import com.nimbo.ingestion.DlqReason;
+import com.nimbo.storage.batching.BatchPolicy;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
@@ -144,30 +144,22 @@ public class ParquetWriterMetrics {
     InstanceState(MeterRegistry registry, int instanceId) {
       Tags tags = Tags.of(INSTANCE_TAG, String.valueOf(instanceId));
 
-      recordsWritten =
-          Counter.builder("ingester_records_written_total").tags(tags).register(registry);
+      recordsWritten = Counter.builder("ingester_records_written_total").tags(tags).register(registry);
 
       parquetFilesCommitted =
           Counter.builder("ingester_parquet_files_committed_total").tags(tags).register(registry);
 
-      writeFailures =
-          Counter.builder("ingester_write_failures_total").tags(tags).register(registry);
+      writeFailures = Counter.builder("ingester_write_failures_total").tags(tags).register(registry);
 
-      rolloverDuration =
-          Timer.builder("ingester_rollover_duration_seconds").tags(tags).register(registry);
+      rolloverDuration = Timer.builder("ingester_rollover_duration_seconds").tags(tags).register(registry);
 
-      pollRecords =
-          DistributionSummary.builder("ingester_poll_records").tags(tags).register(registry);
+      pollRecords = DistributionSummary.builder("ingester_poll_records").tags(tags).register(registry);
 
-      batchRecordCount =
-          DistributionSummary.builder("ingester_batch_record_count").tags(tags).register(registry);
+      batchRecordCount = DistributionSummary.builder("ingester_batch_record_count").tags(tags).register(registry);
 
-      batchSizeBytes =
-          DistributionSummary.builder("ingester_batch_size_bytes").tags(tags).register(registry);
+      batchSizeBytes = DistributionSummary.builder("ingester_batch_size_bytes").tags(tags).register(registry);
 
-      Gauge.builder("ingester_consumer_running", running, AtomicInteger::get)
-          .tags(tags)
-          .register(registry);
+      Gauge.builder("ingester_consumer_running", running, AtomicInteger::get).tags(tags).register(registry);
 
       Gauge.builder(
               "ingester_last_successful_rollover_timestamp",

@@ -5,21 +5,22 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
 import com.nimbo.common.validation.NetflowValidationService;
-import com.nimbo.ingester.config.KafkaProperties;
-import com.nimbo.ingester.consumer.KafkaOffsetCommitter;
-import com.nimbo.ingester.consumer.NetflowConsumer;
-import com.nimbo.ingester.deserializer.AvroDeserializer;
-import com.nimbo.ingester.service.DataProcessingService;
-import com.nimbo.ingester.service.DlqService;
+import com.nimbo.config.HdfsProperties;
+import com.nimbo.config.KafkaProperties;
+import com.nimbo.config.ParquetProperties;
+import com.nimbo.ingestion.AvroDeserializer;
+import com.nimbo.ingestion.DataProcessingService;
+import com.nimbo.ingestion.DlqService;
+import com.nimbo.ingestion.KafkaNetFlowConsumer;
+import com.nimbo.ingestion.KafkaOffsetCommitter;
+import com.nimbo.ingestion.NetflowRecordProcessor;
 import com.nimbo.metrics.ParquetWriterMetrics;
-import com.nimbo.storage.config.HdfsProperties;
-import com.nimbo.storage.config.ParquetProperties;
-import com.nimbo.storage.service.HourWindowPolicy;
-import com.nimbo.storage.service.NetFlowStorage;
-import com.nimbo.storage.service.batching.BatchPolicy;
-import com.nimbo.storage.service.hdfs.HdfsFileStorage;
-import com.nimbo.storage.service.naming.FileNameGenerator;
-import com.nimbo.storage.service.parquet.ParquetFileWriter;
+import com.nimbo.storage.HourWindowPolicy;
+import com.nimbo.storage.NetFlowParquetWriter;
+import com.nimbo.storage.batching.BatchPolicy;
+import com.nimbo.storage.hdfs.HdfsFileStorage;
+import com.nimbo.storage.naming.FileNameGenerator;
+import com.nimbo.storage.parquet.ParquetFileWriter;
 import com.nimbo.support.KafkaContainerExtension;
 import com.nimbo.support.NetFlowTestData;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
@@ -444,8 +445,8 @@ class ParquetWriterPipelineIT {
     SimpleMeterRegistry registry = new SimpleMeterRegistry();
     ParquetWriterMetrics metrics = new ParquetWriterMetrics(registry);
     metrics.registerInstance(1);
-    NetFlowStorage storage =
-        new NetFlowStorage(
+    NetFlowParquetWriter storage =
+        new NetFlowParquetWriter(
             new BatchPolicy(batchSize, 1024 * 1024, Duration.ofMinutes(2)),
             new ParquetFileWriter(fileSystem, parquetProperties),
             new HdfsFileStorage(fileSystem),
@@ -463,14 +464,25 @@ class ParquetWriterPipelineIT {
     avroSerializer.configure(registryConfig, false);
     KafkaAvroDeserializer avroDelegate = new KafkaAvroDeserializer();
     avroDelegate.configure(registryConfig, false);
-    NetflowConsumer consumer =
-        new NetflowConsumer(
-            KAFKA.consumer(group),
+    var kafkaConsumer = KAFKA.consumer(group);
+    AvroDeserializer avroDeserializer = new AvroDeserializer(avroDelegate);
+    DataProcessingService dataProcessingService = new DataProcessingService(storage);
+    NetflowValidationService validationService = new NetflowValidationService();
+    DlqService dlqService = new DlqService(dlqProducer, kafkaProperties);
+    NetflowRecordProcessor recordProcessor = new NetflowRecordProcessor(
+        avroDeserializer,
+        dataProcessingService,
+        validationService,
+        dlqService,
+        1,
+        metrics);
+    KafkaNetFlowConsumer consumer =
+        new KafkaNetFlowConsumer(
+            kafkaConsumer,
             kafkaProperties,
-            new AvroDeserializer(avroDelegate),
-            new DataProcessingService(storage),
-            new NetflowValidationService(),
-            new DlqService(dlqProducer, kafkaProperties),
+            avroDeserializer,
+            dataProcessingService,
+            recordProcessor,
             new KafkaOffsetCommitter(),
             1,
             metrics);
@@ -552,7 +564,7 @@ class ParquetWriterPipelineIT {
   }
 
   private record PipelineFixture(
-      NetflowConsumer consumer,
+      KafkaNetFlowConsumer consumer,
       KafkaProducer<byte[], byte[]> dlqProducer,
       FileSystem fileSystem,
       SimpleMeterRegistry registry,

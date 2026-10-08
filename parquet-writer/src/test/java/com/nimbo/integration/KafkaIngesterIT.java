@@ -3,12 +3,12 @@ package com.nimbo.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import com.nimbo.ingester.config.KafkaProperties;
-import com.nimbo.ingester.consumer.KafkaConsumerFactory;
-import com.nimbo.ingester.consumer.KafkaOffsetCommitter;
-import com.nimbo.ingester.model.DlqReason;
-import com.nimbo.ingester.service.DlqService;
-import com.nimbo.storage.model.TopicPartitionKey;
+import com.nimbo.config.KafkaProperties;
+import com.nimbo.ingestion.DlqReason;
+import com.nimbo.ingestion.DlqService;
+import com.nimbo.ingestion.KafkaConsumerFactory;
+import com.nimbo.ingestion.KafkaOffsetCommitter;
+import com.nimbo.model.TopicPartitionKey;
 import com.nimbo.support.KafkaContainerExtension;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;

@@ -4,7 +4,8 @@ spring:
 
 logging:
   level:
-    com.nimbo.ingester: DEBUG
+    com.nimbo.application: DEBUG
+    com.nimbo.ingestion: DEBUG
     org.apache.kafka: WARN
     org.apache.hadoop: WARN
 

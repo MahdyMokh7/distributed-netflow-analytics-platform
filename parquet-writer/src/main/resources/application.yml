@@ -10,7 +10,8 @@ spring:
 logging:
   level:
     root: INFO
-    com.nimbo.ingester: INFO
+    com.nimbo.application: INFO
+    com.nimbo.ingestion: INFO
     org.apache.kafka: WARN
     org.apache.hadoop: WARN
   pattern:
