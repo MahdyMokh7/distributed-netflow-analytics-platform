@@ -21,7 +21,8 @@ sparkUiService:
   port: 4040
 
 hdfs:
-  uri: hdfs://10.10.61.53:8020
+  uri: hdfs://team1
+  configMapName: spark-config
 
 postgres:
   host: postgresql-ha-postgresql-master
