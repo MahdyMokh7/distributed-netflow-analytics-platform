@@ -17,6 +17,15 @@
     mode: '0640'
   when: not starrocks_disk.has_metadata and not starrocks_disk.has_be_data
 
+- name: Install the backend HDFS HA client configuration
+  ansible.builtin.template:
+    src: hdfs-site.xml.j2
+    dest: "{{ starrocks_install_dir }}/be/conf/hdfs-site.xml"
+    owner: root
+    group: "{{ starrocks_group }}"
+    mode: '0640'
+  register: starrocks_be_hdfs_site
+
 - name: Install the backend service unit
   ansible.builtin.template:
     src: starrocks-be.service.j2
@@ -26,9 +35,10 @@
     mode: '0644'
   register: starrocks_be_unit
 
-- name: Record the backend unit change for the rolling restart
+- name: Record whether the backend needs a rolling restart
   ansible.builtin.set_fact:
-    starrocks_be_unit_changed: "{{ starrocks_be_unit.changed | bool }}"
+    starrocks_be_restart_required: >-
+      {{ (starrocks_be_unit.changed | bool) or (starrocks_be_hdfs_site.changed | bool) }}
 
 - name: Ensure the BE installation tree is owned by the service account
   ansible.builtin.file:

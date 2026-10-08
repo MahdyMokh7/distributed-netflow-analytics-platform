@@ -31,6 +31,7 @@ class ParquetWriterMetricsTest {
     // Then: registration remains idempotent for every instance metric
     assertThat(registry.find("ingester_records_written_total").tag("instance", "1").counters())
         .hasSize(1);
+    assertThat(registry.find("ingester_parquet_files_committed_total").tag("instance", "1").counters()).hasSize(1);
     assertThat(registry.find("ingester_consumer_running").tag("instance", "1").gauges()).hasSize(1);
     assertThat(registry.find("ingester_rollover_total").tag("instance", "1").counters()).hasSize(6);
   }
@@ -61,6 +62,8 @@ class ParquetWriterMetricsTest {
     metrics.recordsPolled(3, 2);
     metrics.recordWritten(3);
     metrics.recordWritten(3);
+    metrics.parquetFileCommitted(3);
+    metrics.parquetFileCommitted(3);
     metrics.writeFailure(3);
 
     // Then: summaries and counters expose the exact observed work
@@ -70,6 +73,13 @@ class ParquetWriterMetricsTest {
     assertThat(polls.max()).isEqualTo(5.0);
     assertThat(
             registry.get("ingester_records_written_total").tag("instance", "3").counter().count())
+        .isEqualTo(2.0);
+    assertThat(
+            registry
+                .get("ingester_parquet_files_committed_total")
+                .tag("instance", "3")
+                .counter()
+                .count())
         .isEqualTo(2.0);
     assertThat(registry.get("ingester_write_failures_total").tag("instance", "3").counter().count())
         .isEqualTo(1.0);

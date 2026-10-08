@@ -28,4 +28,12 @@ starrocks_login_hosts: "{{ groups['starrocks_fe'] | map('extract', hostvars, 'st
 starrocks_health_retries: 60
 starrocks_health_delay: 5
 
+starrocks_hdfs_nameservice: team1
+starrocks_hdfs_namenodes:
+  team1-node1: 10.10.61.51:8020
+  team1-node2: 10.10.61.52:8020
+  team1-node3: 10.10.61.53:8020
+starrocks_hdfs_failover_proxy_provider: >-
+  org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider
+
 starrocks_chrony_service: "{{ 'chrony' if ansible_facts.os_family == 'Debian' else 'chronyd' }}"

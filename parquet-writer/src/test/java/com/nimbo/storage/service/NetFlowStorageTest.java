@@ -223,6 +223,13 @@ class NetFlowStorageTest {
 
     assertEquals(104L, offsets.get(new TopicPartitionKey("test-topic", 0)));
     assertEquals(2, parquetFileCount());
+    assertEquals(
+        2.0,
+        meterRegistry
+            .get("ingester_parquet_files_committed_total")
+            .tag("instance", "2")
+            .counter()
+            .count());
     assertEquals(4, readAllParquetRecords().size());
   }
 

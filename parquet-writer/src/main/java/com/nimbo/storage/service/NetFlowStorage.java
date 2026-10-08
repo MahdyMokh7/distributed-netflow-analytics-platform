@@ -279,6 +279,7 @@ public final class NetFlowStorage {
     }
     for (WriterState writerState : writers.values()) {
       fileStorage.commitAtomic(writerState.tempPath, writerState.finalPath);
+      metrics.parquetFileCommitted(instanceId);
       log.info("Committed parquet file {}", writerState.finalPath);
     }
 

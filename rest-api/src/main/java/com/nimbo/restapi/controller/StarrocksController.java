@@ -33,9 +33,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "StarRocks Analytics", description = "StarRocks NetFlow queries backed by StarRocks")
 public class StarrocksController {
 
-  private static final String IP_EXAMPLE = "1.0.101.34";
-  private static final String START_TIME_EXAMPLE = "2026-09-18T03:00:00Z";
-  private static final String END_TIME_EXAMPLE = "2026-09-21T09:00:00Z";
+  private static final String IP_EXAMPLE = "125.198.7.226";
+  private static final String START_TIME_EXAMPLE = "2026-10-07T00:00:00Z";
+  private static final String END_TIME_EXAMPLE = "2026-10-07T02:00:00Z";
 
   private final StarRocksQueryService queryService;
 

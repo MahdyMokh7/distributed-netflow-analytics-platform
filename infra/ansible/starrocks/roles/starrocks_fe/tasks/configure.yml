@@ -17,6 +17,15 @@
     mode: '0640'
   when: not starrocks_disk.has_metadata and not starrocks_disk.has_be_data
 
+- name: Install the frontend HDFS HA client configuration
+  ansible.builtin.template:
+    src: hdfs-site.xml.j2
+    dest: "{{ starrocks_install_dir }}/fe/conf/hdfs-site.xml"
+    owner: root
+    group: "{{ starrocks_group }}"
+    mode: '0640'
+  register: starrocks_fe_hdfs_site
+
 - name: Create the service launcher directory
   ansible.builtin.file:
     path: "{{ starrocks_fe_launcher | dirname }}"
@@ -43,6 +52,7 @@
     mode: '0644'
   register: starrocks_fe_unit
 
-- name: Record the frontend unit change for the rolling restart
+- name: Record whether the frontend needs a rolling restart
   ansible.builtin.set_fact:
-    starrocks_fe_unit_changed: "{{ starrocks_fe_unit.changed | bool }}"
+    starrocks_fe_restart_required: >-
+      {{ (starrocks_fe_unit.changed | bool) or (starrocks_fe_hdfs_site.changed | bool) }}

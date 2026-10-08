@@ -22,7 +22,7 @@ ingester:
     consumer-instances: ${CONSUMER_INSTANCES:3}
     enable-auto-commit: false
     poll-timeout-ms: ${KAFKA_POLL_TIMEOUT_MS:1000}
-    max-poll-records: ${KAFKA_MAX_POLL_RECORDS:10000}
+    max-poll-records: ${KAFKA_MAX_POLL_RECORDS:5000}
     session-timeout-ms: ${KAFKA_SESSION_TIMEOUT_MS:30000}
     heartbeat-interval-ms: ${KAFKA_HEARTBEAT_INTERVAL_MS:3000}
     max-poll-interval-ms: ${KAFKA_MAX_POLL_INTERVAL_MS:300000}

@@ -51,23 +51,23 @@
             | selectattr('Alive', 'equalto', 'true') | list | length)
     fail_msg: "Too few healthy BEs for a rolling restart at the requested replication factor"
   when:
-    - starrocks_be_unit_changed | default(false) | bool
+    - starrocks_be_restart_required | default(false) | bool
     - starrocks_disk.has_be_data
     - not ansible_check_mode
 
-- name: Restart the backend after its unit changed
+- name: Restart the backend after managed configuration changed
   ansible.builtin.systemd_service:
     name: starrocks-be
     state: restarted
     daemon_reload: true
   when:
-    - starrocks_be_unit_changed | default(false) | bool
+    - starrocks_be_restart_required | default(false) | bool
     - starrocks_disk.has_be_data
     - not ansible_check_mode
 
-- name: Clear the backend unit change record
+- name: Clear the backend restart record
   ansible.builtin.set_fact:
-    starrocks_be_unit_changed: false
+    starrocks_be_restart_required: false
 
 - name: Verify the backend is alive in the cluster
   ansible.builtin.command:

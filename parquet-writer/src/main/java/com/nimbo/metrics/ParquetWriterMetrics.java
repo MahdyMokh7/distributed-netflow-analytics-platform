@@ -94,6 +94,10 @@ public class ParquetWriterMetrics {
     state(instanceId).recordsWritten.increment();
   }
 
+  public void parquetFileCommitted(int instanceId) {
+    state(instanceId).parquetFilesCommitted.increment();
+  }
+
   public void writeFailure(int instanceId) {
     state(instanceId).writeFailures.increment();
   }
@@ -123,6 +127,7 @@ public class ParquetWriterMetrics {
 
   private static class InstanceState {
     final Counter recordsWritten;
+    final Counter parquetFilesCommitted;
     final Counter writeFailures;
     final Timer rolloverDuration;
     final DistributionSummary pollRecords;
@@ -141,6 +146,9 @@ public class ParquetWriterMetrics {
 
       recordsWritten =
           Counter.builder("ingester_records_written_total").tags(tags).register(registry);
+
+      parquetFilesCommitted =
+          Counter.builder("ingester_parquet_files_committed_total").tags(tags).register(registry);
 
       writeFailures =
           Counter.builder("ingester_write_failures_total").tags(tags).register(registry);

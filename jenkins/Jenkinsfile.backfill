@@ -38,8 +38,8 @@ pipeline {
         password(name: 'STARROCKS_PASSWORD', defaultValue: '',
                 description: 'StarRocks password')
         string(name: 'BACKFILL_HDFS_BASE_PATH',
-                defaultValue: 'hdfs://10.10.61.53:8020/netflow/parquetFiles',
-                description: 'Base directory containing yyyy-MM-dd/HH Parquet paths')
+                defaultValue: 'hdfs://team1/netflow/parquetFiles',
+                description: 'HA base directory containing yyyy-MM-dd/HH Parquet paths; StarRocks must have hdfs-site.xml')
         string(name: 'BACKFILL_HDFS_USERNAME', defaultValue: 'team1',
                 description: 'HDFS username passed to the StarRocks FILES function')
     }
@@ -72,6 +72,7 @@ pipeline {
 
         stage('Confirm Execute') {
             when {
+                beforeInput true
                 expression { params.BACKFILL_MODE == 'EXECUTE' }
             }
             input {

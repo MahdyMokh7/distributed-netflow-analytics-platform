@@ -780,8 +780,8 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "kafka_consumer_fetch_manager_records_lag\n/ on(client_id, topic) group_left\nclamp_min(kafka_consumer_fetch_manager_records_consumed_rate, 1)",
-                        "legendFormat": "partition {{partition}} / {{client_id}}",
+                        "expr": "max by (partition) (\n  kafka_consumer_fetch_manager_records_lag{job=\"starrocks-writer\",topic=\"multi-version-netflow\"}\n)\n/ scalar(\n  clamp_min(\n    sum(\n      rate(nimbo_StarRocksWriter_records_polled_total{job=\"starrocks-writer\"}[15m])\n    )\n    /\n    clamp_min(\n      count(\n        max by (partition) (\n          kafka_consumer_fetch_manager_records_lag{job=\"starrocks-writer\",topic=\"multi-version-netflow\"}\n        )\n      ),\n      1\n    ),\n    1\n  )\n)",
+                        "legendFormat": "P{{partition}}",
                         "range": true
                       },
                       "version": "v0"
@@ -794,7 +794,7 @@
               "transformations": []
             }
           },
-          "description": "Estimated catch-up delay for each Kafka partition: partition lag divided by the records/sec of the consumer handling it. Highlights partition or worker skew hidden by an aggregate.",
+          "description": "Estimated backlog drain time for each partition, using the average throughput per assigned partition from StarRocks workers over 15 minutes. This approximation is required because the workers currently share one Kafka client ID.",
           "id": 21,
           "links": [],
           "title": "Delay by Partition",
@@ -1071,7 +1071,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "max(\n  kafka_consumer_fetch_manager_records_lag\n  / on(client_id, topic) group_left\n  clamp_min(kafka_consumer_fetch_manager_records_consumed_rate, 1)\n)",
+                        "expr": "sum(\n  max by (partition) (\n    kafka_consumer_fetch_manager_records_lag{job=\"starrocks-writer\",topic=\"multi-version-netflow\"}\n  )\n)\n/\nclamp_min(\n  sum(\n    rate(nimbo_StarRocksWriter_records_polled_total{job=\"starrocks-writer\"}[15m])\n  ),\n  1\n)",
                         "legendFormat": "Delay",
                         "range": true
                       },
@@ -1085,7 +1085,7 @@
               "transformations": []
             }
           },
-          "description": "Estimated worst-partition catch-up delay. For each consumer/topic, remaining partition lag is divided by that same consumer's records/sec; the dashboard shows the largest result. This is an estimate, not event-time latency.",
+          "description": "Estimated time to drain the total Kafka backlog at StarRocks Writer's actual aggregate polling throughput averaged over 15 minutes. This is a throughput estimate, not event-time latency.",
           "id": 4,
           "links": [],
           "title": "Estimated Kafka Delay",

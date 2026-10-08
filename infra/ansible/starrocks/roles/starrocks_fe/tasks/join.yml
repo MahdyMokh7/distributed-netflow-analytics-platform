@@ -77,23 +77,23 @@
       >= ((starrocks_fe_rows | selectattr('Role', 'in', ['LEADER', 'FOLLOWER']) | list | length) // 2 + 1)
     fail_msg: Restart would lose the FE quorum; recover peer availability first
   when:
-    - starrocks_fe_unit_changed | default(false) | bool
+    - starrocks_fe_restart_required | default(false) | bool
     - starrocks_disk.has_metadata
     - not ansible_check_mode
 
-- name: Restart the frontend after its unit changed
+- name: Restart the frontend after managed configuration changed
   ansible.builtin.systemd_service:
     name: starrocks-fe
     state: restarted
     daemon_reload: true
   when:
-    - starrocks_fe_unit_changed | default(false) | bool
+    - starrocks_fe_restart_required | default(false) | bool
     - starrocks_disk.has_metadata
     - not ansible_check_mode
 
-- name: Clear the frontend unit change record
+- name: Clear the frontend restart record
   ansible.builtin.set_fact:
-    starrocks_fe_unit_changed: false
+    starrocks_fe_restart_required: false
 
 - name: Verify the frontend is alive in the cluster
   ansible.builtin.command:

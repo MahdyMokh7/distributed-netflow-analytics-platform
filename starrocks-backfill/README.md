@@ -75,7 +75,7 @@ Required variables:
 | `STARROCKS_PASSWORD` | supplied by a Kubernetes Secret |
 | `BACKFILL_FROM` | `2026-09-26T10:00:00Z` |
 | `BACKFILL_TO` | `2026-09-26T12:00:00Z` |
-| `BACKFILL_HDFS_BASE_PATH` | `hdfs://10.10.61.53:8020/netflow/parquetFiles` |
+| `BACKFILL_HDFS_BASE_PATH` | `hdfs://team1/netflow/parquetFiles` |
 | `BACKFILL_HDFS_USERNAME` | `team1` |
 
 Optional variables:
@@ -88,9 +88,9 @@ Optional variables:
 | `BACKFILL_MINIMUM_AGE_MINUTES` | `60` | Refuse intervals that may still be receiving data. |
 | `BACKFILL_RETENTION_DAYS` | `7` | Refuse intervals outside the target table's daily retention. |
 
-The HDFS hostname `team1` is not resolvable from the live StarRocks frontend. The tested direct endpoint
-is therefore shown above. If a resolvable HDFS HA nameservice is later configured for StarRocks, use
-that logical URI instead of a NameNode IP.
+The StarRocks FE and BE processes need the repository-managed `hdfs-site.xml` before they can resolve
+the `team1` HDFS HA nameservice. Apply the StarRocks Ansible deployment after changing that file. The
+logical URI then follows an active NameNode failover instead of depending on one NameNode IP.
 
 ## Build and test
 

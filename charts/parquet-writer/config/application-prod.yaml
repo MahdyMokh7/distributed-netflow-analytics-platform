@@ -53,7 +53,7 @@ ingester:
     consumer-instances: 3
     enable-auto-commit: false
     poll-timeout-ms: 1000
-    max-poll-records: 10000
+    max-poll-records: 5000
     session-timeout-ms: 30000
     heartbeat-interval-ms: 3000
     max-poll-interval-ms: 300000
@@ -69,12 +69,12 @@ storage:
       team1-node2: 10.10.61.52:8020
   parquet:
     compression-codec: ZSTD
-    block-size-bytes: 134217728
+    block-size-bytes: 67108864
     page-size-bytes: 1048576
     enable-dictionary: true
 rolling:
-  max-record-count: 3500000
-  max-size-bytes: 419430400
-  max-age: 150m
+  max-record-count: 5000000
+  max-size-bytes: 629145600
+  max-age: 30m
   allowed-lateness-hours: 1
   late-routing-enabled: ${LATE_ROUTING_ENABLED:false}

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<configuration>
+  <property>
+    <name>dfs.nameservices</name>
+    <value>{{ starrocks_hdfs_nameservice }}</value>
+  </property>
+  <property>
+    <name>dfs.ha.namenodes.{{ starrocks_hdfs_nameservice }}</name>
+    <value>{{ starrocks_hdfs_namenodes.keys() | join(',') }}</value>
+  </property>
+{% for node_name, address in starrocks_hdfs_namenodes.items() %}
+  <property>
+    <name>dfs.namenode.rpc-address.{{ starrocks_hdfs_nameservice }}.{{ node_name }}</name>
+    <value>{{ address }}</value>
+  </property>
+{% endfor %}
+  <property>
+    <name>dfs.client.failover.proxy.provider.{{ starrocks_hdfs_nameservice }}</name>
+    <value>{{ starrocks_hdfs_failover_proxy_provider }}</value>
+  </property>
+  <property>
+    <name>dfs.client.failover.random.order</name>
+    <value>false</value>
+  </property>
+</configuration>

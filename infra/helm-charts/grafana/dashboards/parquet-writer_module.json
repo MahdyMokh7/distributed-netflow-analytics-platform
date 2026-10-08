@@ -307,7 +307,7 @@
         "spec": {
           "id": 4,
           "title": "Estimated Kafka Delay",
-          "description": "Worst estimated consumer delay: partition backlog divided by the matching consumer records/sec. This is a throughput-based estimate, not event-time latency.",
+          "description": "Worst estimated consumer backlog drain time: total assigned lag divided by the matching consumer's actual 15-minute throughput. This is not event-time latency.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -325,7 +325,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "max(\n  kafka_consumer_fetch_manager_records_lag{job=\"parquet-writer\",topic=\"multi-version-netflow\"}\n  / on(client_id, topic) group_left\n  clamp_min(kafka_consumer_fetch_manager_records_consumed_rate{job=\"parquet-writer\",topic=\"multi-version-netflow\"}, 1)\n)",
+                        "expr": "max(\n  sum by (client_id, topic) (\n    max by (client_id, topic, partition) (\n      kafka_consumer_fetch_manager_records_lag{job=\"parquet-writer\",topic=\"multi-version-netflow\"}\n    )\n  )\n  / on (client_id, topic)\n  clamp_min(\n    max by (client_id, topic) (\n      rate(\n        kafka_consumer_fetch_manager_records_consumed_total{job=\"parquet-writer\",topic=\"multi-version-netflow\"}[15m]\n      )\n    ),\n    1\n  )\n)",
                         "legendFormat": "Delay",
                         "range": false,
                         "instant": true
@@ -708,7 +708,7 @@
         "spec": {
           "id": 8,
           "title": "Kafka Delay by Partition",
-          "description": "Estimated Kafka delay for each partition, with duplicate scrape/instance series collapsed so each partition appears once. Delay is backlog records divided by the matching consumer speed.",
+          "description": "Estimated backlog drain time for each partition, using the matching consumer's actual 15-minute throughput. Duplicate scrape/instance series are collapsed so each partition appears once.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -726,7 +726,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "max by (partition) (\n  max by (partition, client_id, topic) (\n    kafka_consumer_fetch_manager_records_lag{job=\"parquet-writer\",topic=\"multi-version-netflow\"}\n  )\n  / on(client_id, topic) group_left\n  clamp_min(\n    max by (client_id, topic) (\n      kafka_consumer_fetch_manager_records_consumed_rate{job=\"parquet-writer\",topic=\"multi-version-netflow\"}\n    ),\n    1\n  )\n)",
+                        "expr": "max by (partition) (\n  max by (partition, client_id, topic) (\n    kafka_consumer_fetch_manager_records_lag{job=\"parquet-writer\",topic=\"multi-version-netflow\"}\n  )\n  / on (client_id, topic) group_left\n  clamp_min(\n    max by (client_id, topic) (\n      rate(\n        kafka_consumer_fetch_manager_records_consumed_total{job=\"parquet-writer\",topic=\"multi-version-netflow\"}[15m]\n      )\n    ),\n    1\n  )\n)",
                         "legendFormat": "P{{partition}}",
                         "range": true,
                         "instant": false
@@ -1374,8 +1374,8 @@
         "kind": "Panel",
         "spec": {
           "id": 13,
-          "title": "Batch Closures (Total)",
-          "description": "Total number of successful batch-close (rollover) events reported by Parquet Writer. This is a cumulative counter, useful for confirming that batches continue to complete.",
+          "title": "Completed Parquet Files",
+          "description": "Individual Parquet files successfully committed to their final HDFS paths since the current pods started.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1393,7 +1393,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(\n  ingester_rollover_total{\n    job=\"parquet-writer\"\n  }\n)",
+                        "expr": "sum(\n  ingester_parquet_files_committed_total{\n    job=\"parquet-writer\"\n  }\n)",
                         "legendFormat": "__auto",
                         "range": false,
                         "instant": true
