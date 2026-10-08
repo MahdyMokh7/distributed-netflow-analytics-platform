@@ -39,7 +39,6 @@ spark:
 hdfs:
   uri: file://${java.io.tmpdir}/nimbo-test/parquet
   parquet-path: /
-  spark-history-path: /spark-history
 
 output:
   mode: both

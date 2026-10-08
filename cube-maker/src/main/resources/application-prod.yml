@@ -35,7 +35,6 @@ spark:
 hdfs:
   uri: ${HDFS_URI:hdfs://team1}
   parquet-path: /netflow/parquetFiles/
-  spark-history-path: /spark-history
 
 output:
   mode: both

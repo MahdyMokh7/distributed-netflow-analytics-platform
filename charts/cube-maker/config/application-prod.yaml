@@ -62,7 +62,6 @@ spark:
 hdfs:
   uri: ${HDFS_URI}
   parquet-path: /netflow/parquetFiles/
-  spark-history-path: /spark-history
 
 output:
   mode: database
