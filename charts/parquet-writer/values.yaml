@@ -9,6 +9,10 @@ containerPort: 18080
 springProfile: prod
 healthPath: /actuator/health
 
+extraEnv:
+  - name: JAVA_TOOL_OPTIONS
+    value: "-XX:MaxRAMPercentage=70.0 -XX:+ExitOnOutOfMemoryError"
+
 schemaRegistry:
   url: http://schema-registry:8081
   subject: multi-version-netflow-value
@@ -39,7 +43,7 @@ probes:
 resources:
   requests:
     cpu: 500m
-    memory: 2Gi
+    memory: 3Gi
   limits:
     cpu: "2"
     memory: 4Gi

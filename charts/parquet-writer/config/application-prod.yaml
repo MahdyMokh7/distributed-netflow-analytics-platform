@@ -49,7 +49,7 @@ ingester:
     topic: multi-version-netflow
     dlq-topic: netflow-dlq
     late-topic: netflow-late
-    consumer-group: netflow-consumer-deploy-final
+    consumer-group: multi-version-parquet-writer
     consumer-instances: 3
     enable-auto-commit: false
     poll-timeout-ms: 1000
@@ -73,8 +73,8 @@ storage:
     page-size-bytes: 1048576
     enable-dictionary: true
 rolling:
-  max-record-count: 3100000
-  max-size-bytes: 311673700
-  max-age: 20m
+  max-record-count: 3500000
+  max-size-bytes: 419430400
+  max-age: 150m
   allowed-lateness-hours: 1
   late-routing-enabled: ${LATE_ROUTING_ENABLED:false}

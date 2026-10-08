@@ -18,7 +18,7 @@ ingester:
     topic: ${KAFKA_TOPIC:multi-version-netflow}
     dlq-topic: ${KAFKA_DLQ_TOPIC:netflow-dlq}
     late-topic: ${KAFKA_LATE_TOPIC:netflow-late}
-    consumer-group: ${KAFKA_CONSUMER_GROUP:netflow-consumer-batch-deploy}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:multi-version-parquet-writer}
     consumer-instances: ${CONSUMER_INSTANCES:3}
     enable-auto-commit: false
     poll-timeout-ms: ${KAFKA_POLL_TIMEOUT_MS:1000}

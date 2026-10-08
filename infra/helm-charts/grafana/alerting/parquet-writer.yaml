@@ -62,26 +62,40 @@ groups:
           severity: critical
         isPaused: false
       - uid: afxtfrdoobw8we
-        title: Parquet Writer Kafka Lag High
+        title: Parquet Writer Kafka Lag Risks Retention
         condition: C
         data:
           - refId: A
             relativeTimeRange:
-              from: 600
+              from: 1800
               to: 0
             datasourceUid: prometheus
             model:
               editorMode: code
               expr: |-
-                max by (partition) (
-                  kafka_consumer_fetch_manager_records_lag{
-                    job="parquet-writer",
-                    topic="multi-version-netflow"
-                  }
+                sum by (client_id, topic) (
+                  max by (client_id, topic, partition) (
+                    kafka_consumer_fetch_manager_records_lag{
+                      job="parquet-writer",
+                      topic="multi-version-netflow"
+                    }
+                  )
+                )
+                / on (client_id, topic)
+                clamp_min(
+                  max by (client_id, topic) (
+                    avg_over_time(
+                      kafka_consumer_fetch_manager_records_consumed_rate{
+                        job="parquet-writer",
+                        topic="multi-version-netflow"
+                      }[15m]
+                    )
+                  ),
+                  0.01
                 )
               instant: true
               intervalMs: 1000
-              legendFormat: P{{partition}}
+              legendFormat: '{{client_id}}'
               maxDataPoints: 43200
               range: false
               refId: A
@@ -92,7 +106,7 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 1.5e+07
+                      - 172800
                     type: gt
                   operator:
                     type: and
@@ -111,22 +125,24 @@ groups:
               maxDataPoints: 43200
               refId: C
               type: threshold
-        noDataState: NoData
+        noDataState: OK
         execErrState: Error
-        for: 5m
+        for: 15m
         annotations:
           description: |-
-            Kafka consumer lag exceeded threshold.
+            Estimated time to drain this consumer's assigned Kafka backlog has exceeded 48 hours for 15 minutes.
+            The estimate is total assigned lag divided by the consumer's 15-minute average consumption rate; it is not event-time latency.
+            Kafka retains this topic for 72 hours, so this leaves about 24 hours of recovery margin.
             
             Topic:
             {{ $labels.topic }}
             
-            Partition:
-            {{ $labels.partition }}
-          summary: Parquet Writer Kafka lag is high on partition {{ $labels.partition }}
+            Consumer:
+            {{ $labels.client_id }}
+          summary: Parquet Writer Kafka backlog risks 72-hour retention for {{ $labels.client_id }}
         labels:
           module: parquet-writer
           service: kafka-consumer
-          severity: warning
+          severity: critical
           topic: multi-version-netflow
         isPaused: false

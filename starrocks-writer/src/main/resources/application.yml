@@ -30,7 +30,7 @@ starrockswriter:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:10.10.61.51:9092}
     topic: ${KAFKA_TOPIC:multi-version-netflow}
-    consumer-group: ${KAFKA_CONSUMER_GROUP:multi-version-netflow-starrocks-writer}
+    consumer-group: ${KAFKA_CONSUMER_GROUP:multi-version-starrocks-writer}
     client-id: ${KAFKA_CLIENT_ID:starrocks-writer}
     auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
     max-poll-records: ${KAFKA_MAX_POLL_RECORDS:2000}
@@ -68,4 +68,3 @@ starrockswriter:
     max-batch-time-ms: ${STARROCKS_MAX_BATCH_TIME_MS:1500}
     schema-evolution-timeout-ms: ${STARROCKS_SCHEMA_EVOLUTION_TIMEOUT_MS:120000}
     schema-evolution-poll-ms: ${STARROCKS_SCHEMA_EVOLUTION_POLL_MS:1000}
-

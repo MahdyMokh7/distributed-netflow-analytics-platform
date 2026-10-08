@@ -23,7 +23,7 @@ starrockswriter:
   kafka:
     bootstrap-servers: 10.10.61.51:9092
     topic: multi-version-netflow
-    consumer-group: netflow-starrocks-writer
+    consumer-group: multi-version-starrocks-writer
     client-id: starrocks-writer
     auto-offset-reset: earliest
     max-poll-records: 2000
