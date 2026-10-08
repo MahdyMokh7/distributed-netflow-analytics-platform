@@ -13,12 +13,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class SchemaMapping {
 
-  public static final List<String> KAFKA_COLUMNS = List.of(
-      NetflowMetadata.KAFKA_TOPIC.toLowerCase(Locale.ROOT),
-      NetflowMetadata.KAFKA_PARTITION.toLowerCase(Locale.ROOT),
-      NetflowMetadata.KAFKA_OFFSET.toLowerCase(Locale.ROOT),
-      NetflowMetadata.PROCESS_TIME
-  );
+  public static final List<String> KAFKA_COLUMNS = List.of(NetflowMetadata.KAFKA_TOPIC.toLowerCase(Locale.ROOT),
+      NetflowMetadata.KAFKA_PARTITION.toLowerCase(Locale.ROOT), NetflowMetadata.KAFKA_OFFSET.toLowerCase(Locale.ROOT),
+      NetflowMetadata.PROCESS_TIME);
 
   public String starRocksColumns(List<String> netFlowColumns) {
     return String.join(",", concatColumns(netFlowColumns));
@@ -85,10 +82,6 @@ public class SchemaMapping {
 
     String normalized = columnType.trim().toUpperCase(Locale.ROOT).replace(" ", "");
 
-    // StarRocks exposes MySQL-compatible integer display widths through
-    // information_schema (for example INT(11) and BIGINT(20)). The width
-    // is display metadata, not a different storage type, so schema
-    // evolution must compare the canonical integer type instead.
     if (normalized.matches("(?:INT|INTEGER)\\(\\d+\\)")) {
       return "INT";
     }

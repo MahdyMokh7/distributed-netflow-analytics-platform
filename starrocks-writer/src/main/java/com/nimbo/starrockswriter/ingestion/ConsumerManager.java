@@ -39,10 +39,8 @@ public class ConsumerManager implements ApplicationRunner, SmartLifecycle {
     }
 
     int consumerCount = kafkaProperties.getConsumerCount();
-    executor =
-        Executors.newFixedThreadPool(
+    executor = Executors.newFixedThreadPool(
             consumerCount, new CustomizableThreadFactory("starrocks-worker-"));
-
     for (int i = 1; i <= consumerCount; i++) {
       startWorker(i);
     }

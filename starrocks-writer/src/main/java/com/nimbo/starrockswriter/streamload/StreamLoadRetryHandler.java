@@ -4,7 +4,6 @@ import com.nimbo.starrockswriter.config.StarRocksProperties;
 import com.nimbo.starrockswriter.metrics.StarRocksWriterMetrics;
 import com.nimbo.starrockswriter.model.StarRocksRow;
 import com.nimbo.starrockswriter.model.StreamLoadResult;
-import io.micrometer.core.instrument.Timer;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -23,25 +22,12 @@ public class StreamLoadRetryHandler {
   private final StarRocksWriterMetrics metrics;
 
   public CompletableFuture<StreamLoadResult> sendRequest(List<StarRocksRow> rows, String label) {
-    if (rows == null || rows.isEmpty()) {
-      metrics.emptyBatch();
-    }
-    Timer.Sample sample = metrics.startLoadTimer();
-    return sendAttempt(rows, label)
-        .whenComplete(
-            (result, error) -> {
-              metrics.loadCompleted(workerNumber, outcome(result, error), sample);
-              if (error == null && result != null) {
-                metrics.streamLoadResult(workerNumber, result.numberLoadedRows());
-              }
-            });
+    return sendAttempt(rows, label).whenComplete(
+        (result, error) -> metrics.loadCompleted(workerNumber, outcome(result, error)));
   }
 
   private CompletableFuture<StreamLoadResult> sendAttempt(List<StarRocksRow> rows, String label) {
-    metrics.loadAttempt(workerNumber);
-    return client
-        .sendAsync(rows, label)
-        .handle((result, error) -> handle(rows, label, result, error))
+    return client.sendAsync(rows, label).handle((result, error) -> handle(rows, label, result, error))
         .thenCompose(Function.identity());
   }
 
@@ -51,7 +37,6 @@ public class StreamLoadRetryHandler {
       return CompletableFuture.completedFuture(result);
     }
     log.error("Stream Load failed. label={}, error={}, result={}", label, error, result);
-    metrics.loadRetry(workerNumber, retryReason(result, error));
     return retry(rows, label);
   }
 
@@ -60,10 +45,7 @@ public class StreamLoadRetryHandler {
   }
 
   private CompletableFuture<StreamLoadResult> retry(List<StarRocksRow> rows, String label) {
-    return CompletableFuture.runAsync(
-            () -> {
-            },
-            CompletableFuture.delayedExecutor(
+    return CompletableFuture.runAsync(() -> {}, CompletableFuture.delayedExecutor(
                 properties.getRetryBackoffMs(), TimeUnit.MILLISECONDS))
         .thenCompose(ignored -> sendAttempt(rows, label));
   }
@@ -73,12 +55,5 @@ public class StreamLoadRetryHandler {
       return "failed";
     }
     return PUBLISH_TIMEOUT.equalsIgnoreCase(result.status()) ? "publish_timeout" : "success";
-  }
-
-  private String retryReason(StreamLoadResult result, Throwable error) {
-    if (error != null) {
-      return "transport";
-    }
-    return result == null ? "response" : "status";
   }
 }

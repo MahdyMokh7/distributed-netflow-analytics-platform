@@ -34,41 +34,24 @@ public class StarRocksStreamLoadClient {
   private final SchemaMapping schemaMapping;
   private final StarRocksSchemaEvolutionManager schemaEvolutionManager;
   private final HttpClient httpClient =
-      HttpClient.newBuilder()
-          .connectTimeout(Duration.ofSeconds(5))
-          .followRedirects(HttpClient.Redirect.NEVER)
-          .build();
+      HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build();
 
   private HttpRequest buildRequest(URI uri, String csvBody, String label, String columns) {
-    HttpRequest.Builder builder =
-        HttpRequest.newBuilder()
-            .uri(uri)
-            .timeout(Duration.ofSeconds(60))
-            .header("Authorization", buildAuthorizationHeader())
-            .header("format", "CSV")
-            .header("column_separator", ",")
-            .header("enclose", "\"")
-            .header("columns", columns)
-            .header("strict_mode", "true")
-            .header("max_filter_ratio", "0")
-            .header("Content-Type", "text/csv")
-            .expectContinue(true);
+    HttpRequest.Builder builder = HttpRequest.newBuilder().uri(uri).timeout(Duration.ofSeconds(60))
+            .header("Authorization", buildAuthorizationHeader()).header("format", "CSV")
+            .header("column_separator", ",").header("enclose", "\"").header("columns", columns)
+            .header("strict_mode", "true").header("max_filter_ratio", "0")
+            .header("Content-Type", "text/csv").expectContinue(true);
 
     if (starRocksProperties.isMergeCommitEnabled()) {
       builder.header("enable_merge_commit", "true");
-      builder.header(
-          "merge_commit_async", Boolean.toString(starRocksProperties.isMergeCommitAsync()));
-      builder.header(
-          "merge_commit_interval_ms",
-          Long.toString(starRocksProperties.getMergeCommitIntervalMs()));
-      builder.header(
-          "merge_commit_parallel", Integer.toString(starRocksProperties.getMergeCommitParallel()));
+      builder.header("merge_commit_async", Boolean.toString(starRocksProperties.isMergeCommitAsync()));
+      builder.header("merge_commit_interval_ms", Long.toString(starRocksProperties.getMergeCommitIntervalMs()));
+      builder.header("merge_commit_parallel", Integer.toString(starRocksProperties.getMergeCommitParallel()));
     } else {
       builder.header("label", label);
     }
-    return builder
-        .PUT(HttpRequest.BodyPublishers.ofString(csvBody, StandardCharsets.UTF_8))
-        .build();
+    return builder.PUT(HttpRequest.BodyPublishers.ofString(csvBody, StandardCharsets.UTF_8)).build();
   }
 
   private String buildStreamLoadUrl() {
@@ -76,11 +59,7 @@ public class StarRocksStreamLoadClient {
     if (backend.endsWith("/")) {
       backend = backend.substring(0, backend.length() - 1);
     }
-    return backend
-        + "/api/"
-        + starRocksProperties.getDatabase()
-        + "/"
-        + starRocksProperties.getTable()
+    return backend + "/api/" + starRocksProperties.getDatabase() + "/" + starRocksProperties.getTable()
         + "/_stream_load";
   }
 
@@ -90,17 +69,13 @@ public class StarRocksStreamLoadClient {
           new IllegalArgumentException("Stream Load batch cannot be empty"));
     }
 
-    // Take one immutable column snapshot for both the CSV body and the Stream Load header.
-    // If another schema version is discovered concurrently, this batch remains internally
-    // consistent.
     List<String> netFlowColumns = schemaEvolutionManager.currentNetFlowColumns();
     String columns = schemaMapping.starRocksColumns(netFlowColumns);
     String csvBody = csvFormatter.format(rows, netFlowColumns);
 
     URI uri = URI.create(buildStreamLoadUrl());
     HttpRequest request = buildRequest(uri, csvBody, label, columns);
-    return httpClient
-        .sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+    return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
         .thenApply(
             response -> {
               if (response.statusCode() < 200 || response.statusCode() >= 300) {

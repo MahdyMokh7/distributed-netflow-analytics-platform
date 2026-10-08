@@ -20,10 +20,6 @@ public class StreamLoadLabelGenerator {
   }
 
   private void append(StringBuilder builder, Map.Entry<TopicPartition, OffsetAndMetadata> entry) {
-    builder
-        .append("-p")
-        .append(entry.getKey().partition())
-        .append("-o")
-        .append(entry.getValue().offset());
+    builder.append("-p").append(entry.getKey().partition()).append("-o").append(entry.getValue().offset());
   }
 }

@@ -26,26 +26,17 @@ public class DlqPublisher {
 
   public void publish(RecordDeserializationException exception) {
     ProducerRecord<byte[], byte[]> dlqRecord = createDlqRecord(exception);
-    RecordMetadata metadata = KafkaDlqPublisher.publish(
-        kafkaProducer,
-        dlqRecord,
+    RecordMetadata metadata = KafkaDlqPublisher.publish(kafkaProducer, dlqRecord,
         kafkaProperties.getDlqPublishTimeoutMs());
 
-    log.warn(
-        "Published deserialization failure to DLQ: sourceTopic={}, sourcePartition={}, "
+    log.warn("Published deserialization failure to DLQ: sourceTopic={}, sourcePartition={}, "
             + "sourceOffset={}, dlqTopic={}, dlqPartition={}, dlqOffset={}",
-        exception.topicPartition().topic(),
-        exception.topicPartition().partition(),
-        exception.offset(),
-        metadata.topic(),
-        metadata.partition(),
-        metadata.offset());
+        exception.topicPartition().topic(), exception.topicPartition().partition(), exception.offset(),
+        metadata.topic(), metadata.partition(), metadata.offset());
   }
 
   ProducerRecord<byte[], byte[]> createDlqRecord(RecordDeserializationException exception) {
-    Headers headers = exception.headers() == null
-        ? new RecordHeaders()
-        : new RecordHeaders(exception.headers());
+    Headers headers = exception.headers() == null ? new RecordHeaders() : new RecordHeaders(exception.headers());
 
     addHeader(headers, "original-topic", exception.topicPartition().topic());
     addHeader(headers, "original-partition", String.valueOf(exception.topicPartition().partition()));
@@ -64,13 +55,8 @@ public class DlqPublisher {
     }
 
     Long timestamp = exception.timestamp() >= 0 ? exception.timestamp() : null;
-    return new ProducerRecord<>(
-        kafkaProperties.getDlqTopic(),
-        null,
-        timestamp,
-        toByteArray(exception.keyBuffer()),
-        toByteArray(exception.valueBuffer()),
-        headers);
+    return new ProducerRecord<>(kafkaProperties.getDlqTopic(), null, timestamp,
+        toByteArray(exception.keyBuffer()), toByteArray(exception.valueBuffer()), headers);
   }
 
   private void addHeader(Headers headers, String name, String value) {

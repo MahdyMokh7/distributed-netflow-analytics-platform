@@ -11,9 +11,7 @@ public class StarRocksRecordMapper {
 
   private final SchemaMapping schemaMapping;
 
-  public StarRocksRow map(
-      GenericRecord genericRecord, String topic, int partition, long offset, long processTime) {
-    return new StarRocksRow(
-        topic, partition, offset, processTime, schemaMapping.extractValues(genericRecord));
+  public StarRocksRow map(GenericRecord genericRecord, String topic, int partition, long offset, long processTime) {
+    return new StarRocksRow(topic, partition, offset, processTime, schemaMapping.extractValues(genericRecord));
   }
 }
