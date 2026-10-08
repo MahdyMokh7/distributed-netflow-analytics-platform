@@ -1,8 +1,6 @@
 {
-  "annotations": {
-    "list": []
-  },
-  "description": "Minimal RED and dependency diagnostics for the Nimbo analytics-query service.",
+  "annotations": {"list": []},
+  "description": "Low-volume request outcomes, execution paths, latency, failures, and dependency diagnostics for the Nimbo analytics-query service.",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -10,407 +8,148 @@
   "links": [],
   "panels": [
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Request rate grouped by controlled application status across all analytics endpoints.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2
-          },
-          "unit": "reqps"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "success"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Completed requests across all public analytics endpoints during the selected dashboard time range.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 0, "noValue": "0", "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
       "id": 1,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "expr": "sum by (status) (rate(analytics_query_requests_total[$__rate_interval]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Request Rate by Status",
-      "type": "timeseries"
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "sum(increase(analytics_query_requests_total[$__range])) or vector(0)", "instant": true, "range": false, "refId": "A"}],
+      "title": "Requests — Selected Range",
+      "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "End-to-end request latency across all analytics endpoints.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Average end-to-end duration of completed requests during the selected dashboard time range. The request count beside this panel shows the sample size.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "noValue": "0", "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
       "id": 2,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(analytics_query_request_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "p50",
-          "refId": "A"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(analytics_query_request_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "p95",
-          "refId": "B"
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(analytics_query_request_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "p99",
-          "refId": "C"
-        }
-      ],
-      "title": "End-to-End Latency",
-      "type": "timeseries"
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "sum(increase(analytics_query_request_duration_seconds_sum[$__range])) / clamp_min(sum(increase(analytics_query_request_duration_seconds_count[$__range])), 1) or vector(0)", "instant": true, "range": false, "refId": "A"}],
+      "title": "Average Request Duration",
+      "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Controlled application failures and SQL rejections grouped by execution stage and reason.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 25,
-            "lineWidth": 1
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Controlled failures and SQL rejections recorded during the selected dashboard time range.",
+      "fieldConfig": {"defaults": {"decimals": 0, "noValue": "0", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 1}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
       "id": 3,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "expr": "sum by (stage, reason) (rate(analytics_query_failures_total[$__rate_interval]))",
-          "legendFormat": "{{stage}} / {{reason}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Failures and SQL Rejections",
-      "type": "timeseries"
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "sum(increase(analytics_query_failures_total[$__range])) or vector(0)", "instant": true, "range": false, "refId": "A"}],
+      "title": "Failures / Rejections",
+      "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Dependency p95 latency by outcome, with dependency failure rate on the right axis.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2
-          },
-          "unit": "s"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/^failure /"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
-              {
-                "id": "custom.drawStyle",
-                "value": "bars"
-              },
-              {
-                "id": "unit",
-                "value": "reqps"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "id": 4,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum by (le, dependency, outcome) (rate(analytics_query_dependency_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "p95 {{dependency}} / {{outcome}}",
-          "refId": "A"
-        },
-        {
-          "expr": "sum by (dependency) (rate(analytics_query_dependency_duration_seconds_count{outcome=\"failure\"}[$__rate_interval]))",
-          "legendFormat": "failure {{dependency}}",
-          "refId": "B"
-        }
-      ],
-      "title": "Dependency Latency and Failures",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "description": "Requests currently executing across all analytics-query replicas.",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "noValue": "0",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 24,
-        "x": 0,
-        "y": 16
-      },
-      "id": 5,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "expr": "sum(analytics_query_active_requests) or vector(0)",
-          "refId": "A"
-        }
-      ],
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 0, "noValue": "0", "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"expr": "sum(analytics_query_active_requests) or vector(0)", "instant": true, "range": false, "refId": "A"}],
       "title": "Active Requests",
       "type": "stat"
     },
     {
-      "collapsed": true,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 20
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Completed requests grouped by their controlled application result during the selected dashboard time range.",
+      "fieldConfig": {
+        "defaults": {"decimals": 0, "noValue": "0", "unit": "short"},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "success"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]},
+          {"matcher": {"id": "byRegexp", "options": "/(failed|rejected|unavailable)/"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}
+        ]
       },
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 4},
+      "id": 5,
+      "options": {"displayMode": "gradient", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+      "targets": [{"expr": "sum by (status) (increase(analytics_query_requests_total[$__range]))", "instant": true, "legendFormat": "{{status}}", "range": false, "refId": "A"}],
+      "title": "Requests by Result — Selected Range",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Successful execution paths grouped by controlled execution mode and datasource during the selected dashboard time range.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 0, "noValue": "0", "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 4},
       "id": 6,
+      "options": {"displayMode": "gradient", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+      "targets": [{"expr": "sum by (mode, datasource) (increase(analytics_query_execution_total[$__range]))", "instant": true, "legendFormat": "{{mode}} / {{datasource}}", "range": false, "refId": "A"}],
+      "title": "Execution Paths — Selected Range",
+      "type": "bargauge"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 11},
+      "id": 10,
       "panels": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "description": "Request rate for each of the three public analytics endpoints.",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10,
-                "lineWidth": 2
-              },
-              "unit": "reqps"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 21
-          },
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Controlled failures and SQL rejections grouped by execution stage and reason during the selected dashboard time range.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "red", "mode": "fixed"}, "decimals": 0, "noValue": "0", "unit": "short"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 12},
           "id": 7,
-          "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          },
-          "targets": [
-            {
-              "expr": "sum by (endpoint) (rate(analytics_query_requests_total[$__rate_interval]))",
-              "legendFormat": "{{endpoint}}",
-              "refId": "A"
-            }
-          ],
-          "title": "Request Rate by Endpoint",
-          "type": "timeseries"
+          "options": {"displayMode": "gradient", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+          "targets": [{"expr": "sum by (stage, reason) (increase(analytics_query_failures_total[$__range]))", "instant": true, "legendFormat": "{{stage}} / {{reason}}", "range": false, "refId": "A"}],
+          "title": "Failures by Reason — Selected Range",
+          "type": "bargauge"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "description": "Normal and slow stage latency for the selected execution stages.",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Calls to each external dependency grouped by outcome during the selected dashboard time range.",
           "fieldConfig": {
-            "defaults": {
-              "custom": {
-                "drawStyle": "line",
-                "fillOpacity": 10,
-                "lineWidth": 2
-              },
-              "unit": "s"
-            },
-            "overrides": []
+            "defaults": {"decimals": 0, "noValue": "0", "unit": "short"},
+            "overrides": [
+              {"matcher": {"id": "byRegexp", "options": "/success$/"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]},
+              {"matcher": {"id": "byRegexp", "options": "/failure$/"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}
+            ]
           },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 21
-          },
+          "gridPos": {"h": 8, "w": 8, "x": 8, "y": 12},
           "id": 8,
-          "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "table",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
+          "options": {"displayMode": "gradient", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+          "targets": [{"expr": "sum by (dependency, outcome) (increase(analytics_query_dependency_duration_seconds_count[$__range]))", "instant": true, "legendFormat": "{{dependency}} / {{outcome}}", "range": false, "refId": "A"}],
+          "title": "Dependency Calls — Selected Range",
+          "type": "bargauge"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Average dependency call duration by outcome during the selected dashboard time range. Use the dependency call count beside this panel as the sample size.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "noValue": "0", "unit": "s"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 12},
+          "id": 9,
+          "options": {"displayMode": "gradient", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+          "targets": [{"expr": "sum by (dependency, outcome) (increase(analytics_query_dependency_duration_seconds_sum[$__range])) / clamp_min(sum by (dependency, outcome) (increase(analytics_query_dependency_duration_seconds_count[$__range])), 1)", "instant": true, "legendFormat": "{{dependency}} / {{outcome}}", "range": false, "refId": "A"}],
+          "title": "Average Dependency Duration",
+          "type": "bargauge"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Completed invocations for the selected internal stages, grouped by outcome over the selected dashboard time range.",
+          "fieldConfig": {
+            "defaults": {"decimals": 0, "noValue": "0", "unit": "short"},
+            "overrides": [
+              {"matcher": {"id": "byRegexp", "options": "/success$/"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]},
+              {"matcher": {"id": "byRegexp", "options": "/failure$/"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}
+            ]
           },
-          "targets": [
-            {
-              "expr": "histogram_quantile(0.50, sum by (le, stage, outcome) (rate(analytics_query_stage_duration_seconds_bucket{stage=~\"$stage\"}[$__rate_interval])))",
-              "legendFormat": "p50 {{stage}} / {{outcome}}",
-              "refId": "A"
-            },
-            {
-              "expr": "histogram_quantile(0.95, sum by (le, stage, outcome) (rate(analytics_query_stage_duration_seconds_bucket{stage=~\"$stage\"}[$__rate_interval])))",
-              "legendFormat": "p95 {{stage}} / {{outcome}}",
-              "refId": "B"
-            }
-          ],
-          "title": "Stage Duration",
-          "type": "timeseries"
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+          "id": 11,
+          "options": {"displayMode": "gradient", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+          "targets": [{"expr": "sum by (stage, outcome) (increase(analytics_query_stage_duration_seconds_count{stage=~\"$stage\"}[$__range]))", "instant": true, "legendFormat": "{{stage}} / {{outcome}}", "range": false, "refId": "A"}],
+          "title": "Stage Invocations — Selected Range",
+          "type": "bargauge"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Average duration of the selected internal stages by outcome during the selected dashboard time range.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "noValue": "0", "unit": "s"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+          "id": 12,
+          "options": {"displayMode": "gradient", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
+          "targets": [{"expr": "sum by (stage, outcome) (increase(analytics_query_stage_duration_seconds_sum{stage=~\"$stage\"}[$__range])) / clamp_min(sum by (stage, outcome) (increase(analytics_query_stage_duration_seconds_count{stage=~\"$stage\"}[$__range])), 1)", "instant": true, "legendFormat": "{{stage}} / {{outcome}}", "range": false, "refId": "A"}],
+          "title": "Average Stage Duration",
+          "type": "bargauge"
         }
       ],
       "title": "Component diagnostics",
@@ -419,35 +158,21 @@
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": [
-    "analytics-query",
-    "LLM",
-    "PostgreSQL",
-    "StarRocks"
-  ],
+  "tags": ["LLM", "PostgreSQL", "StarRocks"],
   "templating": {
     "list": [
       {
-        "current": {
-          "selected": true,
-          "text": "planner",
-          "value": "planner"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "prometheus"
-        },
-        "definition": "label_values(analytics_query_stage_duration_seconds_bucket, stage)",
+        "allValue": ".*",
+        "current": {"selected": true, "text": "All", "value": "$__all"},
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "definition": "label_values(analytics_query_stage_duration_seconds_count, stage)",
         "hide": 0,
         "includeAll": true,
         "label": "Stage",
         "multi": true,
         "name": "stage",
         "options": [],
-        "query": {
-          "query": "label_values(analytics_query_stage_duration_seconds_bucket, stage)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
+        "query": {"query": "label_values(analytics_query_stage_duration_seconds_count, stage)", "refId": "PrometheusVariableQueryEditor-VariableQuery"},
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
@@ -456,10 +181,7 @@
       }
     ]
   },
-  "time": {
-    "from": "now-6h",
-    "to": "now"
-  },
+  "time": {"from": "now-24h", "to": "now"},
   "timepicker": {},
   "timezone": "utc",
   "title": "Analytics Query Module",

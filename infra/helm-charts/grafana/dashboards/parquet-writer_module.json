@@ -1796,7 +1796,7 @@
     "links": [],
     "liveNow": false,
     "preload": false,
-    "tags": ["parquet-writer","Kafka", "HDFS"],
+    "tags": ["Kafka", "HDFS"],
     "timeSettings": {
       "timezone": "browser",
       "from": "now-1h",
