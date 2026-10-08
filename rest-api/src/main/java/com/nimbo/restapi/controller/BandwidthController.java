@@ -7,6 +7,7 @@ import com.nimbo.restapi.dto.request.BandwidthQueryRequestDto;
 import com.nimbo.restapi.dto.request.TimeRangeRequestDto;
 import com.nimbo.restapi.dto.response.ApiResponseDto;
 import com.nimbo.restapi.dto.response.BandwidthResponseDto;
+import com.nimbo.restapi.dto.response.TopBandwidthResponseDto;
 import com.nimbo.restapi.service.BandwidthQueryService;
 import com.nimbo.restapi.validation.ValidIpAddress;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,7 +52,7 @@ public class BandwidthController {
         in = ParameterIn.QUERY,
         example = END_TIME)
   })
-  public ResponseEntity<ApiResponseDto<List<BandwidthResponseDto>>> getTopBandwidthIps(
+  public ResponseEntity<ApiResponseDto<List<TopBandwidthResponseDto>>> getTopBandwidthIps(
       @Parameter(description = "Limit results (default: 10, valid range: 1-100)", example = "10")
           @Valid
           Integer limit,
@@ -71,7 +72,7 @@ public class BandwidthController {
             .endTime(timeRange.getEndTime())
             .build();
 
-    List<BandwidthResponseDto> result = bandwidthService.getTopBandwidthIps(request);
+    List<TopBandwidthResponseDto> result = bandwidthService.getTopBandwidthIps(request);
 
     return ResponseEntity.ok(ApiResponseDto.success(result));
   }
@@ -95,7 +96,7 @@ public class BandwidthController {
         example = END_TIME)
   })
   public ResponseEntity<ApiResponseDto<BandwidthResponseDto>> getBandwidthByIp(
-      @Parameter(description = "IP address", required = true, example = "192.168.1.152")
+      @Parameter(description = "IP address", required = true, example = "151.179.151.14")
           @PathVariable
           @ValidIpAddress
           String ip,

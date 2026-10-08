@@ -251,15 +251,12 @@ class AnalyticsToolContractTest {
     BandwidthRow row =
         new BandwidthRow(
             "10.0.0.1",
-            START,
-            END,
             number(10),
             number(20),
             number(30),
             number(1),
             number(2),
-            number(3),
-            END);
+            number(3));
 
     // When: the bandwidth tool normalizes the downstream response
     AnalyticsResult result = TopBandwidthIpsTool.normalize(response(row));

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nimbo.analyticsquery.client.restapi.dto.BandwidthRow;
 import com.nimbo.analyticsquery.client.restapi.dto.ConnectionRow;
 import com.nimbo.analyticsquery.config.RestApiClientConfiguration;
 import com.nimbo.analyticsquery.config.RestApiProperties;
@@ -51,6 +52,40 @@ class RestApiClientTest {
             "sortDirection=ASC",
             "srcIp=10.0.0.1",
             "dstIp=10.0.0.2");
+  }
+
+  @Test
+  void givenTopBandwidthResponseWhenExecutedThenSummaryContractIsPreserved() {
+    REST_API.respondWith(
+        200,
+        """
+        {
+          "success": true,
+          "data": [{
+            "ip": "83.222.96.124",
+            "inboundBytes": 9751430,
+            "outboundBytes": 8401767,
+            "totalBytes": 18153197,
+            "inboundPackets": 7892,
+            "outboundPackets": 6413,
+            "totalPackets": 14305
+          }],
+          "timestamp": "2026-10-08T11:30:00Z"
+        }
+        """);
+    RestApiClient client = client(Duration.ofSeconds(1));
+
+    RestApiResponse<java.util.List<BandwidthRow>> response =
+        client.getTopBandwidthIps(START, END, 10);
+
+    assertThat(response.data())
+        .singleElement()
+        .satisfies(
+            row -> {
+              assertThat(row.ip()).isEqualTo("83.222.96.124");
+              assertThat(row.totalBytes()).isEqualTo(java.math.BigInteger.valueOf(18_153_197));
+              assertThat(row.totalPackets()).isEqualTo(java.math.BigInteger.valueOf(14_305));
+            });
   }
 
   @Test
