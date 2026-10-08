@@ -253,6 +253,8 @@ pipeline {
                     withEnv(["DEPLOY_ARGS=${deployArgs}"]) {
                         sh 'bash jenkins/scripts/cd/helm-deploy.sh apply'
                     }
+                    def sha = headShortSha()
+                    modulesToDeployList().each { name -> recordState(name, sha) }
                 }
             }
         }
@@ -260,12 +262,6 @@ pipeline {
 
     post {
         success {
-            script {
-                if (env.MODULES_TO_DEPLOY?.trim()) {
-                    def sha = headShortSha()
-                    modulesToDeployList().each { name -> recordState(name, sha) }
-                }
-            }
             echo "Release pipeline finished successfully."
         }
         failure {
