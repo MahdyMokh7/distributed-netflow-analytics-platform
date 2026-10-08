@@ -73,7 +73,10 @@ public class AnalyticsQueryService {
       return result.withExplanation(explanation);
 
     } catch (LlmClientException exception) {
-      log.warn("LLM intent interpretation failed category={}", exception.kind());
+      log.warn(
+          "LLM intent interpretation failed category={} reason={}",
+          exception.kind(),
+          exception.getMessage());
       metrics.recordFailure(
           Stage.INTENT,
           exception.kind() == LlmClientException.Kind.UNAVAILABLE

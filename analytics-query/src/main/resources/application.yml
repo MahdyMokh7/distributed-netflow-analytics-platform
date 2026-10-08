@@ -26,7 +26,7 @@ springdoc:
 
 analytics-query:
   explanation:
-    timeout: ${ANALYTICS_QUERY_EXPLANATION_TIMEOUT:10s}
+    timeout: ${ANALYTICS_QUERY_EXPLANATION_TIMEOUT:45s}
     max-rows: ${ANALYTICS_QUERY_EXPLANATION_MAX_ROWS:20}
     max-payload-characters: ${ANALYTICS_QUERY_EXPLANATION_MAX_PAYLOAD_CHARACTERS:32000}
 
@@ -52,7 +52,7 @@ analytics-query:
   query-plan-safety:
     explain-timeout: ${ANALYTICS_QUERY_EXPLAIN_TIMEOUT:5s}
     max-explain-size: ${ANALYTICS_QUERY_MAX_EXPLAIN_SIZE:256KB}
-    max-estimated-rows: ${ANALYTICS_QUERY_MAX_ESTIMATED_ROWS:10000000}
+    max-estimated-rows: ${ANALYTICS_QUERY_MAX_ESTIMATED_ROWS:100000000}
     postgres-max-total-cost: ${ANALYTICS_QUERY_POSTGRES_MAX_TOTAL_COST:1000000}
 
   sql-execution:

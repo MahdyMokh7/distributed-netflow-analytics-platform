@@ -125,6 +125,26 @@ class IntentPromptFactoryTest {
   }
 
   @Test
+  void givenNestedRequirementsWhenPromptIsCreatedThenExactJsonContractsAreExplicit() {
+    // Given: the nested intent structures that previously allowed ambiguous model output
+    String invalidObservedShape = "Never use field or value properties";
+
+    // When: the intent system prompt is created
+    String prompt = promptFactory.createSystemPrompt();
+
+    // Then: every populated nested structure and array boundary is explicit
+    assertThat(prompt)
+        .contains("Every filters item must contain exactly")
+        .contains("Every ipRequirements item must contain exactly")
+        .contains("\"role\": \"SOURCE|DESTINATION|EITHER\"")
+        .contains("\"matchType\": \"EXACT|CIDR\"")
+        .contains("\"values\": [\"<IP address or CIDR>\"]")
+        .contains("The values property is always an array")
+        .contains(invalidObservedShape)
+        .contains("metrics, filters, ipRequirements, groupBy and sort are always arrays");
+  }
+
+  @Test
   void givenUtcPolicyWhenPromptIsCreatedThenUnzonedAndRelativeTimesUseUtc() {
     // Given: the platform UTC time contract
     String unzonedTimeRule = "Interpret times without a specified timezone as UTC";

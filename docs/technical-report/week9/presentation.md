@@ -105,6 +105,7 @@ Important details:
 - Files are marked processed only after all required processors complete.
 - A failed batch reuses its batch ID during retry.
 - Spark writes per partition, rather than collecting all aggregate rows on the driver.
+- JDBI is used instead of Spark JDBC because the write path requires controlled UPSERT behavior, which Spark JDBC does not provide natively.
 - Each Spark partition uses PostgreSQL binary `COPY` into permanent `UNLOGGED` staging tables.
 - Staging rows contain Spark partition and attempt identifiers, allowing a retried partition to replace its previous attempt.
 - The final merge is transactional and verifies that staged and merged row counts match.

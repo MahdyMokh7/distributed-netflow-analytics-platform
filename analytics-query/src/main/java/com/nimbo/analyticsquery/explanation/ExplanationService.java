@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbo.analyticsquery.config.ExplanationProperties;
 import com.nimbo.analyticsquery.intent.model.QueryRequirements;
 import com.nimbo.analyticsquery.llm.LlmClient;
+import com.nimbo.analyticsquery.llm.LlmClientException;
 import com.nimbo.analyticsquery.model.AnalyticsResult;
 import com.nimbo.analyticsquery.schema.SemanticColumn;
 import com.nimbo.analyticsquery.schema.SemanticSchemaCatalog;
@@ -18,6 +19,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -81,8 +83,8 @@ public class ExplanationService {
 
     try {
       future = executor.submit(() -> generate(question, requirements, result));
-    } catch (RuntimeException exception) {
-      log.warn("Analytics explanation capacity is unavailable");
+    } catch (RejectedExecutionException exception) {
+      log.warn("Analytics explanation generation failed reason=EXECUTOR_CAPACITY");
       return null;
     }
 
@@ -91,13 +93,32 @@ public class ExplanationService {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       future.cancel(true);
-      log.warn("Analytics explanation generation was interrupted");
+      log.warn("Analytics explanation generation failed reason=INTERRUPTED");
       return null;
-    } catch (ExecutionException | TimeoutException | RuntimeException exception) {
+    } catch (TimeoutException exception) {
       future.cancel(true);
-      log.warn("Analytics explanation generation failed");
+      log.warn("Analytics explanation generation failed reason=TIMEOUT");
+      return null;
+    } catch (ExecutionException exception) {
+      future.cancel(true);
+      log.warn("Analytics explanation generation failed reason={}", failureReason(exception));
+      return null;
+    } catch (RuntimeException exception) {
+      future.cancel(true);
+      log.warn("Analytics explanation generation failed reason=UNEXPECTED");
       return null;
     }
+  }
+
+  private String failureReason(ExecutionException exception) {
+    Throwable cause = exception.getCause();
+    if (cause instanceof LlmClientException llmException) {
+      return llmException.kind().name();
+    }
+    if (cause instanceof IllegalStateException) {
+      return "SERIALIZATION_FAILURE";
+    }
+    return "UNEXPECTED";
   }
 
   private String generate(String question, QueryRequirements requirements, AnalyticsResult result) {
