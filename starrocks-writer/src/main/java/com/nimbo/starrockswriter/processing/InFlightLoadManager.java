@@ -22,7 +22,6 @@ public class InFlightLoadManager {
 
   public void add(PendingLoad pendingLoad) {
     pendingLoads.addLast(pendingLoad);
-    metrics.futureSubmitted(workerNumber);
     pendingLoad
         .future()
         .whenComplete(
@@ -31,11 +30,9 @@ public class InFlightLoadManager {
               metrics.futureCompleted(workerNumber, error != null);
             });
     metrics.setInFlight(workerNumber, pendingLoads.size());
-    updateOldestAge();
   }
 
   public boolean isBackpressured() {
-    updateOldestAge();
     return pendingLoads.size() >= properties.getMaxInFlightRequests();
   }
 
@@ -58,17 +55,12 @@ public class InFlightLoadManager {
         StreamLoadResult result = pendingLoad.future().join();
         consumer.commitSync(pendingLoad.offsets());
         pendingLoads.removeFirst();
-        metrics.futureDrained(workerNumber, false, pendingLoad.drainDelayNanos());
+        metrics.futureDrained(workerNumber);
         metrics.setInFlight(workerNumber, pendingLoads.size());
         metrics.commit(workerNumber, "success", pendingLoad.rowCount());
-        log.info(
-            "Completed Stream Load label={}, rows={}, {}, inFlights={}",
-            pendingLoad.label(),
-            pendingLoad.rowCount(),
-            result.status(),
-            pendingLoads.size());
+        log.info("Completed Stream Load label={}, rows={}, {}, inFlights={}", pendingLoad.label(),
+            pendingLoad.rowCount(), result.status(), pendingLoads.size());
       } catch (CompletionException e) {
-        metrics.setOldestInFlightAge(workerNumber, pendingLoad.ageSeconds());
         log.error("Stream load failed label={}", pendingLoad.label(), e.getCause());
         return;
       } catch (RuntimeException e) {
@@ -76,11 +68,5 @@ public class InFlightLoadManager {
         throw e;
       }
     }
-    updateOldestAge();
-  }
-
-  private void updateOldestAge() {
-    PendingLoad oldest = pendingLoads.peekFirst();
-    metrics.setOldestInFlightAge(workerNumber, oldest == null ? 0 : oldest.ageSeconds());
   }
 }

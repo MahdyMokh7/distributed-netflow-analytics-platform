@@ -27,7 +27,7 @@ starrockswriter:
     client-id: starrocks-writer
     auto-offset-reset: earliest
     max-poll-records: 2000
-    poll-timeout-ms: 1000
+    poll-timeout-ms: 500
     consumer-count: 3
     max-partition-fetch-bytes: 4194304
     session-timeout-ms: 30000

@@ -5,7 +5,6 @@ import com.nimbo.starrockswriter.config.KafkaProperties;
 import com.nimbo.starrockswriter.metrics.StarRocksWriterMetrics;
 import com.nimbo.starrockswriter.processing.BatchProcessor;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.micrometer.core.instrument.Timer;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.ConnectException;
@@ -73,11 +72,9 @@ public class ConsumerWorker implements Runnable {
       }
     } catch (WakeupException exception) {
       if (running) {
-        metrics.workerException(workerNumber, "unexpected_wakeup");
         log.error("Worker {} received unexpected wakeup", workerNumber, exception);
       }
     } catch (RuntimeException exception) {
-      metrics.workerException(workerNumber, "unexpected_exception");
       log.error("Worker {} stopped due to unexpected error", workerNumber, exception);
     } finally {
       closeConsumer();
@@ -104,7 +101,7 @@ public class ConsumerWorker implements Runnable {
 
     if (batchProcessor.hasTooManyInFlightLoads()) {
       pauseKafka();
-      consumerPoll(Duration.ofMillis(100), "backpressure");
+      consumerPoll(Duration.ofMillis(100));
       return;
     }
     if (batchProcessor.isKafkaPaused()) {
@@ -112,26 +109,19 @@ public class ConsumerWorker implements Runnable {
     }
 
     ConsumerRecords<byte[], GenericRecord> records = consumerPoll(
-        Duration.ofMillis(kafkaProperties.getPollTimeoutMs()), "normal");
-    metrics.polled(workerNumber, records.count());
+        Duration.ofMillis(kafkaProperties.getPollTimeoutMs()));
     batchProcessor.processRecords(records);
     batchProcessor.flushIfNeeded();
   }
 
-  private ConsumerRecords<byte[], GenericRecord> consumerPoll(Duration timeout, String type) {
-    Timer.Sample sample = metrics.startPollTimer();
+  private ConsumerRecords<byte[], GenericRecord> consumerPoll(Duration timeout) {
     try {
       ConsumerRecords<byte[], GenericRecord> records = consumer.poll(timeout);
-      metrics.pollCompleted(workerNumber, type, sample);
       registryFailureCount = 0;
       return records;
     } catch (RecordDeserializationException exception) {
-      metrics.pollCompleted(workerNumber, type, sample);
       handleDeserializationFailure(exception);
       return ConsumerRecords.empty();
-    } catch (RuntimeException exception) {
-      metrics.pollCompleted(workerNumber, type, sample);
-      throw exception;
     }
   }
 
@@ -147,7 +137,6 @@ public class ConsumerWorker implements Runnable {
   private void retrySameOffsetAfterRegistryFailure(RecordDeserializationException exception) {
     TopicPartition partition = exception.topicPartition();
     registryFailureCount++;
-    metrics.workerException(workerNumber, "schema_registry_failure");
     log.warn(
         "Schema Registry/infrastructure failure. NOT publishing to DLQ and NOT advancing the "
             + "source offset; retrying the same offset after backoff: topic={}, partition={}, "
@@ -179,7 +168,6 @@ public class ConsumerWorker implements Runnable {
     try {
       dlqPublisher.publish(exception);
     } catch (PublishException publishException) {
-      metrics.workerException(workerNumber, "dlq_publish_error");
       log.error(
           "DLQ publish failed; source offset will NOT be advanced: topic={}, partition={}, offset={}, "
               + "dlqTopic={}",
@@ -208,7 +196,6 @@ public class ConsumerWorker implements Runnable {
   private boolean isRegistryFailure(Throwable failure) {
     RestClientException registryError = findCause(failure, RestClientException.class);
     if (registryError != null) {
-      // A missing schema ID is a record problem; a healthy Registry answered 40403.
       return !(registryError.getStatus() == 404
           && registryError.getErrorCode() == SCHEMA_NOT_FOUND_ERROR_CODE);
     }
@@ -261,14 +248,12 @@ public class ConsumerWorker implements Runnable {
     }
     consumer.pause(consumer.assignment());
     batchProcessor.markKafkaPaused();
-    metrics.backpressure(workerNumber, true);
     log.debug("Worker {} paused Kafka", workerNumber);
   }
 
   private void resumeKafka() {
     consumer.resume(consumer.assignment());
     batchProcessor.markKafkaResumed();
-    metrics.backpressure(workerNumber, false);
     log.debug("Worker {} resumed Kafka", workerNumber);
   }
 
@@ -276,7 +261,6 @@ public class ConsumerWorker implements Runnable {
     try {
       batchProcessor.shutdown(consumer);
     } catch (KafkaException exception) {
-      metrics.workerException(workerNumber, "shutdown_exception");
       log.error(
           "Kafka failure during batch processor shutdown for worker {}, topic={}, consumerGroup={}",
           workerNumber,

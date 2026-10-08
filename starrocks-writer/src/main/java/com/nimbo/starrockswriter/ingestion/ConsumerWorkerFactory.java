@@ -48,20 +48,10 @@ public class ConsumerWorkerFactory {
         new StreamLoadRetryHandler(starRocksProperties, streamLoadClient, workerNumber, metrics);
     StreamLoadLabelGenerator labelGenerator = new StreamLoadLabelGenerator();
 
-    BatchProcessor processor =
-        new BatchProcessor(
-            workerNumber,
-            validationService,
-            mapper,
-            schemaEvolutionManager,
-            batchBuffer,
-            inFlightLoadManager,
-            retryHandler,
-            labelGenerator,
-            metrics);
+    BatchProcessor processor = new BatchProcessor(workerNumber, validationService, mapper, schemaEvolutionManager,
+            batchBuffer, inFlightLoadManager, retryHandler, labelGenerator, metrics);
 
-    return new ConsumerWorker(
-        workerNumber, consumer, kafkaProperties, processor, metrics, dlqPublisher);
+    return new ConsumerWorker(workerNumber, consumer, kafkaProperties, processor, metrics, dlqPublisher);
   }
 
   private KafkaConsumer<byte[], GenericRecord> createKafkaConsumer() {
@@ -75,9 +65,7 @@ public class ConsumerWorkerFactory {
     props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, kafkaProperties.getMaxPollRecords());
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, kafkaProperties.getAutoOffsetReset());
     props.put(ConsumerConfig.CLIENT_ID_CONFIG, kafkaProperties.getClientId());
-    props.put(
-        ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG,
-        kafkaProperties.getMaxPartitionFetchBytes());
+    props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, kafkaProperties.getMaxPartitionFetchBytes());
 
     props.put("schema.registry.url", schemaRegistryProperties.getUrl());
     props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);

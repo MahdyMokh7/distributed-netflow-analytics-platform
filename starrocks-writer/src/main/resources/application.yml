@@ -65,6 +65,6 @@ starrockswriter:
     max-in-flight-requests: ${STARROCKS_MAX_IN_FLIGHT_REQUESTS:8}
     retry-backoff-ms: ${STARROCKS_RETRY_BACKOFF_MS:1000}
     max-batch-size-rows: ${STARROCKS_MAX_BATCH_SIZE_ROWS:10000}
-    max-batch-time-ms: ${STARROCKS_MAX_BATCH_TIME_MS:1500}
+    max-batch-time-ms: ${STARROCKS_MAX_BATCH_TIME_MS:500}
     schema-evolution-timeout-ms: ${STARROCKS_SCHEMA_EVOLUTION_TIMEOUT_MS:120000}
     schema-evolution-poll-ms: ${STARROCKS_SCHEMA_EVOLUTION_POLL_MS:1000}

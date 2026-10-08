@@ -44,27 +44,17 @@ public class BatchProcessor {
       try {
         processRecord(consumerRecord);
       } catch (NonSkippableProcessingException exception) {
-        log.error(
-            "Non-skippable processing failure; offset will not be advanced: topic={}, partition={},"
-                + " offset={}",
-            consumerRecord.topic(),
-            consumerRecord.partition(),
-            consumerRecord.offset(),
-            exception);
+        log.error("Non-skippable processing failure; offset will not be advanced: topic={}, partition={}, offset={}",
+            consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(), exception);
         throw exception;
       } catch (RuntimeException exception) {
         if (!(exception instanceof AccountedProcessingException)) {
           metrics.recordProcessed(workerNumber, "processing_error");
         }
         log.error(
-            "Skipping record after record-local processing failure: topic={}, partition={},"
-                + " offset={}",
-            consumerRecord.topic(),
-            consumerRecord.partition(),
-            consumerRecord.offset(),
-            exception);
-        batchBuffer.addOffset(
-            new TopicPartition(consumerRecord.topic(), consumerRecord.partition()),
+            "Skipping record after record-local processing failure: topic={}, partition={}," + " offset={}",
+            consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(), exception);
+        batchBuffer.addOffset(new TopicPartition(consumerRecord.topic(), consumerRecord.partition()),
             new OffsetAndMetadata(consumerRecord.offset() + 1));
       }
     }
@@ -85,8 +75,7 @@ public class BatchProcessor {
       throw new NonSkippableProcessingException(exception);
     }
     ValidationResult validation = validationService.validate(avroRecord);
-    TopicPartition partition =
-        new TopicPartition(consumerRecord.topic(), consumerRecord.partition());
+    TopicPartition partition = new TopicPartition(consumerRecord.topic(), consumerRecord.partition());
     OffsetAndMetadata offset = new OffsetAndMetadata(consumerRecord.offset() + 1);
 
     if (!validation.valid()) {
@@ -97,12 +86,7 @@ public class BatchProcessor {
 
     StarRocksRow row;
     try {
-      row =
-          mapper.map(
-              avroRecord,
-              consumerRecord.topic(),
-              consumerRecord.partition(),
-              consumerRecord.offset(),
+      row = mapper.map(avroRecord, consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
               consumerRecord.timestamp());
     } catch (RuntimeException exception) {
       metrics.recordProcessed(workerNumber, "mapping_error");
@@ -111,7 +95,6 @@ public class BatchProcessor {
 
     batchBuffer.add(row, partition, offset);
     metrics.recordProcessed(workerNumber, "success");
-    updateBatchMetrics();
   }
 
   public void skipDeserializationFailure(TopicPartition partition, long nextOffset) {
@@ -120,7 +103,6 @@ public class BatchProcessor {
   }
 
   public void flushIfNeeded() {
-    updateBatchMetrics();
     BatchBuffer.FlushReason reason = batchBuffer.flushReason();
     if (reason == null) {
       return;
@@ -130,28 +112,21 @@ public class BatchProcessor {
 
   private void submitBatch(BatchBuffer.FlushReason reason) {
     if (batchBuffer.isEmpty()) {
-      metrics.emptyBatch();
       return;
     }
 
     BatchBuffer.BatchSnapshot batchSnapshot = batchBuffer.snapshot();
     String label = labelGenerator.generateLabel(workerNumber, batchSnapshot.offsets());
-    CompletableFuture<StreamLoadResult> future =
-        batchSnapshot.rows().isEmpty()
+    CompletableFuture<StreamLoadResult> future = batchSnapshot.rows().isEmpty()
             ? CompletableFuture.completedFuture(StreamLoadResult.offsetOnly(label))
             : retryHandler.sendRequest(batchSnapshot.rows(), label);
-    PendingLoad pendingLoad =
-        new PendingLoad(label, batchSnapshot.rows().size(), batchSnapshot.offsets(), future);
+    PendingLoad pendingLoad = new PendingLoad(label, batchSnapshot.rows().size(), batchSnapshot.offsets(), future);
 
     inFlightLoadManager.add(pendingLoad);
-    metrics.batchSubmitted(workerNumber, reason.name().toLowerCase(), batchSnapshot.rows().size());
+    metrics.batchSubmitted(workerNumber, batchSnapshot.rows().size());
     batchBuffer.clear();
-    updateBatchMetrics();
 
-    log.debug(
-        "Worker {} submitted batch. label={}, rows={}",
-        workerNumber,
-        label,
+    log.debug("Worker {} submitted batch. reason={}, label={}, rows={}", workerNumber, reason, label,
         batchSnapshot.rows().size());
   }
 
@@ -183,10 +158,6 @@ public class BatchProcessor {
       submitBatch(BatchBuffer.FlushReason.SHUTDOWN);
     }
     inFlightLoadManager.drain(consumer);
-  }
-
-  private void updateBatchMetrics() {
-    metrics.setOpenBatch(workerNumber, batchBuffer.rowCount(), batchBuffer.ageSeconds());
   }
 
   private static final class AccountedProcessingException extends RuntimeException {
