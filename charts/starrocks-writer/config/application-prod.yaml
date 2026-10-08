@@ -26,7 +26,7 @@ starrockswriter:
     consumer-group: netflow-starrocks-writer
     client-id: starrocks-writer
     auto-offset-reset: earliest
-    max-poll-records: 20000
+    max-poll-records: 2000
     poll-timeout-ms: 1000
     consumer-count: 3
     max-partition-fetch-bytes: 4194304
@@ -49,5 +49,5 @@ starrockswriter:
     merge-commit-parallel: 3
     max-in-flight-requests: 9
     retry-backoff-ms: 1000
-    max-batch-size-rows: 100000
+    max-batch-size-rows: 10000
     max-batch-time-ms: 1500
