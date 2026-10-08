@@ -171,6 +171,37 @@ public class IntentPromptFactory {
            ASC
            DESC
 
+           Nested requirement structures:
+
+           - Every metrics item must contain exactly:
+             {
+               "field": "<approved semantic field>",
+               "aggregation": "NONE|SUM|AVG|MIN|MAX|COUNT|COUNT_DISTINCT"
+             }
+           - Every filters item must contain exactly:
+             {
+               "field": "<approved semantic field>",
+               "operator": "EQ|NOT_EQ|GT|GTE|LT|LTE|IN|NOT_IN|BETWEEN",
+               "values": ["<value>"]
+             }
+             The values property is always an array, including for one value.
+           - Every ipRequirements item must contain exactly:
+             {
+               "role": "SOURCE|DESTINATION|EITHER",
+               "matchType": "EXACT|CIDR",
+               "values": ["<IP address or CIDR>"]
+             }
+             The values property is always an array, including for one value.
+             Never use field or value properties in an ipRequirements item.
+           - Every sort item must contain exactly:
+             {
+               "field": "<approved semantic field>",
+               "aggregation": "<aggregation or null>",
+               "direction": "ASC|DESC"
+             }
+           - metrics, filters, ipRequirements, groupBy and sort are always arrays,
+             whether empty or populated.
+
            Rules:
 
            - A SUCCESS intent must always contain a bounded UTC time range.
@@ -195,6 +226,9 @@ public class IntentPromptFactory {
            - Use null granularity when no time bucket was requested.
            - IP filtering must use ipRequirements, not generic filters.
            - Use SOURCE, DESTINATION or EITHER to preserve IP semantics.
+           - Exact source-IP filtering must use role SOURCE, matchType EXACT and
+             a one-element values array. Destination and either-IP filtering use
+             the corresponding role with the same array contract.
            - Use trafficDirection only when inbound/outbound semantics were
              requested; otherwise use UNSPECIFIED.
            - dimensions contain semantic dimensions requested in the result.

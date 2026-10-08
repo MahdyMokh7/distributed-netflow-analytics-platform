@@ -58,7 +58,7 @@ intent:
   maxTimeRange: 7d
 
 explanation:
-  timeout: 10s
+  timeout: 45s
   maxRows: 20
   maxPayloadCharacters: 32000
 
@@ -68,7 +68,7 @@ sqlGeneration:
 queryPlanSafety:
   explainTimeout: 5s
   maxExplainSize: 256KB
-  maxEstimatedRows: "10000000"
+  maxEstimatedRows: "100000000"
   postgresMaxTotalCost: "1000000"
 
 sqlExecution:

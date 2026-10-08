@@ -1,8 +1,13 @@
 package com.nimbo.analyticsquery.llm;
 
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
+import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import com.nimbo.analyticsquery.config.LlmProperties;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -64,7 +69,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
     } catch (JsonProcessingException exception) {
       throw new LlmClientException(
           LlmClientException.Kind.INVALID_RESPONSE,
-          "LLM returned invalid structured JSON",
+          "reason=" + jsonFailureReason(exception) + " path=" + jsonPath(exception),
           exception);
     }
   }
@@ -136,6 +141,45 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
 
   private LlmClientException invalidResponse(String message) {
     return new LlmClientException(LlmClientException.Kind.INVALID_RESPONSE, message);
+  }
+
+  private String jsonFailureReason(JsonProcessingException exception) {
+    if (exception instanceof UnrecognizedPropertyException) {
+      return "UNKNOWN_FIELD";
+    }
+    if (exception instanceof InvalidFormatException invalidFormat
+        && invalidFormat.getTargetType() != null
+        && invalidFormat.getTargetType().isEnum()) {
+      return "INVALID_ENUM";
+    }
+    if (exception instanceof MismatchedInputException) {
+      return "INVALID_STRUCTURE";
+    }
+    if (exception instanceof JsonParseException) {
+      return "JSON_SYNTAX";
+    }
+    return "INVALID_JSON";
+  }
+
+  private String jsonPath(JsonProcessingException exception) {
+    if (!(exception instanceof JsonMappingException mappingException)
+        || mappingException.getPath().isEmpty()) {
+      return "root";
+    }
+
+    StringBuilder path = new StringBuilder();
+    for (JsonMappingException.Reference reference : mappingException.getPath()) {
+      if (reference.getFieldName() != null) {
+        if (!path.isEmpty()) {
+          path.append('.');
+        }
+        path.append(reference.getFieldName());
+      } else if (reference.getIndex() >= 0) {
+        path.append('[').append(reference.getIndex()).append(']');
+      }
+    }
+
+    return path.isEmpty() ? "root" : path.toString();
   }
 
   private void validatePrompt(String prompt, String name) {

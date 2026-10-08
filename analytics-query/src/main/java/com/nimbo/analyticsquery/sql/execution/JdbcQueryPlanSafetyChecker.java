@@ -64,7 +64,12 @@ abstract class JdbcQueryPlanSafetyChecker implements QueryPlanSafetyChecker {
               ? QueryPlanSafetyException.Reason.EXPLAIN_TIMEOUT
               : QueryPlanSafetyException.Reason.EXPLAIN_FAILED;
 
-      log.warn("Could not validate {} query plan: {}", analysisDataSource, reason);
+      log.warn(
+          "Could not validate {} query plan reason={} sqlState={} vendorCode={}",
+          analysisDataSource,
+          reason,
+          exception.getSQLState(),
+          exception.getErrorCode());
 
       throw new QueryPlanSafetyException(
           reason, "Query plan could not be validated safely", exception);

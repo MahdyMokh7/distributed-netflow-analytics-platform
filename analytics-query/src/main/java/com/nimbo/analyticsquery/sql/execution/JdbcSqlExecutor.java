@@ -72,6 +72,12 @@ public abstract class JdbcSqlExecutor implements SqlExecutor {
           if (isTimeout(exception)) {
             cancelQuietly(statement);
 
+            log.warn(
+                "{} SQL execution failed reason=TIMEOUT sqlState={} vendorCode={}",
+                analysisDataSource,
+                exception.getSQLState(),
+                exception.getErrorCode());
+
             throw new SqlExecutionException(
                 SqlExecutionException.Kind.TIMEOUT, "SQL execution timed out", exception);
           }
@@ -84,6 +90,12 @@ public abstract class JdbcSqlExecutor implements SqlExecutor {
       throw exception;
 
     } catch (SQLException exception) {
+      log.warn(
+          "{} SQL execution failed reason=DATASOURCE_ERROR sqlState={} vendorCode={}",
+          analysisDataSource,
+          exception.getSQLState(),
+          exception.getErrorCode());
+
       throw new SqlExecutionException(
           SqlExecutionException.Kind.DATASOURCE_ERROR, "SQL execution failed", exception);
     }
