@@ -90,7 +90,7 @@ public class ProtocolController {
       @Parameter(
               description = "Layer 7 protocol identifier (TCP: 6.0, UDP: 5.0)",
               required = true,
-              example = "5.0")
+              example = "3000.0")
           @PathVariable
           Double l7Protocol,
       @Parameter(hidden = true) @Valid TimeRangeRequestDto timeRange) {

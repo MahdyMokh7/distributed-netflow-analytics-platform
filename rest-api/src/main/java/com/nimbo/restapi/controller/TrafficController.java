@@ -77,7 +77,7 @@ public class TrafficController {
         example = "DESC")
   })
   public ResponseEntity<ApiResponseDto<List<TrafficResponseDto>>> getTrafficByIp(
-      @Parameter(description = "Source IP address", required = true, example = "70.192.246.222")
+      @Parameter(description = "Source IP address", required = true, example = "223.191.114.202")
           @PathVariable
           @ValidIpAddress
           String srcIp,
@@ -147,7 +147,7 @@ public class TrafficController {
         example = "DESC")
   })
   public ResponseEntity<ApiResponseDto<List<TrafficResponseDto>>> queryTraffic(
-      @Parameter(description = "Optional source IP filter", example = "70.192.246.222")
+      @Parameter(description = "Optional source IP filter", example = "223.191.114.202")
           @ValidIpAddress
           String srcIp,
       @Parameter(hidden = true) @Valid TimeRangeRequestDto timeRange,

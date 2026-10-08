@@ -80,7 +80,7 @@ public class ConnectionController {
       @Parameter(
               description = "IP address (source or destination)",
               required = true,
-              example = "172.31.69.23")
+              example = "85.214.251.214")
           @PathVariable
           @ValidIpAddress
           String ip,
@@ -148,10 +148,10 @@ public class ConnectionController {
         example = "DESC")
   })
   public ResponseEntity<ApiResponseDto<List<ConnectionResponseDto>>> queryConnections(
-      @Parameter(description = "Optional source IP filter", example = "172.31.69.23")
+      @Parameter(description = "Optional source IP filter", example = "85.214.251.214")
           @ValidIpAddress
           String srcIp,
-      @Parameter(description = "Optional destination IP filter", example = "18.219.211.138")
+      @Parameter(description = "Optional destination IP filter", example = "86.128.31.42")
           @ValidIpAddress
           String dstIp,
       @Parameter(hidden = true) @Valid TimeRangeRequestDto timeRange,

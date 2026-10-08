@@ -2,6 +2,7 @@ package com.nimbo.restapi.service.impl;
 
 import com.nimbo.restapi.dto.request.BandwidthQueryRequestDto;
 import com.nimbo.restapi.dto.response.BandwidthResponseDto;
+import com.nimbo.restapi.dto.response.TopBandwidthResponseDto;
 import com.nimbo.restapi.exception.InvalidTimeRangeException;
 import com.nimbo.restapi.exception.ResourceNotFoundException;
 import com.nimbo.restapi.repository.BandwidthRepository;
@@ -43,7 +44,7 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
       key = "'top_' + #request.limit + '_' + #request.startTime + '_' + #request.endTime")
   @CircuitBreaker(name = "database")
   @Retry(name = "database")
-  public List<BandwidthResponseDto> getTopBandwidthIps(BandwidthQueryRequestDto request) {
+  public List<TopBandwidthResponseDto> getTopBandwidthIps(BandwidthQueryRequestDto request) {
     long startTime = System.currentTimeMillis();
 
     try {
@@ -63,7 +64,7 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
         throw new ResourceNotFoundException("No bandwidth data found for the given criteria");
       }
 
-      List<BandwidthResponseDto> responses =
+      List<TopBandwidthResponseDto> responses =
           topBandwidth.stream().map(this::toTopResponse).collect(Collectors.toList());
 
       long duration = System.currentTimeMillis() - startTime;
@@ -126,10 +127,10 @@ public class BandwidthQueryServiceImpl implements BandwidthQueryService {
     }
   }
 
-  private BandwidthResponseDto toTopResponse(BandwidthSummaryProjection row) {
+  private TopBandwidthResponseDto toTopResponse(BandwidthSummaryProjection row) {
     BigInteger inboundPackets = row.getInboundPackets();
     BigInteger outboundPackets = row.getOutboundPackets();
-    return BandwidthResponseDto.builder()
+    return TopBandwidthResponseDto.builder()
         .ip(row.getIp())
         .inboundBytes(row.getInboundBytes())
         .outboundBytes(row.getOutboundBytes())
