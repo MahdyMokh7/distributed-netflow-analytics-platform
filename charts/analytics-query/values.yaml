@@ -25,7 +25,7 @@ restApi:
   readTimeout: 15s
 
 llm:
-  baseUrl: http://saca-api.inside.sahab.ir:3100
+  baseUrl: http://10.10.61.51:33101
   model: AliBaba/Qwen3.8-27B
   chatCompletionsPath: /v1/chat/completions
   connectTimeout: 10s
