@@ -1,17 +1,12 @@
 package com.nimbo.cubemaker.retention;
 
 import com.nimbo.cubemaker.config.BatchConfig;
-import com.nimbo.cubemaker.config.HdfsConfig;
 import com.nimbo.cubemaker.discovery.NetflowFileTimestampParser;
-import java.io.IOException;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.jdbi.v3.core.Jdbi;
 import org.springframework.stereotype.Component;
@@ -32,20 +27,12 @@ public class RetentionMaintenanceService {
   private final BatchConfig batchConfig;
   private final RetentionPolicy retentionPolicy;
   private final Jdbi jdbi;
-  private final FileSystem fileSystem;
-  private final HdfsConfig hdfsConfig;
 
   public RetentionMaintenanceService(
-      BatchConfig batchConfig,
-      RetentionPolicy retentionPolicy,
-      Jdbi jdbi,
-      FileSystem fileSystem,
-      HdfsConfig hdfsConfig) {
+      BatchConfig batchConfig, RetentionPolicy retentionPolicy, Jdbi jdbi) {
     this.batchConfig = batchConfig;
     this.retentionPolicy = retentionPolicy;
     this.jdbi = jdbi;
-    this.fileSystem = fileSystem;
-    this.hdfsConfig = hdfsConfig;
   }
 
   public RetentionWindow maintain() {
@@ -55,13 +42,6 @@ public class RetentionMaintenanceService {
     }
 
     maintainDatabasePartitions(window);
-    try {
-      deleteExpiredSparkHistory(window);
-    } catch (RuntimeException exception) {
-      log.error(
-          "Spark history retention failed; cleanup will be retried before the next batch",
-          exception);
-    }
     return window;
   }
 
@@ -159,55 +139,7 @@ public class RetentionMaintenanceService {
     }
   }
 
-  private void deleteExpiredSparkHistory(RetentionWindow window) {
-    Path root = new Path(hdfsConfig.getFullSparkHistoryPath());
-    try {
-      if (!fileSystem.exists(root)) {
-        return;
-      }
-      for (FileStatus status : fileSystem.listStatus(root)) {
-        HistoryStatus historyStatus = inspectHistory(status);
-        if (!historyStatus.inProgress()
-            && historyStatus.latestModification().isBefore(window.cutoffInstant())) {
-          deleteRequired(status.getPath());
-        }
-      }
-    } catch (IOException exception) {
-      throw new IllegalStateException(
-          "Failed to apply Spark history retention in " + root, exception);
-    }
-  }
-
-  private HistoryStatus inspectHistory(FileStatus status) throws IOException {
-    Instant latest = Instant.ofEpochMilli(status.getModificationTime());
-    boolean inProgress = status.getPath().getName().endsWith(".inprogress");
-    if (!status.isDirectory()) {
-      return new HistoryStatus(latest, inProgress);
-    }
-    for (FileStatus child : fileSystem.listStatus(status.getPath())) {
-      HistoryStatus childStatus = inspectHistory(child);
-      if (childStatus.latestModification().isAfter(latest)) {
-        latest = childStatus.latestModification();
-      }
-      inProgress |= childStatus.inProgress();
-    }
-    return new HistoryStatus(latest, inProgress);
-  }
-
-  private void deleteRequired(Path path) {
-    try {
-      if (!fileSystem.delete(path, true)) {
-        throw new IOException("HDFS refused to delete " + path);
-      }
-      log.info("Deleted expired HDFS path: {}", path);
-    } catch (IOException exception) {
-      throw new IllegalStateException("Failed to delete expired HDFS path " + path, exception);
-    }
-  }
-
   private String quoteIdentifier(String identifier) {
     return '"' + identifier.replace("\"", "\"\"") + '"';
   }
-
-  private record HistoryStatus(Instant latestModification, boolean inProgress) {}
 }

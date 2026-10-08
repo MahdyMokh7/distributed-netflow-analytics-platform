@@ -69,9 +69,7 @@ spark:
 
   historyServer:
     cleaner:
-      enabled: true
-      interval: 1d
-      maxAge: 7d
+      enabled: false
 
   workerCleanup:
     enabled: true
