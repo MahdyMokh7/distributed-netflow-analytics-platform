@@ -24,6 +24,7 @@ import com.nimbo.cubemaker.config.BatchConfig;
 import com.nimbo.cubemaker.config.OutputConfig;
 import com.nimbo.cubemaker.exception.BatchProcessingException;
 import com.nimbo.cubemaker.metrics.CubeMakerMetrics.Stage;
+import com.nimbo.cubemaker.spark.SparkJobContext;
 import com.nimbo.cubemaker.writer.PostgresWriter;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -61,7 +62,13 @@ public class ProtocolProcessor extends BaseProcessor {
     try {
       Dataset<Row> aggregated = aggregateProtocols(sourceDf);
 
-      long recordCount = aggregated.count();
+      long recordCount =
+          SparkJobContext.execute(
+              sourceDf.sparkSession(),
+              batchId,
+              "protocol-count",
+              "Count protocol aggregate rows",
+              aggregated::count);
       log.info("Total protocol aggregation records: {}", recordCount);
 
       if (recordCount == 0) {
@@ -96,7 +103,7 @@ public class ProtocolProcessor extends BaseProcessor {
 
   private void writeOutput(Dataset<Row> aggregated, UUID batchId) {
     if (outputConfig.isConsoleMode()) {
-      writeToConsole(aggregated);
+      writeToConsole(aggregated, batchId);
     }
 
     if (outputConfig.isDatabaseMode()) {
@@ -104,14 +111,19 @@ public class ProtocolProcessor extends BaseProcessor {
     }
   }
 
-  private void writeToConsole(Dataset<Row> aggregated) {
+  private void writeToConsole(Dataset<Row> aggregated, UUID batchId) {
     log.info("Top 20 Protocol Statistics in Console (by usage):");
     log.info(
         "L7 Proto | Window Start | Window End | In Bytes | "
             + "Out Bytes | In Packets | Out Packets | Connection Count");
     log.info("-".repeat(140));
 
-    aggregated.show(DISPLAY_LIMIT, false);
+    SparkJobContext.execute(
+        aggregated.sparkSession(),
+        batchId,
+        "protocol-preview",
+        "Preview protocol aggregate rows",
+        () -> aggregated.show(DISPLAY_LIMIT, false));
   }
 
   private void writeToDatabase(Dataset<Row> aggregated, UUID batchId) {

@@ -27,6 +27,7 @@ import com.nimbo.cubemaker.config.BatchConfig;
 import com.nimbo.cubemaker.config.OutputConfig;
 import com.nimbo.cubemaker.exception.BatchProcessingException;
 import com.nimbo.cubemaker.metrics.CubeMakerMetrics.Stage;
+import com.nimbo.cubemaker.spark.SparkJobContext;
 import com.nimbo.cubemaker.writer.PostgresWriter;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -64,7 +65,13 @@ public class ConnectionProcessor extends BaseProcessor {
     try {
       Dataset<Row> aggregated = aggregateConnections(sourceDf);
 
-      long recordCount = aggregated.count();
+      long recordCount =
+          SparkJobContext.execute(
+              sourceDf.sparkSession(),
+              batchId,
+              "connection-count",
+              "Count connection aggregate rows",
+              aggregated::count);
       log.info("Total connection aggregation records: {}", recordCount);
 
       if (recordCount == 0) {
@@ -108,7 +115,7 @@ public class ConnectionProcessor extends BaseProcessor {
 
   private void writeOutput(Dataset<Row> aggregated, UUID batchId) {
     if (outputConfig.isConsoleMode()) {
-      writeToConsole(aggregated);
+      writeToConsole(aggregated, batchId);
     }
 
     if (outputConfig.isDatabaseMode()) {
@@ -116,14 +123,19 @@ public class ConnectionProcessor extends BaseProcessor {
     }
   }
 
-  private void writeToConsole(Dataset<Row> aggregated) {
+  private void writeToConsole(Dataset<Row> aggregated, UUID batchId) {
     log.info("Top 20 Connection Aggregations in Console ({} windows):", windowDuration);
     log.info(
         "Id | Src IP | Dst IP | Window Start | Window End | In Bytes | Out Bytes | In Packets | Out"
             + " Packets");
     log.info("-".repeat(110));
 
-    aggregated.show(DISPLAY_LIMIT, false);
+    SparkJobContext.execute(
+        aggregated.sparkSession(),
+        batchId,
+        "connection-preview",
+        "Preview connection aggregate rows",
+        () -> aggregated.show(DISPLAY_LIMIT, false));
   }
 
   private void writeToDatabase(Dataset<Row> aggregated, UUID batchId) {

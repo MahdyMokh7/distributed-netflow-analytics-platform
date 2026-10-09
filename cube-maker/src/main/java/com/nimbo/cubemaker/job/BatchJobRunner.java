@@ -15,6 +15,7 @@ import com.nimbo.cubemaker.metrics.CubeMakerMetrics.Stage;
 import com.nimbo.cubemaker.processor.BaseProcessor;
 import com.nimbo.cubemaker.retention.RetentionMaintenanceService;
 import com.nimbo.cubemaker.retention.RetentionWindow;
+import com.nimbo.cubemaker.spark.SparkJobContext;
 import io.micrometer.core.instrument.Timer;
 import java.util.List;
 import java.util.UUID;
@@ -111,8 +112,18 @@ public class BatchJobRunner {
 
       log.info("Found {} new files to process (batch: {})", files.size(), batchId);
 
-      cachedDf = readAndCacheFiles(files, retentionWindow);
-      long sourceRecordCount = executeStage(Stage.PARQUET_MATERIALIZATION, cachedDf::count);
+      cachedDf = readAndCacheFiles(files, retentionWindow, batchId);
+      Dataset<Row> materializedDataset = cachedDf;
+      long sourceRecordCount =
+          executeStage(
+              Stage.PARQUET_MATERIALIZATION,
+              () ->
+                  SparkJobContext.execute(
+                      spark,
+                      batchId,
+                      "input-materialization",
+                      "Materialize and count cached source records",
+                      materializedDataset::count));
 
       if (!hasValidRecords(sourceRecordCount, files, batchId)) {
         executeStage(Stage.STATE_COMMIT, () -> markFilesAsProcessed(files, batchId));
@@ -153,12 +164,19 @@ public class BatchJobRunner {
     return UUID.randomUUID();
   }
 
-  private Dataset<Row> readAndCacheFiles(List<Path> files, RetentionWindow retentionWindow) {
+  private Dataset<Row> readAndCacheFiles(
+      List<Path> files, RetentionWindow retentionWindow, UUID batchId) {
     String[] paths = files.stream().map(Path::toString).toArray(String[]::new);
 
     log.info("Reading {} Parquet files into shared batch Dataset", paths.length);
 
-    Dataset<Row> source = spark.read().parquet(paths);
+    Dataset<Row> source =
+        SparkJobContext.execute(
+            spark,
+            batchId,
+            "input-read",
+            "Read metadata for " + paths.length + " Parquet files",
+            () -> spark.read().parquet(paths));
     if (retentionWindow.isBounded()) {
       source =
           source.filter(

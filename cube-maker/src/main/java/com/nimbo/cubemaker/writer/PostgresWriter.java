@@ -10,6 +10,7 @@ import com.nimbo.cubemaker.dao.ProtocolAggregateDao;
 import com.nimbo.cubemaker.metrics.CubeMakerMetrics;
 import com.nimbo.cubemaker.metrics.CubeMakerMetrics.Cube;
 import com.nimbo.cubemaker.metrics.CubeMakerMetrics.Stage;
+import com.nimbo.cubemaker.spark.SparkJobContext;
 import io.micrometer.core.instrument.Timer;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -132,7 +133,13 @@ public class PostgresWriter {
 
     Timer.Sample writeTimer = metrics.startTimer();
     try {
-      dataset.repartition(writerPartitions).foreachPartition(stagingWriter::call);
+      String sparkActionName = sparkActionName(cube);
+      SparkJobContext.execute(
+          dataset.sparkSession(),
+          batchId,
+          sparkActionName + "-stage",
+          "COPY " + sparkActionName + " aggregates to PostgreSQL staging",
+          () -> dataset.repartition(writerPartitions).foreachPartition(stagingWriter::call));
       long stagedRows =
           driverJdbi.withHandle(
               handle ->
@@ -190,6 +197,10 @@ public class PostgresWriter {
                 .one());
   }
 
+  private String sparkActionName(Cube cube) {
+    return cube == Cube.TOP_IP ? "bandwidth" : cube.tagValue();
+  }
+
   private <T, D> long writeAggregates(
       Dataset<Row> dataset,
       UUID batchId,
@@ -230,7 +241,12 @@ public class PostgresWriter {
 
     Timer.Sample writeTimer = metrics.startTimer();
     try {
-      dataset.repartition(writerPartitions).foreachPartition(partitionWriter::call);
+      SparkJobContext.execute(
+          dataset.sparkSession(),
+          batchId,
+          cube.tagValue() + "-write",
+          "Upsert " + cube.tagValue() + " aggregates into PostgreSQL",
+          () -> dataset.repartition(writerPartitions).foreachPartition(partitionWriter::call));
     } catch (RuntimeException | Error e) {
       metrics.stageFailed(writeStage);
       throw e;
