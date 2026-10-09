@@ -54,7 +54,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "description": "Logical nimbo_db size reported independently by each PostgreSQL replica.",
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "min": 0, "unit": "suffix: GiB"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 0, "y": 4},
       "id": 5,
       "options": {"displayMode": "basic", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
@@ -65,7 +65,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "description": "Current physical Kafka logs on each broker, including replica copies.",
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "min": 0, "unit": "suffix: GiB"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 6, "y": 4},
       "id": 6,
       "options": {"displayMode": "basic", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
@@ -76,7 +76,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "description": "Current physical HDFS bytes on each DataNode.",
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "min": 0, "unit": "suffix: GiB"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 12, "y": 4},
       "id": 7,
       "options": {"displayMode": "basic", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
@@ -87,7 +87,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "description": "Current physical data bytes on each StarRocks BE node.",
-      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "unit": "suffix: GiB"}, "overrides": []},
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "blue", "mode": "fixed"}, "decimals": 2, "min": 0, "unit": "suffix: GiB"}, "overrides": []},
       "gridPos": {"h": 7, "w": 6, "x": 18, "y": 4},
       "id": 8,
       "options": {"displayMode": "basic", "minVizHeight": 10, "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showUnfilled": true, "sizing": "auto", "valueMode": "color"},
