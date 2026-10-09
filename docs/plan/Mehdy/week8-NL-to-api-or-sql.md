@@ -54,7 +54,7 @@ Below is the cleaned-up version I would treat as the **implementation specificat
 │              ┌───────────────────┼────────────────────┐                          │
 │              │                   │                    │                          │
 │              ▼                   ▼                    ▼                          │
-│   NEEDS_CLARIFICATION       OUT_OF_SCOPE /        ANALYZABLE                     │
+│   NEEDS_CLARIFICATION       OUT_OF_SCOPE /          SUCCESS                      │
 │                             REJECTED /                │                          │
 │                        UNSUPPORTED_ANALYSIS            ▼                          │
 │              │                   │          ┌────────────────────────┐           │
@@ -86,7 +86,7 @@ Below is the cleaned-up version I would treat as the **implementation specificat
 │                    rest-api                               response    Requirements│
 │                         │                                                │        │
 │                         ▼                                                ▼        │
-│                PostgreSQL / StarRocks                      SemanticSchemaCatalog  │
+│                 PostgreSQL cubes                           SemanticSchemaCatalog  │
 │                                                                         │        │
 │                                                          ┌──────────────┴─────┐  │
 │                                                          │                    │  │
@@ -151,7 +151,7 @@ Below is the cleaned-up version I would treat as the **implementation specificat
 │  ┌──────────────────────────────────────────────────┴──────────────────────────┐  │
 │  │                         Observability                                      │  │
 │  │                                                                            │  │
-│  │ AnalyticsQueryMetrics → Micrometer → Actuator → /actuator/prometheus      │  │
+│  │ AnalyticsQueryMetrics → Micrometer → Actuator → /api/actuator/prometheus  │  │
 │  │                                                   ↓                        │  │
 │  │                                              Prometheus                     │  │
 │  │                                                   ↓                        │  │
@@ -646,8 +646,8 @@ Use:
 Expose at least:
 
 ```text
-/actuator/health
-/actuator/prometheus
+/api/actuator/health
+/api/actuator/prometheus
 ```
 
 Prometheus should scrape the module using the same mechanism already established by Nimbo rather than creating a special monitoring solution.
@@ -1599,7 +1599,7 @@ Configure:
 * Prometheus actuator endpoint;
 * Micrometer Prometheus registry.
 
-Verify the custom metrics physically appear in `/actuator/prometheus`.
+Verify the custom metrics physically appear in `/api/actuator/prometheus`.
 
 ---
 
@@ -1963,7 +1963,7 @@ Verify, in order:
 1. pod starts successfully;
 2. liveness succeeds;
 3. readiness succeeds;
-4. `/actuator/prometheus` exposes metrics;
+4. `/api/actuator/prometheus` exposes metrics;
 5. supported tool-based analytics request succeeds;
 6. PostgreSQL SQL-fallback request succeeds;
 7. StarRocks SQL-fallback request succeeds;
