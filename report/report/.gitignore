@@ -1,0 +1,6 @@
+# Raw evidence contains internal addresses and potentially sensitive data.
+/private-evidence/
+*.zip
+*.tar
+*.tar.gz
+.DS_Store
